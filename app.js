@@ -66,12 +66,72 @@ function lastPivot(a){return a.length?a[a.length-1]:null;}
 function reject(c,buy){let body=Math.abs(c.close-c.open),lw=Math.min(c.open,c.close)-c.low,uw=c.high-Math.max(c.open,c.close);return buy?c.close>c.open&&lw>=Math.max(body*.35,(c.high-c.low)*.2):c.close<c.open&&uw>=Math.max(body*.35,(c.high-c.low)*.2);}
 function getZones(d,i,atr){let ob=[],fvg=[];for(let k=Math.max(2,i-35);k<=i;k++){let c=d[k];if(k<i&&c.close<c.open&&d.slice(k+1,Math.min(i+1,k+5)).some(x=>x.close>c.high+atr*.2))ob.push({side:"BUY",low:c.low,high:Math.max(c.open,c.close),i:k});if(k<i&&c.close>c.open&&d.slice(k+1,Math.min(i+1,k+5)).some(x=>x.close<c.low-atr*.2))ob.push({side:"SELL",low:Math.min(c.open,c.close),high:c.high,i:k});if(d[k].low>d[k-2].high)fvg.push({side:"BUY",low:d[k-2].high,high:d[k].low,i:k});if(d[k].high<d[k-2].low)fvg.push({side:"SELL",low:d[k].high,high:d[k-2].low,i:k});}return{ob,fvg};}
 function makeIndicators(d){let close=d.map(x=>x.close);return{e9:emaSeries(close,9),e20:emaSeries(close,20),e50:emaSeries(close,50),rsi:rsiSeries(close,14),atr:atrSeries(d,14),adx:adxSeries(d,14),bb:bollingerSeries(close,20,2)};}
-function structureAt(d,i,x){let c=d[i],prev=d[i-1],atr=x.atr[i];if(!atr||!x.adx.adx[i]||x.rsi[i]==null||!x.bb[i])return{annotations:[],signal:null,projection:null};let piv=pivotsAt(d,i-2),hi=lastPivot(piv.highs),lo=lastPivot(piv.lows),priorHi=piv.highs.length>1?piv.highs.at(-2):null,priorLo=piv.lows.length>1?piv.lows.at(-2):null,bos=null,choch=null;if(hi&&c.close>hi.price&&prev.close<=hi.price)bos="BULL";if(lo&&c.close<lo.price&&prev.close>=lo.price)bos="BEAR";if(bos==="BULL"&&lo&&priorLo&&lo.price<priorLo.price)choch="BULL";if(bos==="BEAR"&&hi&&priorHi&&hi.price>priorHi.price)choch="BEAR";let sweptLow=lo&&c.low<lo.price&&c.close>lo.price,sweptHigh=hi&&c.high>hi.price&&c.close<hi.price,z=getZones(d,i,atr),ann=[];const mark=(type,price,label,side)=>ann.push({type,price,label,side,time:c.time});piv.highs.slice(-8).forEach(p=>mark("pivot",p.price,"PH",""));piv.lows.slice(-8).forEach(p=>mark("pivot",p.price,"PL",""));if(hi)mark("liquidity",hi.price,"BSL","");if(lo)mark("liquidity",lo.price,"SSL","");if(bos)mark("bos",bos==="BULL"?hi.price:lo.price,"BOS "+bos,bos);if(choch)mark("choch",choch==="BULL"?hi.price:lo.price,"CHoCH "+choch,choch);if(sweptLow)mark("sweep",lo.price,"SWEEP LOW","BUY");if(sweptHigh)mark("sweep",hi.price,"SWEEP HIGH","SELL");z.ob.slice(-4).forEach(v=>mark("ob",v.low,"OB "+v.side,v.side),mark("ob",v.high,"",v.side));z.fvg.slice(-4).forEach(v=>{mark("fvg",v.low,"FVG "+v.side,v.side);mark("fvg",v.high,"",v.side);});
-let emaBuy=x.e9[i]>x.e20[i]&&x.e9[i-1]<=x.e20[i-1]&&x.e9[i]>x.e9[i-1]&&x.e20[i]>x.e20[i-1]&&c.close>x.e50[i],emaSell=x.e9[i]<x.e20[i]&&x.e9[i-1]>=x.e20[i-1]&&x.e9[i]<x.e9[i-1]&&x.e20[i]<x.e20[i-1]&&c.close<x.e50[i],obBuy=z.ob.some(v=>v.side==="BUY"&&c.low<=v.high&&c.close>=v.low),fvgBuy=z.fvg.some(v=>v.side==="BUY"&&c.low<=v.high&&c.close>=v.low),obSell=z.ob.some(v=>v.side==="SELL"&&c.high>=v.low&&c.close<=v.high),fvgSell=z.fvg.some(v=>v.side==="SELL"&&c.high>=v.low&&c.close<=v.high),bbBuy=d.slice(Math.max(0,i-5),i+1).some((v,j)=>v.low<=x.bb[Math.max(0,i-5)+j]?.lower)&&c.close>x.bb[i].lower,bbSell=d.slice(Math.max(0,i-5),i+1).some((v,j)=>v.high>=x.bb[Math.max(0,i-5)+j]?.upper)&&c.close<x.bb[i].upper;
-let buy=!!sweptLow&&reject(c,true)&&bos==="BULL"&&choch==="BULL"&&emaBuy&&x.rsi[i]>50&&x.adx.adx[i]>20&&x.adx.pdi[i]>x.adx.mdi[i]&&bbBuy&&(obBuy||fvgBuy),sell=!!sweptHigh&&reject(c,false)&&bos==="BEAR"&&choch==="BEAR"&&emaSell&&x.rsi[i]<50&&x.adx.adx[i]>20&&x.adx.mdi[i]>x.adx.pdi[i]&&bbSell&&(obSell||fvgSell),signal=null;
-if(buy||sell){let direction=buy?"COMPRAR":"VENDER",entry=c.close,sl=buy?Math.min(c.low,lo.price)-atr*.12:Math.max(c.high,hi.price)+atr*.12,risk=Math.abs(entry-sl),targets=buy?piv.highs.filter(p=>p.price>entry).map(p=>p.price).sort((a,b)=>a-b):piv.lows.filter(p=>p.price<entry).map(p=>p.price).sort((a,b)=>b-a),tp1=targets.find(v=>Math.abs(v-entry)>=risk*1.2),tp2=targets.find(v=>Math.abs(v-entry)>=risk*2&&(buy?v>tp1:v<tp1));if(risk>0&&tp1&&tp2)signal={direction,entry,sl,tp1,tp2,rsi:x.rsi[i],adx:x.adx.adx[i],time:c.time,index:i,mode:"Sweep + BOS/CHoCH + EMA + RSI/ADX + OB/FVG + BB",emaPeriods:[9,20,50]};}
-let projection=null,bias=x.e9[i]>x.e20[i]?"BUY":x.e9[i]<x.e20[i]?"SELL":null;if(bias){let pool=bias==="BUY"?lo:hi,zones=(bias==="BUY"?z.ob.filter(v=>v.side==="BUY").concat(z.fvg.filter(v=>v.side==="BUY")):z.ob.filter(v=>v.side==="SELL").concat(z.fvg.filter(v=>v.side==="SELL"))),zone=zones.at(-1);if(pool&&zone){let low=Math.min(zone.low,zone.high,pool.price),high=Math.max(zone.low,zone.high,pool.price);projection={direction:bias==="BUY"?"COMPRAR":"VENDER",low,high,liquidity:pool.price,stage:c.close>=low&&c.close<=high?"PRECIO EN ZONA":"EN PREPARACIÓN",reason:"Zona calculada con liquidez y OB/FVG. Esperando sweep, rechazo y confirmaciones."};}}
-if(signal){mark("signal",signal.entry,signal.direction,signal.direction==="COMPRAR"?"BUY":"SELL");projection={...signal,low:signal.entry,high:signal.entry,stage:"SEÑAL CONFIRMADA"};}return{annotations:ann,signal,projection};}
+function structureAt(d,i,x){
+ const c=d[i],prev=d[i-1],atr=x.atr[i];
+ if(!c||!prev||!atr||!Number.isFinite(x.adx.adx[i])||x.rsi[i]==null||!x.bb[i])return{annotations:[],signal:null,projection:null};
+ const piv=pivotsAt(d,i-2),hi=lastPivot(piv.highs),lo=lastPivot(piv.lows),priorHi=piv.highs.length>1?piv.highs.at(-2):null,priorLo=piv.lows.length>1?piv.lows.at(-2):null;
+ const z=getZones(d,i,atr),ann=[];
+ const mark=(type,price,label,side,time=c.time)=>{if(Number.isFinite(price))ann.push({type,price,label,side,time});};
+ piv.highs.slice(-8).forEach(p=>mark("pivot",p.price,"PH","",d[p.i].time));
+ piv.lows.slice(-8).forEach(p=>mark("pivot",p.price,"PL","",d[p.i].time));
+ if(hi)mark("liquidity",hi.price,"BSL","");
+ if(lo)mark("liquidity",lo.price,"SSL","");
+ z.ob.slice(-4).forEach(v=>{mark("ob",v.low,"OB "+v.side,v.side,d[v.i].time);mark("ob",v.high,"",v.side,d[v.i].time);});
+ z.fvg.slice(-4).forEach(v=>{mark("fvg",v.low,"FVG "+v.side,v.side,d[v.i].time);mark("fvg",v.high,"",v.side,d[v.i].time);});
+ let bos=null;
+ if(hi&&c.close>hi.price&&prev.close<=hi.price)bos="BULL";
+ if(lo&&c.close<lo.price&&prev.close>=lo.price)bos="BEAR";
+ if(bos)mark("bos",bos==="BULL"?hi.price:lo.price,"BOS "+bos,bos);
+ // Buscar barridos recientes: el sweep puede ocurrir antes de la ruptura, no tiene que ser en la misma vela.
+ let sweepBuy=null,sweepSell=null;
+ for(let k=Math.max(65,i-12);k<i;k++){
+  const kp=pivotsAt(d,k-2),kl=lastPivot(kp.lows),kh=lastPivot(kp.highs),bar=d[k];
+  if(kl&&bar.low<kl.price&&bar.close>kl.price)sweepBuy={index:k,level:kl.price,time:bar.time};
+  if(kh&&bar.high>kh.price&&bar.close<kh.price)sweepSell={index:k,level:kh.price,time:bar.time};
+ }
+ const sweptLow=!!sweepBuy&&i-sweepBuy.index<=12,sweptHigh=!!sweepSell&&i-sweepSell.index<=12;
+ if(sweptLow)mark("sweep",sweepBuy.level,"SWEEP LOW","BUY",sweepBuy.time);
+ if(sweptHigh)mark("sweep",sweepSell.level,"SWEEP HIGH","SELL",sweepSell.time);
+ // CHoCH se confirma cuando, después del barrido, el precio rompe estructura en sentido contrario al movimiento que barrió.
+ const chochBuy=sweptLow&&bos==="BULL"&&priorLo&&lo&&lo.price<priorLo.price;
+ const chochSell=sweptHigh&&bos==="BEAR"&&priorHi&&hi&&hi.price>priorHi.price;
+ if(chochBuy)mark("choch",hi.price,"CHoCH BULL","BULL");
+ if(chochSell)mark("choch",lo.price,"CHoCH BEAR","BEAR");
+ const crossRecent=(side,sweepIndex)=>{
+  const from=Math.max(65,sweepIndex??i-8,i-8);
+  for(let k=from;k<=i;k++){
+   if(side==="BUY"&&x.e9[k]>x.e20[k]&&x.e9[k-1]<=x.e20[k-1])return true;
+   if(side==="SELL"&&x.e9[k]<x.e20[k]&&x.e9[k-1]>=x.e20[k-1])return true;
+  }
+  return false;
+ };
+ const emaBuy=x.e9[i]>x.e20[i]&&x.e20[i]>x.e50[i]&&x.e9[i]>x.e9[i-1]&&x.e20[i]>=x.e20[i-1]&&c.close>x.e50[i]&&crossRecent("BUY",sweepBuy?.index);
+ const emaSell=x.e9[i]<x.e20[i]&&x.e20[i]<x.e50[i]&&x.e9[i]<x.e9[i-1]&&x.e20[i]<=x.e20[i-1]&&c.close<x.e50[i]&&crossRecent("SELL",sweepSell?.index);
+ const obBuy=z.ob.some(v=>v.side==="BUY"&&c.low<=v.high&&c.close>=v.low),fvgBuy=z.fvg.some(v=>v.side==="BUY"&&c.low<=v.high&&c.close>=v.low);
+ const obSell=z.ob.some(v=>v.side==="SELL"&&c.high>=v.low&&c.close<=v.high),fvgSell=z.fvg.some(v=>v.side==="SELL"&&c.high>=v.low&&c.close<=v.high);
+ const bbBuy=d.slice(Math.max(0,i-5),i+1).some((v,j)=>{const b=x.bb[Math.max(0,i-5)+j];return b&&v.low<=b.lower;})&&c.close>x.bb[i].lower;
+ const bbSell=d.slice(Math.max(0,i-5),i+1).some((v,j)=>{const b=x.bb[Math.max(0,i-5)+j];return b&&v.high>=b.upper;})&&c.close<x.bb[i].upper;
+ const buy=sweptLow&&reject(c,true)&&chochBuy&&emaBuy&&x.rsi[i]>50&&x.adx.adx[i]>strategyConfig.adxMin&&x.adx.pdi[i]>x.adx.mdi[i]&&bbBuy&&(obBuy||fvgBuy);
+ const sell=sweptHigh&&reject(c,false)&&chochSell&&emaSell&&x.rsi[i]<50&&x.adx.adx[i]>strategyConfig.adxMin&&x.adx.mdi[i]>x.adx.pdi[i]&&bbSell&&(obSell||fvgSell);
+ let signal=null;
+ if(buy||sell){
+  const direction=buy?"COMPRAR":"VENDER",entry=c.close,sl=buy?Math.min(c.low,sweepBuy.level)-atr*strategyConfig.slBufferAtr:Math.max(c.high,sweepSell.level)+atr*strategyConfig.slBufferAtr,risk=Math.abs(entry-sl);
+  const targets=buy?piv.highs.filter(p=>p.price>entry).map(p=>p.price).sort((a,b)=>a-b):piv.lows.filter(p=>p.price<entry).map(p=>p.price).sort((a,b)=>b-a);
+  const tp1=targets.find(v=>Math.abs(v-entry)>=risk*1.2),tp2=targets.find(v=>Math.abs(v-entry)>=risk*2&&(buy?v>tp1:v<tp1));
+  if(risk>0&&tp1&&tp2)signal={direction,entry,sl,tp1,tp2,rsi:x.rsi[i],adx:x.adx.adx[i],time:c.time,index:i,mode:"Sweep previo + CHoCH/BOS + EMA 9/20/50 + RSI/ADX + OB/FVG + BB",emaPeriods:[9,20,50]};
+ }
+ let projection=null,bias=x.e9[i]>x.e20[i]&&x.e20[i]>x.e50[i]?"BUY":x.e9[i]<x.e20[i]&&x.e20[i]<x.e50[i]?"SELL":null;
+ if(bias){
+  const pool=bias==="BUY"?lo:hi,zones=bias==="BUY"?z.ob.filter(v=>v.side==="BUY").concat(z.fvg.filter(v=>v.side==="BUY")):z.ob.filter(v=>v.side==="SELL").concat(z.fvg.filter(v=>v.side==="SELL"));
+  const zone=zones.at(-1);
+  if(pool&&zone){
+   const low=Math.min(zone.low,zone.high),high=Math.max(zone.low,zone.high);
+   projection={direction:bias==="BUY"?"COMPRAR":"VENDER",low,high,liquidity:pool.price,stage:c.close>=low&&c.close<=high?"PRECIO EN ZONA":"EN PREPARACIÓN",reason:"Zona OB/FVG alineada con EMA 9/20/50. Vigilar barrido, rechazo y ruptura estructural."};
+  }
+ }
+ if(signal){mark("signal",signal.entry,signal.direction,signal.direction==="COMPRAR"?"BUY":"SELL");projection={...signal,low:signal.entry,high:signal.entry,stage:"SEÑAL CONFIRMADA"};}
+ return{annotations:ann,signal,projection};
+}
 function renderProjectionCard(p){let a=document.getElementById("projection-card"),s=document.getElementById("projection-status");if(!a)return;if(!p){a.className="empty-state";a.textContent="No hay zona proyectada válida.";if(s)s.textContent="SIN ZONA";return;}let buy=p.direction==="COMPRAR";a.className="projection-card "+(buy?"projection-buy":"projection-sell");a.innerHTML='<div class="projection-stage '+(buy?"buy":"sell")+'">'+p.stage+' · '+p.direction+'</div><strong class="'+(buy?"buy":"sell")+'">'+fmt(p.low)+' — '+fmt(p.high)+'</strong><div class="projection-meta">Liquidez: '+fmt(p.liquidity||p.entry||0)+'<br>'+p.reason+(p.stage==="SEÑAL CONFIRMADA"?"<br>Entrada "+fmt(p.entry)+" · SL "+fmt(p.sl)+" · TP1 "+fmt(p.tp1)+" · TP2 "+fmt(p.tp2):"<br>Esperar confirmación completa.")+'</div>';if(s)s.textContent=p.stage;}
 function computeTrade(d,s,i){let t={...s,entryTime:d[i].time*1000,tp1Hit:false};for(let j=i+1;j<d.length;j++){let c=d[j],stop=s.direction==="COMPRAR"?c.low<=s.sl:c.high>=s.sl,one=s.direction==="COMPRAR"?c.high>=s.tp1:c.low<=s.tp1,two=s.direction==="COMPRAR"?c.high>=s.tp2:c.low<=s.tp2;if(stop){t.result="PERDIDA";t.price=s.sl;t.exitTime=c.time*1000;return t;}if(one)t.tp1Hit=true;if(two){t.result="GANADA";t.price=s.tp2;t.exitTime=c.time*1000;return t;}}t.result="ABIERTA";return t;}
 function runBacktest(symbol,market,candles){if(!Array.isArray(candles)||candles.length<100)return;let d=candles.slice().sort((a,b)=>a.time-b.time),x=makeIndicators(d),trades=[],annotations=[],nextFree=0;for(let i=65;i<d.length-1;i++){let r=structureAt(d,i,x);annotations.push(...r.annotations);if(r.signal&&i>nextFree){let t=computeTrade(d,r.signal,i);trades.push({...t,symbol,market});nextFree=t.exitTime?d.findIndex(v=>v.time*1000===t.exitTime):d.length;}}backtestTrades.splice(0,backtestTrades.length,...trades);if(typeof setBacktestTrades==="function")setBacktestTrades(trades);if(typeof setStructureOverlay==="function")setStructureOverlay({items:annotations,projection:null});backtestSymbol=symbol;backtestReady=true;updateDailyPanel();drawRsiPanel(x.rsi,d);drawAdxPanel(x.adx);let closed=trades.filter(t=>t.result!=="ABIERTA"),wins=closed.filter(t=>t.result==="GANADA").length;setText("chart-message","Backtesting M1 · "+closed.length+" operaciones · "+(closed.length?(wins/closed.length*100).toFixed(1):"0")+"% acierto · reglas completas SMC.");}
