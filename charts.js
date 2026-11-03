@@ -1,6 +1,6 @@
 let candleData=[],chartSymbol=null,tradeLevels=[],chartCanvas=null,chartContext=null,resizeObserver=null;
 let backtestTradeData=[];
-let viewEnd=0,viewCount=100,dragX=null,dragEnd=0,activePointers=new Map(),pinchStart=0,pinchCount=100,chartFrame=null,scaleMin=null,scaleMax=null,scaleWindow="",chartGranularity=60;
+let viewEnd=0,viewCount=100,dragX=null,dragEnd=0,activePointers=new Map(),pinchStart=0,pinchCount=100,pinchAnchorIndex=0,pinchAnchorRatio=.5,chartFrame=null,scaleMin=null,scaleMax=null,scaleWindow="",chartGranularity=60;
 function createMarketChart(containerId="chart-area"){
  const host=document.getElementById(containerId);if(!host)return false;
  host.innerHTML="";chartCanvas=document.createElement("canvas");
@@ -12,14 +12,14 @@ function createMarketChart(containerId="chart-area"){
   activePointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
   chartCanvas.setPointerCapture(e.pointerId);
   if(activePointers.size===1){dragX=e.clientX;dragEnd=viewEnd;chartCanvas.style.cursor="grabbing";}
-  if(activePointers.size===2){const p=[...activePointers.values()];pinchStart=Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y);pinchCount=viewCount;dragX=null;}
+  if(activePointers.size===2){const p=[...activePointers.values()];pinchStart=Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y);pinchCount=viewCount;const rect=chartCanvas.getBoundingClientRect(),mid=(p[0].x+p[1].x)/2;pinchAnchorRatio=Math.max(0,Math.min(1,(mid-rect.left-10)/Math.max(1,rect.width-76)));const end=Math.max(0,Math.min(candleData.length,viewEnd||candleData.length));pinchAnchorIndex=Math.max(0,end-viewCount)+pinchAnchorRatio*Math.min(viewCount,end);dragX=null;}
  });
  chartCanvas.addEventListener("pointermove",e=>{
   if(!activePointers.has(e.pointerId))return;
   activePointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
   if(activePointers.size>=2){
    const p=[...activePointers.values()],dist=Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y);
-   if(pinchStart>0)viewCount=Math.max(15,Math.min(500,Math.round(pinchCount*pinchStart/Math.max(1,dist))));
+   if(pinchStart>0){viewCount=Math.max(15,Math.min(500,Math.round(pinchCount*pinchStart/Math.max(1,dist))));const end=pinchAnchorIndex+(1-pinchAnchorRatio)*viewCount;viewEnd=Math.max(Math.min(viewCount,candleData.length),Math.min(candleData.length,Math.round(end)));}
    drawMarketChart();return;
   }
   if(dragX===null)return;
