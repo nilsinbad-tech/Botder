@@ -38,6 +38,16 @@ function setChartGranularity(seconds){chartGranularity=Number(seconds)||60;scale
 function updateCandles(c){if(!Array.isArray(c))return;candleData=c.filter(x=>[x.time,x.open,x.high,x.low,x.close].every(Number.isFinite)).sort((a,b)=>a.time-b.time).slice();viewEnd=candleData.length;scaleMin=null;scaleMax=null;scaleWindow="";drawMarketChart();}
 function addCandle(c){if(!c||![c.time,c.open,c.high,c.low,c.close].every(Number.isFinite))return;const following=viewEnd>=candleData.length;const last=candleData[candleData.length-1];if(last&&last.time===c.time)candleData[candleData.length-1]=c;else{candleData.push(c);}if(following)viewEnd=candleData.length;else viewEnd=Math.min(viewEnd,candleData.length);drawMarketChart();}
 function setBacktestTrades(trades){backtestTradeData=Array.isArray(trades)?trades.slice():[];drawMarketChart();}
+function toHeikinAshi(candles){
+ let previousOpen=null,previousClose=null;
+ return candles.map(c=>{
+  const haClose=(c.open+c.high+c.low+c.close)/4;
+  const haOpen=previousOpen===null?(c.open+c.close)/2:(previousOpen+previousClose)/2;
+  const haHigh=Math.max(c.high,haOpen,haClose),haLow=Math.min(c.low,haOpen,haClose);
+  previousOpen=haOpen;previousClose=haClose;
+  return {...c,open:haOpen,high:haHigh,low:haLow,close:haClose};
+ });
+}
 function drawTradeLevels(e,s,t){tradeLevels=[{value:Number(e),label:"ENTRADA",color:"#48a8ff"},{value:Number(s),label:"SL",color:"#ff5364"},{value:Number(t),label:"TP",color:"#20c997"}];drawMarketChart();}
 function clearTradeLevels(){tradeLevels=[];drawMarketChart();}
 function getActiveChartSymbol(){return chartSymbol;}
@@ -49,7 +59,7 @@ function renderMarketChart(){
  ctx.font="10px Arial";ctx.strokeStyle="#26364b";ctx.lineWidth=1;
  for(let i=0;i<=4;i++){let y=top+ph*i/4;ctx.beginPath();ctx.moveTo(left,y);ctx.lineTo(w-right,y);ctx.stroke();}
  if(!candleData.length){ctx.fillStyle="#8495aa";ctx.textAlign="center";ctx.font="12px Arial";ctx.fillText("Esperando datos reales del mercado...",w/2,h/2);return;}
- const end=Math.max(0,Math.min(candleData.length,viewEnd||candleData.length)),start=Math.max(0,end-viewCount),data=candleData.slice(start,end);
+ const end=Math.max(0,Math.min(candleData.length,viewEnd||candleData.length)),start=Math.max(0,end-viewCount),data=toHeikinAshi(candleData.slice(0,end)).slice(start,end);
  if(!data.length)return;const windowKey=start+":"+end+":"+viewCount;let lows=data.map(c=>c.low),highs=data.map(c=>c.high);const candleMin=Math.min(...lows),candleMax=Math.max(...highs);tradeLevels.forEach(x=>{if(Number.isFinite(x.value)&&x.value>=candleMin-(candleMax-candleMin)*.25&&x.value<=candleMax+(candleMax-candleMin)*.25){lows.push(x.value);highs.push(x.value);}});
  const rawMin=Math.min(...lows),rawMax=Math.max(...highs);
  if(scaleWindow!==windowKey||scaleMin===null||scaleMax===null){const pad=(rawMax-rawMin)*.08||Math.abs(rawMax)*.0001||1;scaleMin=rawMin-pad;scaleMax=rawMax+pad;scaleWindow=windowKey;}else{const span=scaleMax-scaleMin,pad=span*.08;if(rawMin<scaleMin+pad)scaleMin=rawMin-pad;if(rawMax>scaleMax-pad)scaleMax=rawMax+pad;}
@@ -92,7 +102,7 @@ function renderMarketChart(){
   }
  });
  tradeLevels.forEach(a=>{let y=yOf(a.value);ctx.strokeStyle=a.color;ctx.setLineDash([4,3]);ctx.beginPath();ctx.moveTo(left,y);ctx.lineTo(w-right,y);ctx.stroke();ctx.setLineDash([]);ctx.fillStyle=a.color;ctx.textAlign="left";ctx.fillText(a.label,w-right+5,y-4);});
- ctx.fillStyle="#8495aa";ctx.textAlign="left";ctx.fillText((chartGranularity===30?"30S":"M"+(chartGranularity/60))+" · "+data.length+" velas",left,h-7);ctx.textAlign="right";ctx.fillText(new Date(data[data.length-1].time*1000).toLocaleTimeString("es-PA",{hour:"2-digit",minute:"2-digit"}),w-right,h-7);if(chartGranularity===60){const remain=Math.max(0,60-(Math.floor(Date.now()/1000)-data[data.length-1].time));const mm=String(Math.floor(remain/60)).padStart(2,"0"),ss=String(remain%60).padStart(2,"0");ctx.textAlign="left";ctx.font="bold 11px Arial";ctx.fillStyle="#f5c451";ctx.fillText("CIERRE M1 "+mm+":"+ss,left+4,top+13);}
+ ctx.fillStyle="#8495aa";ctx.textAlign="left";ctx.fillText("HEIKIN ASHI · M1 · "+data.length+" velas",left,h-7);ctx.textAlign="right";ctx.fillText(new Date(data[data.length-1].time*1000).toLocaleTimeString("es-PA",{hour:"2-digit",minute:"2-digit"}),w-right,h-7);{const remain=Math.max(0,60-(Math.floor(Date.now()/1000)-data[data.length-1].time));const mm=String(Math.floor(remain/60)).padStart(2,"0"),ss=String(remain%60).padStart(2,"0");ctx.textAlign="left";ctx.font="bold 11px Arial";ctx.fillStyle="#f5c451";ctx.fillText("CIERRE M1 "+mm+":"+ss,left+4,top+13);}
 }
 window.addEventListener("resize",resizeMarketChart);
 setInterval(()=>{if(chartGranularity===60&&candleData.length)drawMarketChart();},1000);
