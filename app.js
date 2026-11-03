@@ -76,15 +76,26 @@ function updateM5Candle(candle){
  else if(!last||candle.time>last.time)m5Candles.push(candle);
  if(m5Candles.length>1200)m5Candles=m5Candles.slice(-1200);
 }
-function confirmM5(direction,signalTime){
- const closed=m5Candles.filter(c=>c.time+300<=signalTime);
+function buildM5FromM1(sourceCandles,signalTime){
+ const buckets=new Map();
+ sourceCandles.filter(c=>c.time<signalTime).forEach(c=>{
+  const time=Math.floor(c.time/300)*300;let b=buckets.get(time);
+  if(!b)buckets.set(time,{time,open:c.open,high:c.high,low:c.low,close:c.close});
+  else{b.high=Math.max(b.high,c.high);b.low=Math.min(b.low,c.low);b.close=c.close;}
+ });
+ return [...buckets.values()].filter(c=>c.time+300<=signalTime).sort((a,b)=>a.time-b.time);
+}
+function confirmM5(direction,signalTime,sourceCandles){
+ const derived=buildM5FromM1(sourceCandles,signalTime),external=m5Candles.filter(c=>c.time+300<=signalTime);
+ const closed=derived.length>=25?derived:external;
  if(closed.length<25)return false;
  const i=closed.length-1,closes=closed.map(c=>c.close),ema=emaAt(closes,20,i),prior=emaAt(closes,20,i-1);
  if(ema==null||prior==null)return false;
  return direction==="COMPRAR"?(closes[i]>ema&&ema>prior):(closes[i]<ema&&ema<prior);
 }
-function m5Targets(direction,entry,risk,signalTime){
- const closed=m5Candles.filter(c=>c.time+300<=signalTime),slice=closed.slice(-80);
+function m5Targets(direction,entry,risk,signalTime,sourceCandles){
+ const derived=buildM5FromM1(sourceCandles,signalTime),external=m5Candles.filter(c=>c.time+300<=signalTime);
+ const closed=derived.length>=10?derived:external,slice=closed.slice(-80);
  if(slice.length<10)return null;
  const highs=[],lows=[];
  for(let i=2;i<slice.length-2;i++){
@@ -112,10 +123,11 @@ function buildSignal(candles,i,rsis){
  const sell=r>=rsiConfig.high&&r<prev&&trend.bear;
  if(!buy&&!sell)return null;
  const direction=buy?"COMPRAR":"VENDER";
- if(!confirmM5(direction,c.time))return null;
+ const signalCloseTime=c.time+60;
+ if(!confirmM5(direction,signalCloseTime,candles))return null;
  const entry=c.close,recent=candles.slice(Math.max(0,i-14),i+1),atr=recent.reduce((sum,x)=>sum+x.high-x.low,0)/recent.length,buffer=atr*strategyConfig.slBufferAtr;
  const sl=buy?Math.min(...recent.map(x=>x.low))-buffer:Math.max(...recent.map(x=>x.high))+buffer,risk=Math.abs(entry-sl);if(!Number.isFinite(risk)||risk<=0)return null;
- const targets=m5Targets(direction,entry,risk,c.time),tp1=targets.tp1,tp2=targets.tp2;
+ const targets=m5Targets(direction,entry,risk,signalCloseTime,candles);if(!targets)return null;const tp1=targets.tp1,tp2=targets.tp2;
  if((buy&&(tp1<=entry||tp2<=tp1))||(!buy&&(tp1>=entry||tp2>=tp1)))return null;
  return{direction,entry,sl,tp1,tp2,rsi:r,time:c.time,index:i,mode:"RSI + EMA M1 · CONFIRMACIÓN M5",confirmation:"M5 EMA20 + pendiente",tpSource:"Estructura M5",emaPeriods:strategyConfig.emaPeriods.slice(),tp1Close:strategyConfig.tp1Close,protectAfterTp1:strategyConfig.protectAfterTp1};
 }
