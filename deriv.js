@@ -89,7 +89,7 @@ function connectDeriv() {
         if (!live || live.time !== bucket) { live = { time: bucket, open: price, high: price, low: price, close: price }; candleBuffer.push(live); }
         else { live = { ...live, high: Math.max(live.high, price), low: Math.min(live.low, price), close: price }; candleBuffer[candleBuffer.length - 1] = live; }
         if (typeof addCandle === "function") addCandle(live);
-        if (selectedGranularity === 30 && typeof analyzeCandles === "function") analyzeCandles(selectedSymbol, selectedMarketName(), candleBuffer);
+        if (typeof analyzeCandles === "function") analyzeCandles(selectedSymbol, selectedMarketName(), candleBuffer);
         if (typeof updateBacktestTick === "function") updateBacktestTick(Number(data.tick.epoch), price);
       }
     }
@@ -116,33 +116,24 @@ function selectedMarketName() {
   return item ? symbolName(item) : selectedSymbol || "";
 }
 function renderMarkets(all) {
-  availableSymbols = all.filter(x => {
-    const searchable = [
-      symbolName(x), x.underlying_symbol, x.underlying_symbol_type,
-      x.market, x.submarket, x.subgroup, x.market_display_name,
-      x.submarket_display_name, x.subgroup_display_name
-    ].filter(Boolean).join(" ");
-    return /volatility/i.test(searchable);
-  }).slice(0, 10);
-  const area = document.getElementById("markets"), count = document.getElementById("market-count");
-  if (!area) return;
-  if (count) count.textContent = availableSymbols.length + " / 10 instrumentos";
-  area.innerHTML = "";
-  if (!availableSymbols.length) {
-    showApiDiagnostic("Deriv respondió (" + all.length + " símbolos), pero ninguno coincide con Volatility. Primeros símbolos: " + all.slice(0, 5).map(x => x.underlying_symbol_name || x.display_name || x.underlying_symbol || x.symbol || "sin nombre").join(", "));
-    area.innerHTML = '<div class="empty-state">No se detectaron instrumentos Volatility. Revisa el diagnóstico.</div>';
-    return;
-  }
-  showApiDiagnostic("Correcto: " + availableSymbols.length + " instrumentos Volatility cargados.");
-  availableSymbols.forEach(item => {
-    const symbol = symbolCode(item), name = symbolName(item);
-    const card = document.createElement("button"); card.className = "market"; card.dataset.symbol = symbol;
-    const title = document.createElement("strong"); title.textContent = name;
-    const code = document.createElement("span"); code.textContent = symbol;
-    card.append(title, code); card.addEventListener("click", () => selectMarket(name, symbol));
-    area.appendChild(card);
-  });
-  if (!selectedSymbol) selectMarket(symbolName(availableSymbols[0]), symbolCode(availableSymbols[0]));
+ availableSymbols=all.filter(x=>{
+  const searchable=[symbolName(x),x.underlying_symbol,x.underlying_symbol_type,x.market,x.submarket,x.subgroup,x.market_display_name,x.submarket_display_name,x.subgroup_display_name].filter(Boolean).join(" ");
+  return /volatility/i.test(searchable);
+ }).sort((a,b)=>symbolName(a).localeCompare(symbolName(b)));
+ const area=document.getElementById("markets"),count=document.getElementById("market-count");if(!area)return;
+ if(count)count.textContent=availableSymbols.length+" instrumentos";area.innerHTML="";
+ if(!availableSymbols.length){showApiDiagnostic("Deriv respondió ("+all.length+" símbolos), pero no se detectó ningún índice Volatility.");area.innerHTML='<div class="empty-state">No se detectaron instrumentos Volatility.</div>';return;}
+ const groups=new Map();
+ availableSymbols.forEach(item=>{const label=/1s|1 second|1-second/i.test(symbolName(item)+" "+symbolCode(item))?"VOLATILITY 1 SEGUNDO":"VOLATILITY ESTÁNDAR";if(!groups.has(label))groups.set(label,[]);groups.get(label).push(item);});
+ groups.forEach((items,label)=>{
+  const section=document.createElement("section");section.className="instrument-group";
+  const heading=document.createElement("h3");heading.textContent=label+" · "+items.length;section.appendChild(heading);
+  const list=document.createElement("div");list.className="instrument-list";
+  items.forEach(item=>{const symbol=symbolCode(item),name=symbolName(item),card=document.createElement("button");card.className="market";card.dataset.symbol=symbol;const title=document.createElement("strong"),code=document.createElement("span");title.textContent=name;code.textContent=symbol;card.append(title,code);card.addEventListener("click",()=>selectMarket(name,symbol));list.appendChild(card);});
+  section.appendChild(list);area.appendChild(section);
+ });
+ showApiDiagnostic("Correcto: "+availableSymbols.length+" índices Volatility organizados por categoría.");
+ if(!selectedSymbol)selectMarket(symbolName(availableSymbols[0]),symbolCode(availableSymbols[0]));
 }
 function aggregateTicks(times, prices, seconds) {
   const candles = new Map();
@@ -190,7 +181,7 @@ function getAvailableSymbols() { return availableSymbols; }
 function isDerivConnected() { return derivSocket && derivSocket.readyState === WebSocket.OPEN; }
 document.addEventListener("DOMContentLoaded", () => {
   const tf = document.getElementById("timeframe");
-  if (tf) { tf.value = "60"; tf.disabled = false; tf.addEventListener("change", () => { const n=Number(tf.value); if([30,60,120,180].includes(n)&&selectedSymbol)loadMarketHistory(selectedSymbol,n); }); }
+  if (tf) { tf.value = "60"; tf.disabled = false; tf.addEventListener("change", () => { const n=60;tf.value="60";selectedGranularity=60;if(selectedSymbol)loadMarketHistory(selectedSymbol,60); }); }
   const style=document.getElementById("candle-style");if(style)style.addEventListener("change",()=>{if(typeof setCandleStyle==="function")setCandleStyle(style.value);});
 });
 connectDeriv();
