@@ -14,7 +14,7 @@ function profitLock(op){const risk=Math.abs(op.entry-op.sl);return op.direction=
 function updateOperationPrice(symbol,price){operations.forEach(op=>{if(op.symbol!==symbol||op.result!=="OPEN")return;op.currentPrice=Number(price);const favorable=signedMove(op.direction,op.entry,price);if(!op.tp1Hit&&favorable>=Math.abs(op.tp1-op.entry)){op.tp1Hit=true;op.partialClosed=true;op.realizedR=0.5*(Math.abs(op.tp1-op.entry)/Math.abs(op.entry-op.sl));op.protectionActive=true;op.protectionSL=profitLock(op);op.managementMessage="TP1 ALCANZADO · 50% asegurado · SL restante en +0.5R";}if(op.tp1Hit&&favorable>=Math.abs(op.tp2-op.entry)){op.result="GANADA";op.exitPrice=Number(price);op.realizedR+=0.5*(Math.abs(op.tp2-op.entry)/Math.abs(op.entry-op.sl));op.exitReason="TP2 · OBJETIVO FINAL";op.finishedAt=Date.now();history.unshift({...op});}else if(op.tp1Hit&&(op.direction==="COMPRAR"?price<=op.protectionSL:price>=op.protectionSL)){op.result="GANADA";op.exitPrice=op.protectionSL;op.realizedR+=0.5*0.5;op.exitReason="PROTECCIÓN +0.5R · RESTO CERRADO";op.finishedAt=Date.now();history.unshift({...op});}});renderOperations();renderHistory();}
 function isDoji(c){const range=c.high-c.low;if(range<=0)return false;return Math.abs(c.close-c.open)/range<=0.12;}
 function evaluateOpenOperations(symbol,candle){operations.forEach(op=>{if(op.symbol!==symbol||op.result!=="OPEN"||op.lastManagedCandle===candle.time)return;op.lastManagedCandle=candle.time;const risk=Math.abs(op.entry-op.sl),hitTp1=op.direction==="COMPRAR"?candle.high>=op.tp1:candle.low<=op.tp1,hitTp2=op.direction==="COMPRAR"?candle.high>=op.tp2:candle.low<=op.tp2,hitStop=op.direction==="COMPRAR"?candle.low<= (op.protectionSL??op.sl):candle.high>=(op.protectionSL??op.sl);if(!op.tp1Hit&&hitStop){op.result="PERDIDA";op.exitPrice=op.sl;op.realizedR=-1;op.exitReason="SL INICIAL";op.finishedAt=candle.time*1000;history.unshift({...op});return;}if(!op.tp1Hit&&hitTp1){op.tp1Hit=true;op.partialClosed=true;op.realizedR=0.5*(Math.abs(op.tp1-op.entry)/risk);op.protectionActive=true;op.protectionSL=profitLock(op);op.managementMessage="TP1 ALCANZADO · CIERRA 50% · PROTEGE EL RESTO EN +0.5R";return;}if(op.tp1Hit){if(hitTp2){op.result="GANADA";op.exitPrice=op.tp2;op.realizedR+=0.5*(Math.abs(op.tp2-op.entry)/risk);op.exitReason="TP2 · OBJETIVO FINAL";op.finishedAt=candle.time*1000;history.unshift({...op});}else if(hitStop){op.result="GANADA";op.exitPrice=op.protectionSL;op.realizedR+=0.25;op.exitReason="PROTECCIÓN +0.5R";op.finishedAt=candle.time*1000;history.unshift({...op});}else{op.managementMessage="TP1 COBRADO · RESTO PROTEGIDO EN +0.5R";}}});renderOperations();renderHistory();}
-function renderSignals(){const area=document.getElementById("signals");if(!area)return;const active=signals.filter(s=>s.status==="ACTIVE");setText("signal-count",active.length);area.innerHTML=active.length?active.map(s=>`<article class="signal-card"><div class="muted">${s.id} · ${s.market}</div><h3 class="${s.direction==="COMPRAR"?"buy":"sell"}">${s.direction}</h3><div class="levels"><div class="level"><span>ENTRADA</span><strong>${fmt(s.entry)}</strong></div><div class="level"><span>SL</span><strong>${fmt(s.sl)}</strong></div><div class="level"><span>TP1 ESTRUCTURAL</span><strong>${fmt(s.tp1)}</strong></div><div class="level"><span>TP2</span><strong>${fmt(s.tp2)}</strong></div></div><div class="muted">RSI ${s.rsi.toFixed(1)} · EMA 9/20/50</div><div class="action-row"><button class="enter-button" onclick="markEntered('${s.id}')">ENTRÉ</button><button class="ignore-button" onclick="markIgnored('${s.id}')">NO ENTRÉ</button></div></article>`).join(""):'<div class="empty-state">No hay señales activas.</div>';}
+function renderSignals(){const area=document.getElementById("signals");if(!area)return;const active=signals.filter(s=>s.status==="ACTIVE");setText("signal-count",active.length);area.innerHTML=active.length?active.map(s=>`<article class="signal-card"><div class="muted">${s.id} · ${s.market}</div><h3 class="${s.direction==="COMPRAR"?"buy":"sell"}">${s.direction}</h3><div class="levels"><div class="level"><span>ENTRADA</span><strong>${fmt(s.entry)}</strong></div><div class="level"><span>SL</span><strong>${fmt(s.sl)}</strong></div><div class="level"><span>TP1 ESTRUCTURAL</span><strong>${fmt(s.tp1)}</strong></div><div class="level"><span>TP2</span><strong>${fmt(s.tp2)}</strong></div></div><div class="muted">${s.mode||"RSI + EMA"} · RSI ${s.rsi.toFixed(1)} · EMA 9/20/50</div><div class="action-row"><button class="enter-button" onclick="markEntered('${s.id}')">ENTRÉ</button><button class="ignore-button" onclick="markIgnored('${s.id}')">NO ENTRÉ</button></div></article>`).join(""):'<div class="empty-state">No hay señales activas.</div>';}
 function renderOperations(){const area=document.getElementById("operations");if(!area)return;const open=operations.filter(x=>x.result==="OPEN");setText("operation-count",open.length);area.innerHTML=open.length?open.map(o=>`<article class="operation-card"><strong>${o.market} · ${o.direction}</strong><p>Entrada ${fmt(o.entry)} · Actual ${fmt(o.currentPrice)}</p><p>SL inicial ${fmt(o.sl)} · TP1 ${fmt(o.tp1)} · TP2 ${fmt(o.tp2)}</p>${o.tp1Hit?`<p class="result-warning">TP1: 50% COBRADO · SL RESTANTE: ${fmt(o.protectionSL)} (+0.5R)</p>`:`<p class="result-warning">${o.managementMessage||"EN SEGUIMIENTO · TP1 COBRA 50%"}</p>`}</article>`).join(""):'<div class="empty-state">No tienes operaciones manuales abiertas.</div>'; }
 function renderHistory(){const a=document.getElementById("history");if(!a)return;a.innerHTML=history.length?history.slice(0,100).map(x=>`<article class="history-card"><strong>${x.market||""}</strong><p>${x.direction||""} · ${x.result}</p></article>`).join(""):'<div class="empty-state">Sin resultados registrados.</div>';}
 function fmt(v){return Number(v).toPrecision(7).replace(/0+$/,"").replace(/\.$/,"");}
@@ -60,23 +60,32 @@ function buildSignal(candles,i,rsis){
  if([e9,e20,e50,p9,p20,p50].some(x=>x==null))return null;
  const bullishTrend=e9>e20&&e20>e50&&e9>p9&&e20>p20&&e50>=p50;
  const bearishTrend=e9<e20&&e20<e50&&e9<p9&&e20<p20&&e50<=p50;
- const buySetup=prev<rsiConfig.high&&r>=rsiConfig.high&&bullishTrend;
- const sellSetup=prev>rsiConfig.low&&r<=rsiConfig.low&&bearishTrend;
- if(!buySetup&&!sellSetup)return null;
- const dir=buySetup?"COMPRAR":"VENDER",sw=swingPoints(candles,i),entry=c.close;let sl,tp1,tp2;
- if(buySetup){
-  const supports=sw.lows.filter(x=>x.i<i&&x.v<entry);sl=supports.length?supports.at(-1).v:Math.min(...candles.slice(Math.max(0,i-7),i+1).map(x=>x.low));
-  const risk=entry-sl;
-  const targets=sw.highs.filter(x=>x.i<i&&x.v>=entry+risk*1.5).map(x=>x.v).sort((x,y)=>x-y);
+ const rsiBuy=prev<rsiConfig.high&&r>=rsiConfig.high&&bullishTrend;
+ const rsiSell=prev>rsiConfig.low&&r<=rsiConfig.low&&bearishTrend;
+ const sw=swingPoints(candles,i),body=Math.abs(c.close-c.open),range=Math.max(c.high-c.low,1e-12);
+ const lowerWick=Math.min(c.open,c.close)-c.low,upperWick=c.high-Math.max(c.open,c.close);
+ const recent=candles.slice(Math.max(0,i-14),i),atr=recent.length?recent.reduce((sum,x)=>sum+(x.high-x.low),0)/recent.length:range;
+ const tolerance=Math.max(atr*0.18,range*0.08);
+ const supports=sw.lows.filter(x=>x.i<i&&c.low<=x.v+tolerance&&c.close>x.v);
+ const resistances=sw.highs.filter(x=>x.i<i&&c.high>=x.v-tolerance&&c.close<x.v);
+ const support=supports.at(-1),resistance=resistances.at(-1);
+ const structuralBuy=!!support&&c.close>c.open&&lowerWick>=Math.max(body*1.2,range*0.18)&&r>prev&&e9>e20;
+ const structuralSell=!!resistance&&c.close<c.open&&upperWick>=Math.max(body*1.2,range*0.18)&&r<prev&&e9<e20;
+ if(!rsiBuy&&!rsiSell&&!structuralBuy&&!structuralSell)return null;
+ const buy= rsiBuy||(!rsiSell&&structuralBuy),dir=buy?"COMPRAR":"VENDER";
+ const mode=(buy?(rsiBuy?"RSI + EMA":"REBOTE ESTRUCTURAL"):(rsiSell?"RSI + EMA":"REBOTE ESTRUCTURAL"));
+ const entry=c.close;let sl,tp1,tp2;
+ if(buy){
+  const supportsBelow=sw.lows.filter(x=>x.i<i&&x.v<entry);sl=supportsBelow.length?supportsBelow.at(-1).v:Math.min(...candles.slice(Math.max(0,i-7),i+1).map(x=>x.low));
+  const risk=entry-sl,targets=sw.highs.filter(x=>x.i<i&&x.v>=entry+risk*1.5).map(x=>x.v).sort((x,y)=>x-y);
   tp1=targets[0];tp2=targets.find(v=>v>=entry+risk*2.5&&v>tp1);
  }else{
   const resist=sw.highs.filter(x=>x.i<i&&x.v>entry);sl=resist.length?resist.at(-1).v:Math.max(...candles.slice(Math.max(0,i-7),i+1).map(x=>x.high));
-  const risk=sl-entry;
-  const targets=sw.lows.filter(x=>x.i<i&&x.v<=entry-risk*1.5).map(x=>x.v).sort((x,y)=>y-x);
+  const risk=sl-entry,targets=sw.lows.filter(x=>x.i<i&&x.v<=entry-risk*1.5).map(x=>x.v).sort((x,y)=>y-x);
   tp1=targets[0];tp2=targets.find(v=>v<=entry-risk*2.5&&v<tp1);
  }
  if(!Number.isFinite(tp1)||!Number.isFinite(tp2)||!Number.isFinite(sl)||(dir==="COMPRAR"?(sl>=entry||tp1<=entry||tp2<=tp1):(sl<=entry||tp1>=entry||tp2>=tp1)))return null;
- return{direction:dir,entry,sl,tp1,tp2,rsi:r,time:c.time,index:i};
+ return{direction:dir,entry,sl,tp1,tp2,rsi:r,time:c.time,index:i,mode,structuralLevel:buy?(support?.v??null):(resistance?.v??null)};
 }
 function runBacktest(symbol,market,candles){
  if(!Array.isArray(candles)||candles.length<65)return;
