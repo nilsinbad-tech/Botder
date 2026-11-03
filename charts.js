@@ -58,20 +58,29 @@ function renderMarketChart(){
  for(let i=0;i<=4;i++){let v=max-(max-min)*i/4,y=top+ph*i/4;ctx.fillStyle="#8495aa";ctx.textAlign="left";ctx.fillText(v.toFixed(4),w-right+5,y+3);}
  const step=pw/Math.max(viewCount,data.length),bw=Math.max(2,Math.min(10,step*.65));
  data.forEach((c,i)=>{let x=left+step*(i+.5),color=c.close>=c.open?"#20c997":"#ff5364";ctx.strokeStyle=color;ctx.fillStyle=color;ctx.beginPath();ctx.moveTo(x,yOf(c.high));ctx.lineTo(x,yOf(c.low));ctx.stroke();let y1=yOf(Math.max(c.open,c.close)),y2=yOf(Math.min(c.open,c.close));ctx.fillRect(x-bw/2,y1,bw,Math.max(1,y2-y1));});
- // Historical backtest zones and entry/exit markers, aligned by candle time.
+ // Historical trade zones and exact price labels.
  backtestTradeData.forEach(t=>{
   const entryTime=Number(t.entryTime)/1000,exitTime=Number(t.exitTime||Date.now())/1000;
   if(!Number.isFinite(entryTime)||entryTime>data[data.length-1].time||exitTime<data[0].time)return;
   const idx=data.findIndex(v=>v.time>=entryTime),endIdx=data.findIndex(v=>v.time>=exitTime);
   const ix=idx<0?data.length-1:idx,ex=endIdx<0?data.length-1:endIdx;
   const x1=left+step*(ix+.5),x2=left+step*(Math.max(ix,ex)+.5);
-  const yEntry=yOf(t.entry),yStop=yOf(t.sl),yTarget=yOf(t.tp2);
-  ctx.fillStyle=t.result==="PERDIDA"?"rgba(255,83,100,.13)":"rgba(32,201,151,.13)";
-  ctx.fillRect(x1,Math.min(yEntry,yStop),Math.max(2,x2-x1),Math.abs(yEntry-yStop));
-  ctx.fillStyle="rgba(32,201,151,.12)";ctx.fillRect(x1,Math.min(yEntry,yTarget),Math.max(2,x2-x1),Math.abs(yEntry-yTarget));
-  ctx.strokeStyle=t.direction==="COMPRAR"?"#20c997":"#ff5364";ctx.lineWidth=1.4;ctx.beginPath();ctx.moveTo(x1,yEntry);ctx.lineTo(x2,yEntry);ctx.stroke();
-  ctx.fillStyle=ctx.strokeStyle;ctx.beginPath();ctx.arc(x1,yEntry,3.5,0,Math.PI*2);ctx.fill();
-  if(t.exitTime){ctx.fillStyle=t.result==="GANADA"?"#20c997":"#ff5364";ctx.font="9px Arial";ctx.textAlign="left";ctx.fillText(t.result==="GANADA"?"✓":"×",x2,yEntry-6);}
+  const yEntry=yOf(t.entry),yStop=yOf(t.sl),exitPrice=Number(t.price),yExit=Number.isFinite(exitPrice)?yOf(exitPrice):yOf(t.tp2);
+  ctx.fillStyle="rgba(255,83,100,.14)";ctx.fillRect(x1,Math.min(yEntry,yStop),Math.max(3,x2-x1),Math.abs(yEntry-yStop));
+  if(t.result==="GANADA"){ctx.fillStyle="rgba(32,201,151,.14)";ctx.fillRect(x1,Math.min(yEntry,yExit),Math.max(3,x2-x1),Math.abs(yEntry-yExit));}
+  ctx.lineWidth=1.3;ctx.setLineDash([4,3]);
+  ctx.strokeStyle="#ff5364";ctx.beginPath();ctx.moveTo(x1,yStop);ctx.lineTo(x2,yStop);ctx.stroke();
+  ctx.strokeStyle="#48a8ff";ctx.beginPath();ctx.moveTo(x1,yEntry);ctx.lineTo(x2,yEntry);ctx.stroke();
+  ctx.setLineDash([]);
+  const dot=(x,y,color)=>{ctx.fillStyle=color;ctx.beginPath();ctx.arc(x,y,4,0,Math.PI*2);ctx.fill();ctx.strokeStyle="#101827";ctx.lineWidth=1;ctx.stroke();};
+  dot(x1,yEntry,"#48a8ff");dot(x1,yStop,"#ff5364");
+  const label=(txt,x,y,color)=>{ctx.font="bold 10px Arial";ctx.textAlign="left";const tw=ctx.measureText(txt).width;ctx.fillStyle="rgba(8,13,22,.88)";ctx.fillRect(x,y-10,tw+8,14);ctx.fillStyle=color;ctx.fillText(txt,x+4,y+1);};
+  label("ENTRADA "+Number(t.entry).toPrecision(7),Math.min(w-right-130,x1+5),yEntry-5,"#70bdff");
+  label("SL "+Number(t.sl).toPrecision(7),Math.min(w-right-110,x1+5),yStop-5,"#ff7180");
+  if(t.exitTime&&Number.isFinite(exitPrice)){
+   const won=t.result==="GANADA";dot(x2,yExit,won?"#20c997":"#ff5364");
+   label((won?"GANADA ":"PERDIDA ")+exitPrice.toPrecision(7),Math.min(w-right-135,x2+5),yExit-5,won?"#43e0b0":"#ff7180");
+  }
  });
  tradeLevels.forEach(a=>{let y=yOf(a.value);ctx.strokeStyle=a.color;ctx.setLineDash([4,3]);ctx.beginPath();ctx.moveTo(left,y);ctx.lineTo(w-right,y);ctx.stroke();ctx.setLineDash([]);ctx.fillStyle=a.color;ctx.textAlign="left";ctx.fillText(a.label,w-right+5,y-4);});
  ctx.fillStyle="#8495aa";ctx.textAlign="left";ctx.fillText((chartGranularity===30?"30S":"M"+(chartGranularity/60))+" · "+data.length+" velas",left,h-7);ctx.textAlign="right";ctx.fillText(new Date(data[data.length-1].time*1000).toLocaleTimeString("es-PA",{hour:"2-digit",minute:"2-digit"}),w-right,h-7);
