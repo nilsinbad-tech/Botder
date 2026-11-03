@@ -20,7 +20,7 @@ function renderHistory(){const a=document.getElementById("history");if(!a)return
 function fmt(v){return Number(v).toPrecision(7).replace(/0+$/,"").replace(/\.$/,"");}
 function emaAt(v,p,end=v.length-1){if(end+1<p)return null;let x=v.slice(0,p).reduce((a,b)=>a+b,0)/p,k=2/(p+1);for(let i=p;i<=end;i++)x=v[i]*k+x*(1-k);return x;}
 function rsiSeries(values,period=14){const out=Array(values.length).fill(null);if(values.length<=period)return out;let gain=0,loss=0;for(let i=1;i<=period;i++){const d=values[i]-values[i-1];gain+=Math.max(0,d);loss+=Math.max(0,-d);}let ag=gain/period,al=loss/period;out[period]=al===0?100:100-100/(1+ag/al);for(let i=period+1;i<values.length;i++){const d=values[i]-values[i-1];ag=(ag*(period-1)+Math.max(0,d))/period;al=(al*(period-1)+Math.max(0,-d))/period;out[i]=al===0?100:100-100/(1+ag/al);}return out;}
-const rsiConfig={timeframe:300,period:14,low:40,mid:50,high:60};
+const rsiConfig={timeframe:60,period:14,low:40,mid:50,high:60};
 function aggregateRsiCandles(candles,seconds){
  if(seconds<=60)return candles.map((c,i)=>({...c,_sourceIndex:i}));
  const buckets=new Map();
@@ -65,8 +65,8 @@ function readStrategySettings(){
 function strategyTrend(closes,i){
  const ps=strategyConfig.emaPeriods,now=ps.map(p=>emaAt(closes,p,i)),before=ps.map(p=>emaAt(closes,p,i-1));
  if(now.some(x=>x==null)||before.some(x=>x==null))return{bull:false,bear:false};
- const bull=now.every((v,k)=>k===0||v>now[k-1])&&now.every((v,k)=>v>before[k]);
- const bear=now.every((v,k)=>k===0||v<now[k-1])&&now.every((v,k)=>v<before[k]);
+ const bull=now[0]>now[now.length-1]&&now.every((v,k)=>v>before[k]);
+ const bear=now[0]<now[now.length-1]&&now.every((v,k)=>v<before[k]);
  return{bull,bear};
 }
 function bollingerBasis(values,period,end=values.length-1){if(end+1<period)return null;return values.slice(end-period+1,end+1).reduce((a,b)=>a+b,0)/period;}
@@ -88,10 +88,10 @@ function buildSignal(candles,i,rsis){
  const structuralBuy=!!support&&bullishStructure&&c.close>c.open&&lowerWick>=Math.max(body*1.2,range*0.18)&&r>prev&&trend.bull;
  const structuralSell=!!resistance&&bearishStructure&&c.close<c.open&&upperWick>=Math.max(body*1.2,range*0.18)&&r<prev&&trend.bear;
  // Ningún disparador opera aislado: RSI/Bollinger también necesitan estructura HH+HL o LH+LL.
- const validRsiBuy=rsiBuy&&bullishStructure,validRsiSell=rsiSell&&bearishStructure;
- const validBbBuy=bbBuy&&bullishStructure,validBbSell=bbSell&&bearishStructure;
+ const validRsiBuy=rsiBuy,validRsiSell=rsiSell;
+ const validBbBuy=bbBuy,validBbSell=bbSell;
  let direction,mode,entry=c.close,sl,tp1,tp2;
- if(validRsiBuy||validBbBuy||validRsiSell||validBbSell){direction=(validRsiBuy||validBbBuy)?"COMPRAR":"VENDER";mode=[validRsiBuy||validRsiSell?"RSI":null,validBbBuy||validBbSell?"BOLLINGER CENTRAL":null,"ESTRUCTURA "+((validRsiBuy||validBbBuy)?"HH + HL":"LH + LL"),"EMA"].filter(Boolean).join(" + ");}
+ if(validRsiBuy||validBbBuy||validRsiSell||validBbSell){direction=(validRsiBuy||validBbBuy)?"COMPRAR":"VENDER";mode=[validRsiBuy||validRsiSell?"RSI":null,validBbBuy||validBbSell?"BOLLINGER CENTRAL":null,( (validRsiBuy||validBbBuy)?(bullishStructure?"HH + HL":"SIN ESTRUCTURA COMPLETA"):(bearishStructure?"LH + LL":"SIN ESTRUCTURA COMPLETA")),"EMA"].filter(Boolean).join(" + ");}
  else if(structuralBuy||structuralSell){direction=structuralBuy?"VENDER":"COMPRAR";mode="REBOTE ESTRUCTURAL INVERTIDO";}
  else return null;
  if(direction==="COMPRAR"){
