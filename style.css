@@ -416,3 +416,50 @@ body{background:#050b14}
 .stats-panel{margin-top:12px}
 @media(max-width:900px){.trading-workspace{grid-template-columns:1fr}.bot-sidebar{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}.bot-sidebar .side-card:first-child{grid-column:1/-1}}
 @media(max-width:560px){.container{padding:8px}.trading-workspace{gap:8px}.chart-panel{padding:9px}.bot-sidebar{grid-template-columns:1fr}#chart-area{height:390px;min-height:340px}.toolbar-note{margin-left:0;width:100%}.chart-toolbar{gap:9px}.chart-controls{gap:5px}}
+
+
+/* Mobile-first opportunity panel and cleaner chart labels */
+.zone-outlook-list{display:grid;gap:8px}
+.zone-outlook-list .projection-card{margin:0;padding:10px 11px;border-radius:9px}
+.zone-outlook-list .projection-card strong{font-size:16px;margin:5px 0}
+.zone-source{font-size:9px;letter-spacing:.55px;color:#9db2c8;font-weight:700;margin:3px 0 6px}
+.zone-outlook-list .projection-meta{font-size:9px;line-height:1.5}
+.zone-outlook-list .projection-meta b{display:inline-block;margin-top:5px;color:#f5bd4f;font-size:8px;letter-spacing:.25px}
+@media(max-width:560px){
+ .container{padding:6px}
+ .topbar{padding:7px 3px 10px}
+ .topbar h1{font-size:18px}
+ .topbar p{font-size:8px;margin:4px 0}
+ .connection{font-size:8px;padding:6px 8px}
+ .trading-workspace{display:flex;flex-direction:column;gap:7px}
+ .bot-sidebar{order:0;display:grid;grid-template-columns:1fr 1fr;gap:7px;width:100%;margin-top:7px}
+ .bot-sidebar .side-card{padding:9px;min-width:0}
+ .bot-sidebar .side-card:first-child{grid-column:1/-1}
+ .bot-sidebar .side-card:nth-child(2){grid-column:1/-1}
+ .bot-sidebar .side-card:nth-child(3),.bot-sidebar .side-card:nth-child(4){grid-column:span 1}
+ .bot-sidebar .side-card h2{font-size:14px}
+ .side-title,.side-eyebrow{font-size:8px}
+ .side-status{font-size:9px;margin:5px 0}
+ .chart-panel{order:1;width:100%;margin-top:0;padding:8px}
+ .chart-panel>.section-heading h2{font-size:14px}
+ .tf-caption{font-size:8px}
+ .chart-toolbar{font-size:8px;gap:7px;padding:5px 2px}
+ .chart-toolbar .dot{width:6px;height:6px}
+ #chart-area{height:340px;min-height:300px}
+ .chart-legend{font-size:8px;gap:4px;padding:6px 0}
+ .chart-legend span{padding:3px 5px}
+ #structure-diagnostic{font-size:8px}
+ .indicator-heading{font-size:9px}
+ #rsi-area{height:78px!important;min-height:70px!important}
+ #adx-area{height:72px!important;min-height:65px!important}
+ .price-bar strong{font-size:15px}
+ .zone-outlook-list .projection-card strong{font-size:14px}
+ .zone-outlook-list .projection-meta{font-size:8px}
+ .bot-sidebar .side-list{font-size:9px;gap:6px}
+ .bot-sidebar #signals .signal-card{padding:8px}
+ .bot-sidebar #signals .signal-card h3{font-size:13px}
+ .bot-sidebar #signals .levels{gap:4px}
+ .bot-sidebar #signals .level{padding:6px}
+ .bot-sidebar #signals .level strong{font-size:10px}
+ .bot-sidebar #signals .level span{font-size:7px}
+}
