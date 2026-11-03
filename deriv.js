@@ -1,184 +1,83 @@
-
-const DERIV_CONFIG = {
-  endpoint: "wss://api.derivws.com/trading/v1/options/ws/public"
-};
-
-let derivSocket = null;
-let derivConnected = false;
-let availableSymbols = [];
-let selectedSymbol = null;
-let reconnectTimer = null;
+const DERIV_CONFIG = { endpoint: "wss://api.derivws.com/trading/v1/options/ws/public" };
+let derivSocket = null, availableSymbols = [], selectedSymbol = null;
+let candleBuffer = [], tickSubId = null, candleSubId = null, reconnectTimer = null;
 
 function sendDeriv(data) {
-  if (derivSocket?.readyState !== WebSocket.OPEN) return false;
-  derivSocket.send(JSON.stringify(data));
-  return true;
+  if (!derivSocket || derivSocket.readyState !== WebSocket.OPEN) return false;
+  derivSocket.send(JSON.stringify(data)); return true;
 }
-
-function setConnectionStatus(connected) {
-  const el = document.getElementById("connection");
-  if (!el) return;
-
-  el.textContent = connected ? "● CONECTADO" : "● DESCONECTADO";
-  el.className = connected
-    ? "connection online"
-    : "connection offline";
+function setConnectionStatus(ok) {
+  const el = document.getElementById("connection"); if (!el) return;
+  el.textContent = ok ? "● CONECTADO" : "● DESCONECTADO";
+  el.className = ok ? "connection online" : "connection offline";
 }
-
-function showDiagnostic(message) {
-  const el = document.getElementById("api-diagnostic");
-  if (el) el.textContent = message;
+function showChartMessage(message) {
+  const el = document.getElementById("chart-message"); if (el) el.textContent = message;
 }
-
 function connectDeriv() {
-  if (
-    derivSocket &&
-    (derivSocket.readyState === WebSocket.OPEN ||
-     derivSocket.readyState === WebSocket.CONNECTING)
-  ) return;
-
+  if (derivSocket && [WebSocket.OPEN, WebSocket.CONNECTING].includes(derivSocket.readyState)) return;
   clearTimeout(reconnectTimer);
-
   derivSocket = new WebSocket(DERIV_CONFIG.endpoint);
-
   derivSocket.onopen = () => {
-    derivConnected = true;
     setConnectionStatus(true);
-    showDiagnostic("Conectado. Solicitando instrumentos...");
-
-    sendDeriv({
-      active_symbols: "brief",
-      req_id: 1
-    });
+    sendDeriv({ active_symbols: "brief", product_type: "basic", req_id: 1 });
   };
-
   derivSocket.onmessage = event => {
-    let data;
-
-    try {
-      data = JSON.parse(event.data);
-    } catch (error) {
-      showDiagnostic("Respuesta no válida de Deriv.");
-      return;
+    let data; try { data = JSON.parse(event.data); } catch { return; }
+    if (data.error) { showChartMessage("Deriv: " + data.error.message); return; }
+    if (data.msg_type === "active_symbols") renderMarkets(data.active_symbols || []);
+    if (data.msg_type === "candles" || data.msg_type === "history") {
+      candleBuffer = (data.candles || []).map(c => ({ time: Number(c.epoch), open: Number(c.open), high: Number(c.high), low: Number(c.low), close: Number(c.close) }));
+      if (typeof updateCandles === "function") updateCandles(candleBuffer);
+      if (typeof analyzeCandles === "function") analyzeCandles(selectedSymbol, selectedMarketName(), candleBuffer);
+      showChartMessage("Gráfico M1 en vivo · " + candleBuffer.length + " velas cargadas");
     }
-
-    console.log("RESPUESTA DERIV:", data);
-
-    if (data.error) {
-      showDiagnostic("Error de Deriv: " + data.error.message);
-      return;
+    if (data.msg_type === "ohlc" && data.ohlc) {
+      const o = data.ohlc, candle = { time: Number(o.open_time), open: Number(o.open), high: Number(o.high), low: Number(o.low), close: Number(o.close) };
+      if (candleBuffer.length && candleBuffer[candleBuffer.length - 1].time === candle.time) candleBuffer[candleBuffer.length - 1] = candle;
+      else candleBuffer.push(candle);
+      if (typeof addCandle === "function") addCandle(candle);
+      if (typeof analyzeCandles === "function") analyzeCandles(selectedSymbol, selectedMarketName(), candleBuffer);
     }
-
-    if (data.msg_type === "active_symbols") {
-      handleActiveSymbols(data.active_symbols || []);
+    if (data.msg_type === "tick" && data.tick) {
+      const price = Number(data.tick.quote);
+      const el = document.getElementById("current-price"); if (el) el.textContent = price.toFixed(4);
+      if (selectedSymbol) updateOperationPrice(selectedSymbol, price);
     }
   };
-
-  derivSocket.onerror = () => {
-    showDiagnostic("Error en la conexión con Deriv.");
-  };
-
-  derivSocket.onclose = () => {
-    derivConnected = false;
-    setConnectionStatus(false);
-    showDiagnostic("Conexión cerrada. Reconectando...");
-
-    reconnectTimer = setTimeout(connectDeriv, 5000);
-  };
+  derivSocket.onerror = () => showChartMessage("No se pudo conectar con Deriv.");
+  derivSocket.onclose = () => { setConnectionStatus(false); reconnectTimer = setTimeout(connectDeriv, 5000); };
 }
-
-function handleActiveSymbols(symbols) {
-  availableSymbols = symbols;
-
-  const count = document.getElementById("market-count");
-
-  if (count) {
-    count.textContent = symbols.length + " instrumentos recibidos";
-  }
-
-  const area = document.getElementById("markets");
-
+function selectedMarketName() {
+  const item = availableSymbols.find(x => x.symbol === selectedSymbol);
+  return item ? item.display_name : selectedSymbol || "";
+}
+function renderMarkets(all) {
+  availableSymbols = all.filter(x => /volatility/i.test((x.display_name || "") + " " + (x.submarket || "")));
+  const area = document.getElementById("markets"), count = document.getElementById("market-count");
   if (!area) return;
-
-  if (!symbols.length) {
-    area.innerHTML =
-      '<div class="empty-state">Deriv no devolvió instrumentos.</div>';
-    showDiagnostic("Lista vacía recibida de Deriv.");
-    return;
-  }
-
+  if (count) count.textContent = availableSymbols.length + " índices Volatility";
   area.innerHTML = "";
-
-  symbols.forEach((item, index) => {
-    const name =
-      item.display_name ||
-      item.underlying_symbol_name ||
-      item.name ||
-      "Instrumento " + (index + 1);
-
-    const symbol =
-      item.symbol ||
-      item.underlying_symbol ||
-      item.underlying ||
-      "";
-
-    const card = document.createElement("button");
-    card.className = "market";
-
-    const title = document.createElement("strong");
-    title.textContent = name;
-
-    const code = document.createElement("span");
-    code.textContent = "Código: " + (symbol || "No identificado");
-
-    const details = document.createElement("span");
-    details.textContent =
-      "Mercado: " + (item.market || "N/D") +
-      " · Submercado: " + (item.submarket || "N/D");
-
-    const raw = document.createElement("span");
-    raw.textContent = JSON.stringify(item);
-    raw.style.display = "block";
-    raw.style.marginTop = "8px";
-    raw.style.fontSize = "9px";
-    raw.style.overflowWrap = "anywhere";
-    raw.style.color = "#8495aa";
-
-    card.append(title, code, details, raw);
-
-    if (symbol) {
-      card.addEventListener("click", () => {
-        selectedSymbol = symbol;
-
-        document.querySelectorAll(".market").forEach(element => {
-          element.classList.toggle(
-            "active",
-            element === card
-          );
-        });
-
-        const chartTitle = document.getElementById("chart-title");
-        if (chartTitle) chartTitle.textContent = name;
-
-        showDiagnostic("Instrumento seleccionado: " + symbol);
-      });
-    }
-
+  if (!availableSymbols.length) { area.innerHTML = '<div class="empty-state">Deriv no devolvió índices Volatility. Revisa la conexión.</div>'; return; }
+  availableSymbols.forEach(item => {
+    const card = document.createElement("button"); card.className = "market"; card.dataset.symbol = item.symbol;
+    const title = document.createElement("strong"); title.textContent = item.display_name || item.symbol;
+    const code = document.createElement("span"); code.textContent = item.symbol;
+    card.append(title, code); card.addEventListener("click", () => selectMarket(item.display_name || item.symbol, item.symbol));
     area.appendChild(card);
   });
-
-  showDiagnostic(
-    "Deriv respondió correctamente. Mostrando los " +
-    symbols.length + " instrumentos sin filtros."
-  );
+  if (!selectedSymbol) selectMarket(availableSymbols[0].display_name || availableSymbols[0].symbol, availableSymbols[0].symbol);
 }
-
-function getAvailableSymbols() {
-  return availableSymbols;
+function openMarket(symbol) {
+  if (!symbol || !sendDeriv({ forget_all: "ticks" })) { /* socket may still be connecting */ }
+  if (!derivSocket || derivSocket.readyState !== WebSocket.OPEN) return;
+  selectedSymbol = symbol; candleBuffer = []; tickSubId = null; candleSubId = null;
+  if (typeof setChartSymbol === "function") setChartSymbol(symbol);
+  const price = document.getElementById("current-price"); if (price) price.textContent = "---";
+  sendDeriv({ ticks_history: symbol, count: 120, end: "latest", style: "candles", granularity: 60, subscribe: 1, req_id: 10 });
+  sendDeriv({ ticks: symbol, subscribe: 1, req_id: 11 });
+  showChartMessage("Solicitando velas M1 y precio en vivo...");
 }
-
-function isDerivConnected() {
-  return derivConnected;
-}
-
+function getAvailableSymbols() { return availableSymbols; }
+function isDerivConnected() { return derivSocket && derivSocket.readyState === WebSocket.OPEN; }
 connectDeriv();
