@@ -54,7 +54,7 @@ document.addEventListener("DOMContentLoaded",()=>{["rsi-timeframe","rsi-period",
 
 
 const strategyConfig={emaPeriods:[9,20,50],rsiPeriod:14,adxPeriod:14,atrPeriod:14,bbPeriod:20,bbDeviation:2,adxMin:20,slBufferAtr:.12};
-const rsiConfig={timeframe:60,period:14,low:40,mid:50,high:60};
+
 let analysisGranularity=60,lastProjection=null,lastProjectionNotice="";
 function emaSeries(v,p){const o=Array(v.length).fill(null);if(v.length<p)return o;let e=v.slice(0,p).reduce((a,b)=>a+b,0)/p,k=2/(p+1);o[p-1]=e;for(let i=p;i<v.length;i++){e=v[i]*k+e*(1-k);o[i]=e;}return o;}
 function rsiSeries(v,p=14){const o=Array(v.length).fill(null);if(v.length<=p)return o;let g=0,l=0;for(let i=1;i<=p;i++){let d=v[i]-v[i-1];g+=Math.max(0,d);l+=Math.max(0,-d);}let ag=g/p,al=l/p;o[p]=al===0?100:100-100/(1+ag/al);for(let i=p+1;i<v.length;i++){let d=v[i]-v[i-1];ag=(ag*(p-1)+Math.max(0,d))/p;al=(al*(p-1)+Math.max(0,-d))/p;o[i]=al===0?100:100-100/(1+ag/al);}return o;}
