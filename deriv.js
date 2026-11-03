@@ -25,9 +25,15 @@ function showStatus(message, connected = derivConnected) {
     ? "connection online"
     : "connection offline";
 
-  console.log("[DERIV]", message);
-}
+  const diagnostic = document.getElementById("api-diagnostic");
 
+if (diagnostic) {
+  diagnostic.textContent =
+    "Respuesta: " + (data.msg_type || "sin tipo") +
+    " | Error: " + (data.error?.message || "ninguno") +
+    " | Símbolos: " + (data.active_symbols?.length ?? "sin lista");
+}
+console.log("[DERIV RESPUESTA]", data);
 function connectDeriv() {
   derivSocket = new WebSocket(DERIV_CONFIG.endpoint);
 
