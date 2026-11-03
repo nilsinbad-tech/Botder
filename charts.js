@@ -91,9 +91,12 @@ function renderMarketChart(){
   ctx.strokeStyle="#20c997";ctx.setLineDash([3,3]);ctx.beginPath();ctx.moveTo(x1,yTp2);ctx.lineTo(x2,yTp2);ctx.stroke();ctx.setLineDash([]);
   dot(x1,yTp2,"#20c997");
   label("TP2 "+Number(t.tp2).toPrecision(7),Math.min(w-right-130,x1+5),yTp2-5,"#43e0b0");
-  if(t.reason&&String(t.reason).includes("TP1")){
-   const tp1=Number(t.price),yTp1=yOf(tp1);dot(x2,yTp1,"#f5c451");
-   label("TP1 "+tp1.toPrecision(7),Math.min(w-right-130,x2+5),yTp1-5,"#f5c451");
+  const tp1=Number(t.tp1);
+  if(Number.isFinite(tp1)){
+   const yTp1=yOf(tp1);
+   ctx.strokeStyle="#f5c451";ctx.setLineDash([3,3]);ctx.beginPath();ctx.moveTo(x1,yTp1);ctx.lineTo(x2,yTp1);ctx.stroke();ctx.setLineDash([]);
+   dot(x1,yTp1,"#f5c451");
+   label("TP1 "+tp1.toPrecision(7),Math.min(w-right-130,x1+5),yTp1-5,"#f5c451");
   }
   if(t.exitTime&&Number.isFinite(exitPrice)){
    const won=t.result==="GANADA";dot(x2,yExit,won?"#20c997":"#ff5364");
