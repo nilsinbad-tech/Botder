@@ -1,5 +1,6 @@
 let candleData=[],chartSymbol=null,tradeLevels=[],chartCanvas=null,chartContext=null,resizeObserver=null;
-let backtestTradeData=[];\nlet viewEnd=0,viewCount=100,dragX=null,dragEnd=0,activePointers=new Map(),pinchStart=0,pinchCount=100,chartFrame=null,scaleMin=null,scaleMax=null,scaleWindow="",chartGranularity=60;
+let backtestTradeData=[];
+let viewEnd=0,viewCount=100,dragX=null,dragEnd=0,activePointers=new Map(),pinchStart=0,pinchCount=100,chartFrame=null,scaleMin=null,scaleMax=null,scaleWindow="",chartGranularity=60;
 function createMarketChart(containerId="chart-area"){
  const host=document.getElementById(containerId);if(!host)return false;
  host.innerHTML="";chartCanvas=document.createElement("canvas");
@@ -36,7 +37,8 @@ function setChartSymbol(s){chartSymbol=s;candleData=[];tradeLevels=[];viewEnd=0;
 function setChartGranularity(seconds){chartGranularity=Number(seconds)||60;scaleMin=null;scaleMax=null;scaleWindow="";drawMarketChart();}
 function updateCandles(c){if(!Array.isArray(c))return;candleData=c.filter(x=>[x.time,x.open,x.high,x.low,x.close].every(Number.isFinite)).sort((a,b)=>a.time-b.time).slice();viewEnd=candleData.length;scaleMin=null;scaleMax=null;scaleWindow="";drawMarketChart();}
 function addCandle(c){if(!c||![c.time,c.open,c.high,c.low,c.close].every(Number.isFinite))return;const following=viewEnd>=candleData.length;const last=candleData[candleData.length-1];if(last&&last.time===c.time)candleData[candleData.length-1]=c;else{candleData.push(c);}if(following)viewEnd=candleData.length;else viewEnd=Math.min(viewEnd,candleData.length);drawMarketChart();}
-function setBacktestTrades(trades){backtestTradeData=Array.isArray(trades)?trades.slice():[];drawMarketChart();}\nfunction drawTradeLevels(e,s,t){tradeLevels=[{value:Number(e),label:"ENTRADA",color:"#48a8ff"},{value:Number(s),label:"SL",color:"#ff5364"},{value:Number(t),label:"TP",color:"#20c997"}];drawMarketChart();}
+function setBacktestTrades(trades){backtestTradeData=Array.isArray(trades)?trades.slice():[];drawMarketChart();}
+function drawTradeLevels(e,s,t){tradeLevels=[{value:Number(e),label:"ENTRADA",color:"#48a8ff"},{value:Number(s),label:"SL",color:"#ff5364"},{value:Number(t),label:"TP",color:"#20c997"}];drawMarketChart();}
 function clearTradeLevels(){tradeLevels=[];drawMarketChart();}
 function getActiveChartSymbol(){return chartSymbol;}
 function drawMarketChart(){if(chartFrame!==null)return;chartFrame=requestAnimationFrame(()=>{chartFrame=null;renderMarketChart();});}
