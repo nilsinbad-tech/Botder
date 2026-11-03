@@ -9,7 +9,7 @@ function createMarketChart(containerId="chart-area"){
  chartCanvas.addEventListener("pointerdown",e=>{dragX=e.clientX;dragEnd=viewEnd;chartCanvas.setPointerCapture(e.pointerId);chartCanvas.style.cursor="grabbing";});
  chartCanvas.addEventListener("pointermove",e=>{if(dragX===null)return;const step=(chartCanvas.parentElement.clientWidth-76)/Math.max(1,viewCount);const shift=Math.round((dragX-e.clientX)/Math.max(1,step));viewEnd=Math.max(Math.min(viewCount,candleData.length),Math.min(candleData.length,dragEnd+shift));drawMarketChart();});
  const endDrag=()=>{dragX=null;chartCanvas.style.cursor="grab"};chartCanvas.addEventListener("pointerup",endDrag);chartCanvas.addEventListener("pointercancel",endDrag);
- chartCanvas.addEventListener("wheel",e=>{e.preventDefault();const old=viewCount;viewCount=Math.max(15,Math.min(100,Math.round(viewCount*(e.deltaY>0?1.2:.82))));if(viewEnd===candleData.length||viewEnd===0)viewEnd=candleData.length;else viewEnd=Math.min(candleData.length,viewEnd);drawMarketChart();},{passive:false});
+ chartCanvas.addEventListener("wheel",e=>{e.preventDefault();const old=viewCount;viewCount=Math.max(15,Math.min(500,Math.round(viewCount*(e.deltaY>0?1.2:.82))));if(viewEnd===candleData.length||viewEnd===0)viewEnd=candleData.length;else viewEnd=Math.min(candleData.length,viewEnd);drawMarketChart();},{passive:false});
  resizeMarketChart();drawMarketChart();return true;
 }
 function resizeMarketChart(){if(!chartCanvas||!chartContext)return;const host=chartCanvas.parentElement;if(!host)return;const r=host.getBoundingClientRect(),dpr=Math.min(devicePixelRatio||1,2);chartCanvas.width=Math.max(1,Math.floor(r.width*dpr));chartCanvas.height=Math.max(1,Math.floor(r.height*dpr));chartContext.setTransform(dpr,0,0,dpr,0,0);drawMarketChart();}
