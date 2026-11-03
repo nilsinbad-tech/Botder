@@ -161,7 +161,7 @@ function loadMarketHistory(symbol, granularity = selectedGranularity) {
     showChartMessage("Construyendo velas de 30 segundos desde ticks de Deriv...");
   } else {
     sendDeriv({ ticks_history: symbol, count: 5000, end: "latest", style: "candles", granularity: selectedGranularity, req_id: 12 });
-    sendDeriv({ ticks_history: symbol, start: 0, end: "latest", style: "candles", granularity: selectedGranularity, subscribe: 1, req_id: 10 });
+    sendDeriv({ ticks_history: symbol, count: 500, end: "latest", style: "candles", granularity: selectedGranularity, subscribe: 1, req_id: 10 });
     showChartMessage("Cargando historial · " + (selectedGranularity/60) + " min...");
   }
 }
