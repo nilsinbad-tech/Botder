@@ -1,5 +1,5 @@
 let candleData=[],chartSymbol=null,tradeLevels=[],signalMarker=null,chartCanvas=null,chartContext=null,resizeObserver=null,candleStyle="heikin";
-let backtestTradeData=[];
+let backtestTradeData=[],chartSignalData=[];
 let viewEnd=0,viewCount=100,dragX=null,dragEnd=0,activePointers=new Map(),pinchStart=0,pinchCount=100,pinchAnchorIndex=0,pinchAnchorRatio=.5,chartFrame=null,scaleMin=null,scaleMax=null,scaleWindow="",chartGranularity=60;
 function createMarketChart(containerId="chart-area"){
  const host=document.getElementById(containerId);if(!host)return false;
@@ -38,6 +38,8 @@ function setChartGranularity(seconds){chartGranularity=Number(seconds)||60;scale
 function updateCandles(c){if(!Array.isArray(c))return;candleData=c.filter(x=>[x.time,x.open,x.high,x.low,x.close].every(Number.isFinite)).sort((a,b)=>a.time-b.time).slice();viewEnd=candleData.length;scaleMin=null;scaleMax=null;scaleWindow="";drawMarketChart();}
 function addCandle(c){if(!c||![c.time,c.open,c.high,c.low,c.close].every(Number.isFinite))return;const following=viewEnd>=candleData.length;const last=candleData[candleData.length-1];if(last&&last.time===c.time)candleData[candleData.length-1]=c;else{candleData.push(c);}if(following)viewEnd=candleData.length;else viewEnd=Math.min(viewEnd,candleData.length);drawMarketChart();}
 function setBacktestTrades(trades){backtestTradeData=Array.isArray(trades)?trades.slice():[];drawMarketChart();}
+function setSignalMarkers(items){chartSignalData=Array.isArray(items)?items.slice(-80):[];drawMarketChart();}
+function addChartSignalMarker(item){if(!item)return;chartSignalData=chartSignalData.filter(x=>!(x.time===item.time&&x.direction===item.direction));chartSignalData.push(item);chartSignalData=chartSignalData.slice(-80);drawMarketChart();}
 function toHeikinAshi(candles){
  let previousOpen=null,previousClose=null;
  return candles.map(c=>{
@@ -68,6 +70,8 @@ function renderMarketChart(){
  for(let i=0;i<=4;i++){let v=max-(max-min)*i/4,y=top+ph*i/4;ctx.fillStyle="#8495aa";ctx.textAlign="left";ctx.fillText(v.toFixed(4),w-right+5,y+3);}
  const step=pw/Math.max(viewCount,data.length),bw=Math.max(2,Math.min(10,step*.65));
  data.forEach((c,i)=>{let x=left+step*(i+.5),color=c.close>=c.open?"#20c997":"#ff5364";ctx.strokeStyle=color;ctx.fillStyle=color;ctx.beginPath();ctx.moveTo(x,yOf(c.high));ctx.lineTo(x,yOf(c.low));ctx.stroke();let y1=yOf(Math.max(c.open,c.close)),y2=yOf(Math.min(c.open,c.close));ctx.fillRect(x-bw/2,y1,bw,Math.max(1,y2-y1));});
+ // Clean historical BUY/SELL markers on the candle where each confirmed setup appeared.
+ chartSignalData.forEach(s=>{const si=data.findIndex(v=>v.time===Number(s.time));if(si<0)return;const candle=data[si],sx=left+step*(si+.5),buy=s.direction==="COMPRAR",sy=yOf(buy?candle.low:candle.high),color=buy?"#20c997":"#ff6575";ctx.fillStyle=color;ctx.beginPath();if(buy){ctx.moveTo(sx,sy+5);ctx.lineTo(sx-6,sy+15);ctx.lineTo(sx+6,sy+15);}else{ctx.moveTo(sx,sy-5);ctx.lineTo(sx-6,sy-15);ctx.lineTo(sx+6,sy-15);}ctx.closePath();ctx.fill();ctx.font="bold 9px Arial";ctx.textAlign="center";ctx.fillText(buy?"COMPRA":"VENTA",sx,buy?sy+27:sy-19);});
  // Historical trade zones and exact price labels.
  backtestTradeData.forEach(t=>{
   const entryTime=Number(t.entryTime)/1000,exitTime=Number(t.exitTime||Date.now())/1000;
