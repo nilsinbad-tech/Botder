@@ -138,6 +138,32 @@ function runBacktest(symbol,market,candles){
  const closed=backtestTrades.filter(t=>t.result!=="ABIERTA"),wins=closed.filter(t=>t.result==="GANADA").length,losses=closed.filter(t=>t.result==="PERDIDA").length,tp1Hits=closed.filter(t=>t.tp1Hit).length,tp2Hits=closed.filter(t=>t.reason==="TP2").length,rate=closed.length?(wins/closed.length*100).toFixed(1):"0.0";
  setText("chart-message","Backtest M1 · RSI "+(rsiConfig.timeframe/60)+"m ("+rsiConfig.period+") · "+closed.length+" cerradas · "+rate+"% ganadas · TP1 "+tp1Hits+" · TP2 "+tp2Hits+" · "+losses+" pérdidas · TP1 cobra 50% (mín. 1.5R) · resto protegido +0.5R · TP2 (mín. 2.5R)");
 }
+function simulateCandidate(data,config,rsi){
+ const oldS={...strategyConfig},oldR={...rsiConfig};Object.assign(strategyConfig,config);Object.assign(rsiConfig,rsi);
+ const rs=configuredRsiSeries(data),trades=[];let active=null;
+ for(let i=Math.max(60,...strategyConfig.emaPeriods,strategyConfig.bollingerPeriod)+2;i<data.length-1;i++){
+  const c=data[i];
+  if(active){const stop=active.protectionSL??active.sl,hitStop=active.direction==="COMPRAR"?c.low<=stop:c.high>=stop,hit1=active.direction==="COMPRAR"?c.high>=active.tp1:c.low<=active.tp1,hit2=active.direction==="COMPRAR"?c.high>=active.tp2:c.low<=active.tp2,risk=Math.abs(active.entry-active.sl);let out=null;
+   if(!active.tp1Hit&&hitStop)out={result:"PERDIDA",realizedR:-1};else if(!active.tp1Hit&&hit1){active.tp1Hit=true;active.realizedR=.5*Math.abs(active.tp1-active.entry)/risk;active.protectionSL=profitLock(active);}else if(active.tp1Hit&&hitStop)out={result:"GANADA",realizedR:active.realizedR+.25};else if(active.tp1Hit&&hit2)out={result:"GANADA",realizedR:active.realizedR+.5*Math.abs(active.tp2-active.entry)/risk};
+   if(out){trades.push({...active,...out,exitIndex:i});active=null;}}
+  if(!active){const s=buildSignal(data,i,rs);if(s)active={...s,entryIndex:i,tp1Hit:false};}
+ }
+ Object.assign(strategyConfig,oldS);Object.assign(rsiConfig,oldR);return trades;
+}
+function optimizeBacktest(){
+ if(m1Candles.length<180){setText("optimizer-result","Necesito al menos 180 velas M1 para optimizar con validación.");return;}
+ const data=m1Candles.slice().sort((a,b)=>a.time-b.time),split=Math.floor(data.length*.7),emaSets=[[9,20,50],[8,21,55],[10,20,50,100]],bbPeriods=[14,20,30],rsiPeriods=[10,14,21],levels=[[55,45],[60,40],[65,35]];let best=null,scored=0;
+ for(const emas of emaSets)for(const bb of bbPeriods)for(const rp of rsiPeriods)for(const lv of levels)for(const useBB of [true,false]){
+  const cfg={emaPeriods:emas,bollingerPeriod:bb,useBollinger:useBB},rc={...rsiConfig,period:rp,high:lv[0],low:lv[1],mid:50};const trades=simulateCandidate(data,cfg,rc),train=trades.filter(t=>t.entryIndex<split),valid=trades.filter(t=>t.entryIndex>=split);
+  const metric=list=>{const wins=list.filter(t=>t.result==="GANADA").length;return{n:list.length,wr:list.length?wins/list.length*100:0,net:list.reduce((s,t)=>s+(t.realizedR||0),0)};};const tr=metric(train),va=metric(valid);if(tr.n<5||va.n<5)continue;scored++;
+  const score=va.net+Math.min(va.wr,75)*.015+Math.min(va.n,30)*.03;if(!best||score>best.score)best={score,cfg,rc,tr,va};
+ }
+ if(!best){setText("optimizer-result","Muestra insuficiente: no hubo combinaciones con al menos 5 operaciones cerradas en entrenamiento y 5 en validación. Carga más historial.");return;}
+ Object.assign(strategyConfig,best.cfg);Object.assign(rsiConfig,best.rc);
+ const e=document.getElementById("ema-periods"),b=document.getElementById("bb-period"),on=document.getElementById("bb-enabled"),rp=document.getElementById("rsi-period"),lo=document.getElementById("rsi-low"),hi=document.getElementById("rsi-high");if(e)e.value=best.cfg.emaPeriods.join(",");if(b)b.value=best.cfg.bollingerPeriod;if(on)on.checked=best.cfg.useBollinger;if(rp)rp.value=best.rc.period;if(lo)lo.value=best.rc.low;if(hi)hi.value=best.rc.high;
+ lastSignalKey="";runBacktest(backtestSymbol||selectedMarket?.symbol,selectedMarket?.name||"",data);if(selectedMarket)analyzeCandles(selectedMarket.symbol,selectedMarket.name,data);
+ setText("optimizer-result","Mejor combinación entre "+scored+" configuraciones · EMA "+best.cfg.emaPeriods.join("/")+" · Bollinger "+(best.cfg.useBollinger?"ON":"OFF")+" ("+best.cfg.bollingerPeriod+") · RSI "+best.rc.period+" ("+best.rc.low+"/"+best.rc.high+"). Entrenamiento: "+best.tr.n+" ops, "+best.tr.wr.toFixed(1)+"% acierto, "+best.tr.net.toFixed(2)+"R. Validación 30%: "+best.va.n+" ops, "+best.va.wr.toFixed(1)+"% acierto, "+best.va.net.toFixed(2)+"R. Parámetros aplicados a señales y backtest.");
+}
 function drawRsiPanel(series,candles){const host=document.getElementById("rsi-area");if(!host)return;host.innerHTML="";const cv=document.createElement("canvas");cv.style.cssText="width:100%;height:100%;display:block";host.appendChild(cv);const dpr=Math.min(devicePixelRatio||1,2),w=host.clientWidth,h=host.clientHeight;cv.width=w*dpr;cv.height=h*dpr;const x=cv.getContext("2d");x.scale(dpr,dpr);const left=24,right=8,top=10,bottom=18,ph=h-top-bottom,pw=w-left-right;for(const level of [rsiConfig.low,rsiConfig.mid,rsiConfig.high]){const y=top+(100-level)/100*ph;x.strokeStyle=level===50?"#8495aa":"#43546b";x.setLineDash([4,3]);x.beginPath();x.moveTo(left,y);x.lineTo(w-right,y);x.stroke();x.setLineDash([]);x.fillStyle="#a8b5c6";x.font="9px Arial";x.fillText(String(level),2,y+3);}const start=Math.max(0,series.length-200);x.beginPath();let begun=false;for(let i=start;i<series.length;i++){if(series[i]==null)continue;const px=left+(i-start)/Math.max(1,series.length-start-1)*pw,py=top+(100-series[i])/100*ph;if(!begun){x.moveTo(px,py);begun=true;}else x.lineTo(px,py);}x.strokeStyle="#48a8ff";x.lineWidth=1.7;x.stroke();setText("rsi-current","RSI: "+(series.at(-1)==null?"--":series.at(-1).toFixed(1)));}
 function analyzeCandles(symbol,market,candles){if(!candles||candles.length<61)return;const closedIndex=candles.length-2;evaluateOpenOperations(symbol,candles[closedIndex]);const rs=configuredRsiSeries(candles),s=buildSignal(candles,closedIndex,rs);drawRsiPanel(rs,candles);if(!s)return;const key=symbol+":"+s.time+":"+s.direction;if(key===lastSignalKey)return;lastSignalKey=key;addSignal({...s,symbol,market,quality:80,candleTime:s.time});if(typeof drawTradeLevels==="function")drawTradeLevels(s);}
 function setAnalysisGranularity(seconds){analysisGranularity=60;lastSignalKey="";backtestTrades.length=0;backtestReady=false;}
