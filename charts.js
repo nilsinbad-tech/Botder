@@ -1,5 +1,5 @@
 let candleData=[],chartSymbol=null,tradeLevels=[],chartCanvas=null,chartContext=null,resizeObserver=null;
-let viewEnd=0,viewCount=100,dragX=null,dragEnd=0,activePointers=new Map(),pinchStart=0,pinchCount=100,chartFrame=null;
+let viewEnd=0,viewCount=100,dragX=null,dragEnd=0,activePointers=new Map(),pinchStart=0,pinchCount=100,chartFrame=null,scaleMin=null,scaleMax=null,scaleWindow="";
 function createMarketChart(containerId="chart-area"){
  const host=document.getElementById(containerId);if(!host)return false;
  host.innerHTML="";chartCanvas=document.createElement("canvas");
@@ -32,13 +32,14 @@ function createMarketChart(containerId="chart-area"){
  resizeMarketChart();drawMarketChart();return true;
 }
 function resizeMarketChart(){if(!chartCanvas||!chartContext)return;const host=chartCanvas.parentElement;if(!host)return;const r=host.getBoundingClientRect(),dpr=Math.min(devicePixelRatio||1,2);chartCanvas.width=Math.max(1,Math.floor(r.width*dpr));chartCanvas.height=Math.max(1,Math.floor(r.height*dpr));chartContext.setTransform(dpr,0,0,dpr,0,0);drawMarketChart();}
-function setChartSymbol(s){chartSymbol=s;candleData=[];tradeLevels=[];viewEnd=0;viewCount=100;drawMarketChart();}
-function updateCandles(c){if(!Array.isArray(c))return;candleData=c.filter(x=>[x.time,x.open,x.high,x.low,x.close].every(Number.isFinite)).sort((a,b)=>a.time-b.time).slice(-500);viewEnd=candleData.length;drawMarketChart();}
+function setChartSymbol(s){chartSymbol=s;candleData=[];tradeLevels=[];viewEnd=0;viewCount=100;scaleMin=null;scaleMax=null;scaleWindow="";drawMarketChart();}
+function updateCandles(c){if(!Array.isArray(c))return;candleData=c.filter(x=>[x.time,x.open,x.high,x.low,x.close].every(Number.isFinite)).sort((a,b)=>a.time-b.time).slice(-500);viewEnd=candleData.length;scaleMin=null;scaleMax=null;scaleWindow="";drawMarketChart();}
 function addCandle(c){if(!c||![c.time,c.open,c.high,c.low,c.close].every(Number.isFinite))return;const following=viewEnd>=candleData.length;const last=candleData[candleData.length-1];if(last&&last.time===c.time)candleData[candleData.length-1]=c;else{candleData.push(c);if(candleData.length>500)candleData.shift();}if(following)viewEnd=candleData.length;else viewEnd=Math.min(viewEnd,candleData.length);drawMarketChart();}
 function drawTradeLevels(e,s,t){tradeLevels=[{value:Number(e),label:"ENTRADA",color:"#48a8ff"},{value:Number(s),label:"SL",color:"#ff5364"},{value:Number(t),label:"TP",color:"#20c997"}];drawMarketChart();}
 function clearTradeLevels(){tradeLevels=[];drawMarketChart();}
 function getActiveChartSymbol(){return chartSymbol;}
-function drawMarketChart(){
+function drawMarketChart(){if(chartFrame!==null)return;chartFrame=requestAnimationFrame(()=>{chartFrame=null;renderMarketChart();});}
+function renderMarketChart(){
  if(!chartCanvas||!chartContext)return;const ctx=chartContext,w=chartCanvas.parentElement?.clientWidth||0,h=chartCanvas.parentElement?.clientHeight||0;if(!w||!h)return;
  ctx.clearRect(0,0,w,h);ctx.fillStyle="#111b2a";ctx.fillRect(0,0,w,h);
  const left=10,right=66,top=16,bottom=25,pw=w-left-right,ph=h-top-bottom;
@@ -46,8 +47,10 @@ function drawMarketChart(){
  for(let i=0;i<=4;i++){let y=top+ph*i/4;ctx.beginPath();ctx.moveTo(left,y);ctx.lineTo(w-right,y);ctx.stroke();}
  if(!candleData.length){ctx.fillStyle="#8495aa";ctx.textAlign="center";ctx.font="12px Arial";ctx.fillText("Esperando velas M1...",w/2,h/2);return;}
  const end=Math.max(0,Math.min(candleData.length,viewEnd||candleData.length)),start=Math.max(0,end-viewCount),data=candleData.slice(start,end);
- if(!data.length)return;let lows=data.map(c=>c.low),highs=data.map(c=>c.high);tradeLevels.forEach(x=>{if(Number.isFinite(x.value)){lows.push(x.value);highs.push(x.value);}});
- let min=Math.min(...lows),max=Math.max(...highs),pad=(max-min)*.08||Math.abs(max)*.0001||1;min-=pad;max+=pad;
+ if(!data.length)return;const windowKey=start+":"+end+":"+viewCount;let lows=data.map(c=>c.low),highs=data.map(c=>c.high);tradeLevels.forEach(x=>{if(Number.isFinite(x.value)){lows.push(x.value);highs.push(x.value);}});
+ const rawMin=Math.min(...lows),rawMax=Math.max(...highs);
+ if(scaleWindow!==windowKey||scaleMin===null||scaleMax===null){const pad=(rawMax-rawMin)*.08||Math.abs(rawMax)*.0001||1;scaleMin=rawMin-pad;scaleMax=rawMax+pad;scaleWindow=windowKey;}else{const span=scaleMax-scaleMin,pad=span*.08;if(rawMin<scaleMin+pad)scaleMin=rawMin-pad;if(rawMax>scaleMax-pad)scaleMax=rawMax+pad;}
+ const min=scaleMin,max=scaleMax;
  const yOf=v=>top+(max-v)/(max-min)*ph;
  for(let i=0;i<=4;i++){let v=max-(max-min)*i/4,y=top+ph*i/4;ctx.fillStyle="#8495aa";ctx.textAlign="left";ctx.fillText(v.toFixed(4),w-right+5,y+3);}
  const step=pw/Math.max(viewCount,data.length),bw=Math.max(2,Math.min(10,step*.65));
