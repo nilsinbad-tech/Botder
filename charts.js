@@ -19,7 +19,7 @@ function createMarketChart(containerId="chart-area"){
   activePointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
   if(activePointers.size>=2){
    const p=[...activePointers.values()],dist=Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y);
-   if(pinchStart>0){viewCount=Math.max(15,Math.min(500,Math.round(pinchCount*pinchStart/Math.max(1,dist))));const end=pinchAnchorIndex+(1-pinchAnchorRatio)*Math.min(viewCount,candleData.length);viewEnd=Math.max(1,Math.min(candleData.length,Math.round(end)));}
+   if(pinchStart>0){viewCount=Math.max(15,Math.min(500,Math.round(pinchCount*pinchStart/Math.max(1,dist))));const visible=Math.min(viewCount,candleData.length);const end=pinchAnchorIndex+(1-pinchAnchorRatio)*visible;viewEnd=Math.max(visible,Math.min(candleData.length,Math.round(end)));}
    drawMarketChart();return;
   }
   if(dragX===null)return;
@@ -84,8 +84,6 @@ function renderMarketChart(){
   if(t.reason&&String(t.reason).includes("TP1")){
    const tp1=Number(t.price),yTp1=yOf(tp1);dot(x2,yTp1,"#f5c451");
    label("TP1 "+tp1.toPrecision(7),Math.min(w-right-130,x2+5),yTp1-5,"#f5c451");
-  }else{
-   label("TP1 · RECHAZO M1",Math.min(w-right-130,x1+5),yEntry+15,"#f5c451");
   }
   if(t.exitTime&&Number.isFinite(exitPrice)){
    const won=t.result==="GANADA";dot(x2,yExit,won?"#20c997":"#ff5364");
