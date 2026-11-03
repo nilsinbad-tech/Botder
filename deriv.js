@@ -43,14 +43,6 @@ function connectDeriv() {
       showApiDiagnostic("Error API (" + (data.error.code || "sin código") + "): " + data.error.message);
       return;
     }
-    if (data.msg_type === "history" && responseSymbol(data) === selectedSymbol && data.req_id === 20 && data.history && Array.isArray(data.history.times)) {
-      const history5 = data.history.times.map((time,i)=>({time:Number(time),open:Number(data.history.open[i]),high:Number(data.history.high[i]),low:Number(data.history.low[i]),close:Number(data.history.close[i])}));
-      if(typeof setM5History==="function")setM5History(selectedSymbol,history5);
-    }
-    if (data.msg_type === "candles" && responseSymbol(data) === selectedSymbol && data.req_id === 20) {
-      const history5=(data.candles||[]).map(c=>({time:Number(c.epoch),open:Number(c.open),high:Number(c.high),low:Number(c.low),close:Number(c.close)}));
-      if(typeof setM5History==="function")setM5History(selectedSymbol,history5);
-    }
     if (data.msg_type === "active_symbols") {
       clearTimeout(symbolsTimer);
       const received = Array.isArray(data.active_symbols) ? data.active_symbols : [];
@@ -80,8 +72,6 @@ function connectDeriv() {
       showChartMessage("Historial cargado · " + candleBuffer.length + " velas · " + (selectedGranularity/60) + " min");
     }
     if (data.msg_type === "ohlc" && responseSymbol(data) === selectedSymbol && data.ohlc) {
-      if(Number(data.ohlc.granularity)===300 && typeof updateM5Candle==="function")updateM5Candle({time:Number(data.ohlc.open_time),open:Number(data.ohlc.open),high:Number(data.ohlc.high),low:Number(data.ohlc.low),close:Number(data.ohlc.close)});
-
       const o = data.ohlc, candle = { time: Number(o.open_time), open: Number(o.open), high: Number(o.high), low: Number(o.low), close: Number(o.close) };
       if (candleBuffer.length && candleBuffer[candleBuffer.length - 1].time === candle.time) candleBuffer[candleBuffer.length - 1] = candle;
       else candleBuffer.push(candle);
@@ -172,15 +162,13 @@ function loadMarketHistory(symbol, granularity = selectedGranularity) {
   } else {
     sendDeriv({ ticks_history: symbol, count: 5000, end: "latest", style: "candles", granularity: selectedGranularity, req_id: 12 });
     sendDeriv({ ticks_history: symbol, start: 0, end: "latest", style: "candles", granularity: selectedGranularity, subscribe: 1, req_id: 10 });
-    sendDeriv({ ticks_history: symbol, count: 1000, end: "latest", style: "candles", granularity: 300, req_id: 20 });
-    sendDeriv({ ticks_history: symbol, start: 0, end: "latest", style: "candles", granularity: 300, subscribe: 1, req_id: 20 });
     showChartMessage("Cargando historial · " + (selectedGranularity/60) + " min...");
   }
 }
 function openMarket(symbol) {
   if (!symbol || !sendDeriv({ forget_all: "ticks" })) { /* socket may still be connecting */ }
   if (!derivSocket || derivSocket.readyState !== WebSocket.OPEN) return;
-  selectedSymbol = symbol; candleBuffer = []; if(typeof setM5History==="function")setM5History(symbol,[]); tickSubId = null; candleSubId = null;
+  selectedSymbol = symbol; candleBuffer = []; tickSubId = null; candleSubId = null;
   sendDeriv({ forget_all: "candles" });
   sendDeriv({ forget_all: "ticks" });
   if (typeof setChartSymbol === "function") setChartSymbol(symbol);
