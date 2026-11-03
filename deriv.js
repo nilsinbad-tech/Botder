@@ -1,6 +1,6 @@
 const DERIV_CONFIG = { endpoint: "wss://api.derivws.com/trading/v1/options/ws/public" };
 let derivSocket = null, availableSymbols = [], selectedSymbol = null;
-let candleBuffer = [], tickSubId = null, candleSubId = null, reconnectTimer = null, symbolsTimer = null;
+let candleBuffer = [], tickSubId = null, candleSubId = null, reconnectTimer = null, symbolsTimer = null, selectedGranularity = 60;
 
 function sendDeriv(data) {
   if (!derivSocket || derivSocket.readyState !== WebSocket.OPEN) return false;
@@ -52,7 +52,7 @@ function connectDeriv() {
       candleBuffer = (data.candles || []).map(c => ({ time: Number(c.epoch), open: Number(c.open), high: Number(c.high), low: Number(c.low), close: Number(c.close) }));
       if (typeof updateCandles === "function") updateCandles(candleBuffer);
       if (typeof analyzeCandles === "function") analyzeCandles(selectedSymbol, selectedMarketName(), candleBuffer);
-      showChartMessage("Gráfico M1 en vivo · " + candleBuffer.length + " velas cargadas");
+      showChartMessage("Historial cargado · " + candleBuffer.length + " velas · M" + (selectedGranularity / 60));
     }
     if (data.msg_type === "ohlc" && data.ohlc) {
       const o = data.ohlc, candle = { time: Number(o.open_time), open: Number(o.open), high: Number(o.high), low: Number(o.low), close: Number(o.close) };
@@ -131,7 +131,7 @@ function renderMarkets(all) {
   });
   if (!selectedSymbol) selectMarket(symbolName(availableSymbols[0]), symbolCode(availableSymbols[0]));
 }
-function openMarket(symbol) {
+function loadMarketHistory(symbol, granularity = selectedGranularity) {\n  selectedGranularity = granularity;\n  if (!symbol || !derivSocket || derivSocket.readyState !== WebSocket.OPEN) return;\n  candleBuffer = [];\n  if (typeof setChartSymbol === "function") setChartSymbol(symbol);\n  const tf = document.getElementById("timeframe"); if (tf) tf.value = String(granularity);\n  sendDeriv({ ticks_history: symbol, start: 0, end: "latest", style: "candles", granularity, subscribe: 1, req_id: 10 });\n  showChartMessage("Cargando el historial disponible en M" + (granularity / 60) + "...");\n}\nfunction openMarket(symbol) {
   if (!symbol || !sendDeriv({ forget_all: "ticks" })) { /* socket may still be connecting */ }
   if (!derivSocket || derivSocket.readyState !== WebSocket.OPEN) return;
   selectedSymbol = symbol; candleBuffer = []; tickSubId = null; candleSubId = null;
@@ -143,4 +143,4 @@ function openMarket(symbol) {
 }
 function getAvailableSymbols() { return availableSymbols; }
 function isDerivConnected() { return derivSocket && derivSocket.readyState === WebSocket.OPEN; }
-connectDeriv();
+document.addEventListener("DOMContentLoaded", () => {\n  const tf = document.getElementById("timeframe");\n  if (tf) tf.addEventListener("change", () => { if (selectedSymbol) loadMarketHistory(selectedSymbol, Number(tf.value)); });\n});\nconnectDeriv();
