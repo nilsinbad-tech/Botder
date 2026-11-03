@@ -377,3 +377,5 @@ button:active {
 .projection-panel{margin:12px 0;padding:12px;background:var(--panel2);border:1px solid var(--border);border-radius:10px}.projection-card{padding:12px;border-radius:9px;background:#0c1522;border:1px solid var(--border)}.projection-card strong{display:block;font-size:20px;margin:7px 0;font-variant-numeric:tabular-nums}.projection-stage{font-size:10px;font-weight:bold;letter-spacing:.6px}.projection-meta{font-size:11px;color:var(--muted);line-height:1.7}.projection-buy{border-left:3px solid var(--green)}.projection-sell{border-left:3px solid var(--red)}
 
 .alert-button{margin:10px 0;padding:10px 14px;border:1px solid #3c8f7a;border-radius:8px;background:#12352f;color:#d8fff2;font-weight:700;font-size:11px}
+
+.chart-legend{display:flex;flex-wrap:wrap;gap:7px 12px;padding:9px 3px;color:#b9c7d8;font-size:10px}.chart-legend span{white-space:nowrap}#structure-diagnostic{padding:4px 3px 9px;font-size:10px;color:#91a5bc}
