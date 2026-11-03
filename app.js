@@ -1,4 +1,4 @@
-const signals=[],operations=[],history=[],backtestTrades=[],invertedBacktestTrades=[];
+const signals=[],operations=[],history=[],backtestTrades=[];
 let signalCounter=0,lastSignalKey="",selectedMarket=null,backtestSymbol=null,m1Candles=[],backtestReady=false;
 const TZ="America/Panama";
 function panamaParts(ts=Date.now()){const p=new Intl.DateTimeFormat("en-CA",{timeZone:TZ,year:"numeric",month:"2-digit",day:"2-digit"}).formatToParts(new Date(ts));return Object.fromEntries(p.map(x=>[x.type,x.value]));}
@@ -65,8 +65,9 @@ function structuralLevels(candles,i,direction,entry){
  if(direction==="COMPRAR"?(sl>=entry||tp1<=entry||tp2<=tp1):(sl<=entry||tp1>=entry||tp2>=tp1))return null;
  return{sl,tp1,tp2};
 }
-function simulateBacktest(data,rs,symbol,market,inverted){
- const trades=[];let active=null;
+function runBacktest(symbol,market,candles){
+ if(!Array.isArray(candles)||candles.length<65)return;
+ const data=candles.slice().sort((a,b)=>a.time-b.time),rs=rsiSeries(data.map(c=>c.close));backtestTrades.length=0;let active=null;
  for(let i=60;i<data.length-1;i++){
   const c=data[i];
   if(active){
@@ -74,35 +75,22 @@ function simulateBacktest(data,rs,symbol,market,inverted){
    if(active.direction==="COMPRAR"?c.low<=stop:c.high>=stop)exit={result:active.tp1Hit?"GANADA":"PERDIDA",price:stop,reason:active.tp1Hit?"SL PROTEGIDO":"SL"};
    else if(!active.tp1Hit&&(active.direction==="COMPRAR"?c.high>=active.tp1:c.low<=active.tp1)){active.tp1Hit=true;active.protectionSL=active.entry;active.tp1Time=c.time*1000;}
    else if(active.tp1Hit&&(active.direction==="COMPRAR"?c.high>=active.tp2:c.low<=active.tp2))exit={result:"GANADA",price:active.tp2,reason:"TP2"};
-   if(exit){trades.push({...active,...exit,exitTime:c.time*1000});active=null;}
+   if(exit){backtestTrades.push({...active,...exit,exitTime:c.time*1000});active=null;}
   }
   if(!active){
    const signal=buildSignal(data,i,rs);
    if(signal){
-    const direction=inverted?(signal.direction==="COMPRAR"?"VENDER":"COMPRAR"):signal.direction;
-    const levels=inverted?structuralLevels(data,i,direction,signal.entry):{sl:signal.sl,tp1:signal.tp1,tp2:signal.tp2};
-    if(levels)active={...signal,...levels,direction,symbol,market,entryTime:c.time*1000,tp1Hit:false,variant:inverted?"INVERTIDA":"ORIGINAL"};
+    const direction=signal.direction==="COMPRAR"?"VENDER":"COMPRAR";
+    const levels=structuralLevels(data,i,direction,signal.entry);
+    if(levels)active={...signal,...levels,direction,symbol,market,entryTime:c.time*1000,tp1Hit:false};
    }
   }
  }
- if(active)trades.push({...active,result:"ABIERTA",exitTime:null});
- return trades;
-}
-function renderBacktestComparison(){
- const box=document.getElementById("backtest-comparison");if(!box)return;
- const summarize=list=>{const wins=list.filter(t=>t.result==="GANADA").length,losses=list.filter(t=>t.result==="PERDIDA").length,closed=wins+losses;return{wins,losses,closed,rate:closed?(wins/closed*100).toFixed(1)+"%":"—"};};
- const a=summarize(backtestTrades),b=summarize(invertedBacktestTrades);
- box.innerHTML='<div class="backtest-compare-grid"><article><strong>ESTRATEGIA ORIGINAL</strong><p>'+a.closed+' cerradas · '+a.wins+' ganadas · '+a.losses+' perdidas</p><p>Acierto: '+a.rate+'</p></article><article><strong>ESTRATEGIA INVERTIDA</strong><p>'+b.closed+' cerradas · '+b.wins+' ganadas · '+b.losses+' perdidas</p><p>Acierto: '+b.rate+'</p></article></div><p class="muted">Cada dirección usa su propio SL, TP1 y TP2 estructurales.</p>';
-}
-function runBacktest(symbol,market,candles){
- if(!Array.isArray(candles)||candles.length<65)return;
- const data=candles.slice().sort((a,b)=>a.time-b.time),rs=rsiSeries(data.map(c=>c.close));
- backtestTrades.splice(0,backtestTrades.length,...simulateBacktest(data,rs,symbol,market,false));
- invertedBacktestTrades.splice(0,invertedBacktestTrades.length,...simulateBacktest(data,rs,symbol,market,true));
- backtestSymbol=symbol;backtestReady=true;updateDailyPanel();renderBacktestComparison();
- if(typeof setBacktestTrades==="function")setBacktestTrades(backtestTrades.concat(invertedBacktestTrades));
+ if(active)backtestTrades.push({...active,result:"ABIERTA",exitTime:null});
+ backtestSymbol=symbol;backtestReady=true;updateDailyPanel();
+ if(typeof setBacktestTrades==="function")setBacktestTrades(backtestTrades);
  drawRsiPanel(rs,data);
- setText("chart-message","Backtesting M1 · Original: "+backtestTrades.length+" · Invertida: "+invertedBacktestTrades.length);
+ setText("chart-message","Backtesting M1 · Estrategia invertida · "+backtestTrades.length+" operaciones · "+backtestTrades.filter(t=>t.result==="GANADA").length+" ganadas · "+backtestTrades.filter(t=>t.result==="PERDIDA").length+" perdidas");
 }
 function drawRsiPanel(series,candles){const host=document.getElementById("rsi-area");if(!host)return;host.innerHTML="";const cv=document.createElement("canvas");cv.style.cssText="width:100%;height:100%;display:block";host.appendChild(cv);const dpr=Math.min(devicePixelRatio||1,2),w=host.clientWidth,h=host.clientHeight;cv.width=w*dpr;cv.height=h*dpr;const x=cv.getContext("2d");x.scale(dpr,dpr);const left=24,right=8,top=10,bottom=18,ph=h-top-bottom,pw=w-left-right;for(const level of [40,50,60]){const y=top+(100-level)/100*ph;x.strokeStyle=level===50?"#8495aa":"#43546b";x.setLineDash([4,3]);x.beginPath();x.moveTo(left,y);x.lineTo(w-right,y);x.stroke();x.setLineDash([]);x.fillStyle="#a8b5c6";x.font="9px Arial";x.fillText(String(level),2,y+3);}const start=Math.max(0,series.length-200);x.beginPath();let begun=false;for(let i=start;i<series.length;i++){if(series[i]==null)continue;const px=left+(i-start)/Math.max(1,series.length-start-1)*pw,py=top+(100-series[i])/100*ph;if(!begun){x.moveTo(px,py);begun=true;}else x.lineTo(px,py);}x.strokeStyle="#48a8ff";x.lineWidth=1.7;x.stroke();setText("rsi-current","RSI: "+(series.at(-1)==null?"--":series.at(-1).toFixed(1)));}
 function analyzeCandles(symbol,market,candles){if(!candles||candles.length<61)return;const closedIndex=candles.length-2;evaluateOpenOperations(symbol,candles[closedIndex]);const rs=rsiSeries(candles.map(c=>c.close)),s=buildSignal(candles,closedIndex,rs);drawRsiPanel(rs,candles);if(!s)return;const key=symbol+":"+s.time+":"+s.direction;if(key===lastSignalKey)return;lastSignalKey=key;addSignal({...s,symbol,market,quality:80,candleTime:s.time});if(typeof drawTradeLevels==="function")drawTradeLevels(s);}
