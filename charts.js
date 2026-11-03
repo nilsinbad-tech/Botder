@@ -1,6 +1,6 @@
 let candleData=[],chartSymbol=null,tradeLevels=[],signalMarker=null,chartCanvas=null,chartContext=null,resizeObserver=null,candleStyle="heikin";
 let backtestTradeData=[],chartSignalData=[];
-let viewEnd=0,viewCount=1000,dragX=null,dragEnd=0,activePointers=new Map(),pinchStart=0,pinchCount=100,pinchAnchorIndex=0,pinchAnchorRatio=.5,chartFrame=null,scaleMin=null,scaleMax=null,scaleWindow="",chartGranularity=60;
+let viewEnd=0,viewCount=1500,dragX=null,dragEnd=0,activePointers=new Map(),pinchStart=0,pinchCount=100,pinchAnchorIndex=0,pinchAnchorRatio=.5,chartFrame=null,scaleMin=null,scaleMax=null,scaleWindow="",chartGranularity=60;
 function createMarketChart(containerId="chart-area"){
  const host=document.getElementById(containerId);if(!host)return false;
  host.innerHTML="";chartCanvas=document.createElement("canvas");
@@ -19,17 +19,17 @@ function createMarketChart(containerId="chart-area"){
   activePointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
   if(activePointers.size>=2){
    const p=[...activePointers.values()],dist=Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y);
-   if(pinchStart>0){viewCount=Math.max(15,Math.min(2000,Math.round(pinchCount*pinchStart/Math.max(1,dist))));const visible=Math.min(viewCount,candleData.length);const end=pinchAnchorIndex+(1-pinchAnchorRatio)*visible;viewEnd=Math.max(visible,Math.min(candleData.length,Math.round(end)));}
+   if(pinchStart>0){viewCount=Math.max(15,Math.min(5000,Math.round(pinchCount*pinchStart/Math.max(1,dist))));const visible=Math.min(viewCount,candleData.length);const end=pinchAnchorIndex+(1-pinchAnchorRatio)*visible;viewEnd=Math.max(visible,Math.min(candleData.length,Math.round(end)));}
    drawMarketChart();return;
   }
   if(dragX===null)return;
   const step=(chartCanvas.parentElement.clientWidth-76)/Math.max(1,viewCount);
   const shift=Math.round((dragX-e.clientX)/Math.max(1,step));
-  viewEnd=Math.max(Math.min(viewCount,candleData.length),Math.min(candleData.length,dragEnd+shift));drawMarketChart();
+  viewEnd=Math.max(1,Math.min(candleData.length,dragEnd+shift));drawMarketChart();
  });
  const endDrag=e=>{activePointers.delete(e.pointerId);if(activePointers.size<2)pinchStart=0;if(activePointers.size===1){const p=[...activePointers.values()][0];dragX=p.x;dragEnd=viewEnd;}else{dragX=null;chartCanvas.style.cursor="grab";}};
  chartCanvas.addEventListener("pointerup",endDrag);chartCanvas.addEventListener("pointercancel",endDrag);
- chartCanvas.addEventListener("wheel",e=>{e.preventDefault();viewCount=Math.max(15,Math.min(500,Math.round(viewCount*(e.deltaY>0?1.2:.82))));viewEnd=candleData.length;drawMarketChart();},{passive:false});
+ chartCanvas.addEventListener("wheel",e=>{e.preventDefault();viewCount=Math.max(15,Math.min(5000,Math.round(viewCount*(e.deltaY>0?1.2:.82))));viewEnd=candleData.length;drawMarketChart();},{passive:false});
  resizeMarketChart();drawMarketChart();return true;
 }
 function resizeMarketChart(){if(!chartCanvas||!chartContext)return;const host=chartCanvas.parentElement;if(!host)return;const r=host.getBoundingClientRect(),dpr=Math.min(devicePixelRatio||1,2);chartCanvas.width=Math.max(1,Math.floor(r.width*dpr));chartCanvas.height=Math.max(1,Math.floor(r.height*dpr));chartContext.setTransform(dpr,0,0,dpr,0,0);drawMarketChart();}
