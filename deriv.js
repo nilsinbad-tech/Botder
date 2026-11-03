@@ -56,8 +56,8 @@ function connectDeriv() {
       showChartMessage("Historial · " + (selectedGranularity/60) + " min · " + candleBuffer.length + " velas");
     }
     if (data.msg_type === "candles" && responseSymbol(data) === selectedSymbol && data.req_id === 12) {
-      const historicalM1 = (data.candles || []).map(c => ({ time: Number(c.epoch), open: Number(c.open), high: Number(c.high), low: Number(c.low), close: Number(c.close) }));
-      if (typeof setBacktestHistory === "function") setBacktestHistory(selectedSymbol, selectedMarketName(), historicalM1);
+      const historical = (data.candles || []).map(c => ({ time: Number(c.epoch), open: Number(c.open), high: Number(c.high), low: Number(c.low), close: Number(c.close) }));
+      if (typeof setBacktestHistory === "function") setBacktestHistory(selectedSymbol, selectedMarketName(), historical);
     }
     if (data.msg_type === "candles" && responseSymbol(data) === selectedSymbol && data.req_id !== 12) {
       candleBuffer = (data.candles || []).map(c => ({ time: Number(c.epoch), open: Number(c.open), high: Number(c.high), low: Number(c.low), close: Number(c.close) }));
