@@ -95,4 +95,5 @@ function renderMarketChart(){
  ctx.fillStyle="#8495aa";ctx.textAlign="left";ctx.fillText((chartGranularity===30?"30S":"M"+(chartGranularity/60))+" · "+data.length+" velas",left,h-7);ctx.textAlign="right";ctx.fillText(new Date(data[data.length-1].time*1000).toLocaleTimeString("es-PA",{hour:"2-digit",minute:"2-digit"}),w-right,h-7);if(chartGranularity===60){const remain=Math.max(0,60-(Math.floor(Date.now()/1000)-data[data.length-1].time));const mm=String(Math.floor(remain/60)).padStart(2,"0"),ss=String(remain%60).padStart(2,"0");ctx.textAlign="left";ctx.font="bold 11px Arial";ctx.fillStyle="#f5c451";ctx.fillText("CIERRE M1 "+mm+":"+ss,left+4,top+13);}
 }
 window.addEventListener("resize",resizeMarketChart);
+setInterval(()=>{if(chartGranularity===60&&candleData.length)drawMarketChart();},1000);
 if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",createMarketChart);else createMarketChart();
