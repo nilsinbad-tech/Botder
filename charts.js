@@ -1,5 +1,5 @@
 let candleData=[],chartSymbol=null,tradeLevels=[],signalMarker=null,chartCanvas=null,chartContext=null,resizeObserver=null,candleStyle="heikin";
-let backtestTradeData=[];
+let backtestTradeData=[];let structureOverlay={items:[],projection:null};
 let viewEnd=0,viewCount=100,dragX=null,dragEnd=0,activePointers=new Map(),pinchStart=0,pinchCount=100,pinchAnchorIndex=0,pinchAnchorRatio=.5,chartFrame=null,scaleMin=null,scaleMax=null,scaleWindow="",chartGranularity=60;
 function createMarketChart(containerId="chart-area"){
  const host=document.getElementById(containerId);if(!host)return false;
@@ -38,6 +38,7 @@ function setChartGranularity(seconds){chartGranularity=Number(seconds)||60;scale
 function updateCandles(c){if(!Array.isArray(c))return;const oldLength=candleData.length,wasFollowing=viewEnd===0||viewEnd>=oldLength,distanceFromEnd=Math.max(0,oldLength-viewEnd);candleData=c.filter(x=>[x.time,x.open,x.high,x.low,x.close].every(Number.isFinite)).sort((a,b)=>a.time-b.time).slice();viewEnd=wasFollowing?candleData.length:Math.max(Math.min(viewCount,candleData.length),candleData.length-distanceFromEnd);scaleMin=null;scaleMax=null;scaleWindow="";drawMarketChart();}
 function addCandle(c){if(!c||![c.time,c.open,c.high,c.low,c.close].every(Number.isFinite))return;const following=viewEnd>=candleData.length;const last=candleData[candleData.length-1];if(last&&last.time===c.time)candleData[candleData.length-1]=c;else{candleData.push(c);}if(following)viewEnd=candleData.length;else viewEnd=Math.min(viewEnd,candleData.length);drawMarketChart();}
 function setBacktestTrades(trades){backtestTradeData=Array.isArray(trades)?trades.slice():[];drawMarketChart();}
+function setStructureOverlay(data){structureOverlay=data||{items:[],projection:null};drawMarketChart();}
 function toHeikinAshi(candles){
  let previousOpen=null,previousClose=null;
  return candles.map(c=>{
@@ -68,6 +69,11 @@ function renderMarketChart(){
  for(let i=0;i<=4;i++){let v=max-(max-min)*i/4,y=top+ph*i/4;ctx.fillStyle="#8495aa";ctx.textAlign="left";ctx.fillText(v.toFixed(4),w-right+5,y+3);}
  const step=pw/Math.max(viewCount,data.length),bw=Math.max(2,Math.min(10,step*.65));
  data.forEach((c,i)=>{let x=left+step*(i+.5),color=c.close>=c.open?"#20c997":"#ff5364";ctx.strokeStyle=color;ctx.fillStyle=color;ctx.beginPath();ctx.moveTo(x,yOf(c.high));ctx.lineTo(x,yOf(c.low));ctx.stroke();let y1=yOf(Math.max(c.open,c.close)),y2=yOf(Math.min(c.open,c.close));ctx.fillRect(x-bw/2,y1,bw,Math.max(1,y2-y1));});
+ // SMC overlays: pivots, liquidity, BOS/CHoCH, OB/FVG and projected zone.
+ const visibleStart=data[0].time,visibleEnd=data[data.length-1].time;
+ const tag=(txt,x,y,color)=>{if(!txt)return;ctx.font="bold 9px Arial";ctx.textAlign="left";let tw=ctx.measureText(txt).width,tx=Math.max(left,Math.min(w-right-tw-8,x)),ty=Math.max(top+10,Math.min(h-bottom,y));ctx.fillStyle="rgba(8,13,22,.9)";ctx.fillRect(tx,ty-10,tw+8,14);ctx.fillStyle=color;ctx.fillText(txt,tx+4,ty+1);};
+ (structureOverlay.items||[]).forEach(a=>{if(!Number.isFinite(a.price)||a.time<visibleStart||a.time>visibleEnd)return;let ix=data.findIndex(v=>v.time>=a.time),x=left+(Math.max(0,ix)+.5)*step,y=yOf(a.price),color="#aab7c8";if(a.type==="bos")color=a.side==="BULL"?"#20c997":"#ff5364";if(a.type==="choch")color="#f5c451";if(a.type==="sweep")color="#bd8cff";if(a.type==="liquidity")color="#e2a84a";if(a.type==="ob")color=a.side==="BUY"?"#20a88a":"#d85a68";if(a.type==="fvg")color=a.side==="BUY"?"#3d9eea":"#b07be8";ctx.strokeStyle=color;ctx.setLineDash([3,3]);ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(Math.min(w-right,x+Math.max(20,step*8)),y);ctx.stroke();ctx.setLineDash([]);tag(a.label,x+3,y-3,color);});
+ const p=structureOverlay.projection;if(p&&Number.isFinite(p.low)&&Number.isFinite(p.high)){let y1=yOf(Math.max(p.low,p.high)),y2=yOf(Math.min(p.low,p.high)),col=p.direction==="COMPRAR"?"#20c997":"#ff5364";ctx.fillStyle="rgba(72,168,255,.13)";ctx.fillRect(left,Math.min(y1,y2),pw,Math.max(3,Math.abs(y2-y1)));ctx.strokeStyle=col;ctx.setLineDash([5,4]);ctx.strokeRect(left,Math.min(y1,y2),pw,Math.max(3,Math.abs(y2-y1)));ctx.setLineDash([]);tag(p.stage+" "+p.direction+" "+Number(p.low).toPrecision(6)+"-"+Number(p.high).toPrecision(6),left+5,Math.min(y1,y2)-3,col);}
  // Historical trade zones and exact price labels.
  backtestTradeData.forEach(t=>{
   const entryTime=Number(t.entryTime)/1000,exitTime=Number(t.exitTime||Date.now())/1000;
