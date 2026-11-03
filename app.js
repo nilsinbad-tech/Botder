@@ -51,32 +51,22 @@ document.addEventListener("DOMContentLoaded",()=>{["rsi-timeframe","rsi-period",
 
 function swingPoints(candles,at){const highs=[],lows=[];for(let i=2;i<at-2;i++){const c=candles[i];if(c.high>candles[i-1].high&&c.high>candles[i-2].high&&c.high>=candles[i+1].high&&c.high>=candles[i+2].high)highs.push({i,v:c.high});if(c.low<candles[i-1].low&&c.low<candles[i-2].low&&c.low<=candles[i+1].low&&c.low<=candles[i+2].low)lows.push({i,v:c.low});}return{highs,lows};}
 function buildSignal(candles,i,rsis){
- if(i<60||rsis[i]==null||rsis[i-1]==null||rsis[i-2]==null)return null;
- const closes=candles.slice(0,i+1).map(c=>c.close),c=candles[i],r=rsis[i],prev=rsis[i-1],prev2=rsis[i-2];
+ if(i<60||rsis[i]==null||rsis[i-1]==null)return null;
+ const closes=candles.slice(0,i+1).map(c=>c.close),c=candles[i],r=rsis[i],prev=rsis[i-1];
  const e9=emaAt(closes,9),e20=emaAt(closes,20),e50=emaAt(closes,50);
  const p9=emaAt(closes,9,i-1),p20=emaAt(closes,20,i-1),p50=emaAt(closes,50,i-1);
  if([e9,e20,e50,p9,p20,p50].some(x=>x==null))return null;
- const from=Math.max(1,i-40);
- let buyImpulse=-1,sellImpulse=-1;
- for(let k=from;k<=i-2;k++){
-  if(rsis[k-1]!=null&&rsis[k-1]<=rsiConfig.high&&rsis[k]>rsiConfig.high)buyImpulse=k;
-  if(rsis[k-1]!=null&&rsis[k-1]>=rsiConfig.low&&rsis[k]<rsiConfig.low)sellImpulse=k;
- }
- const buyPullback=buyImpulse>=0&&rsis.slice(buyImpulse+1,i).some(v=>v!=null&&v>=rsiConfig.mid&&v<=rsiConfig.high);
- const sellPullback=sellImpulse>=0&&rsis.slice(sellImpulse+1,i).some(v=>v!=null&&v>=rsiConfig.low&&v<=rsiConfig.mid);
- const buyBounce=prev>=rsiConfig.mid&&prev<=rsiConfig.high&&r>prev&&prev2>=prev;
- const sellBounce=prev>=rsiConfig.low&&prev<=rsiConfig.mid&&r<prev&&prev2<=prev;
  const bullishTrend=e9>e20&&e20>e50&&e9>p9&&e20>p20&&e50>=p50;
  const bearishTrend=e9<e20&&e20<e50&&e9<p9&&e20<p20&&e50<=p50;
- const buySetup=buyPullback&&buyBounce&&bullishTrend;
- const sellSetup=sellPullback&&sellBounce&&bearishTrend;
+ const buySetup=prev<rsiConfig.high&&r>=rsiConfig.high&&bullishTrend;
+ const sellSetup=prev>rsiConfig.low&&r<=rsiConfig.low&&bearishTrend;
  if(!buySetup&&!sellSetup)return null;
  const dir=buySetup?"COMPRAR":"VENDER",sw=swingPoints(candles,i),entry=c.close;let sl,tp1,tp2;
  if(buySetup){
-  const supports=sw.lows.filter(x=>x.i<i&&x.v<entry);sl=supports.length?supports.at(-1).v:Math.min(...candles.slice(i-7,i+1).map(x=>x.low));
+  const supports=sw.lows.filter(x=>x.i<i&&x.v<entry);sl=supports.length?supports.at(-1).v:Math.min(...candles.slice(Math.max(0,i-7),i+1).map(x=>x.low));
   const targets=sw.highs.filter(x=>x.i<i&&x.v>entry).map(x=>x.v).sort((x,y)=>x-y);tp1=targets[0];tp2=targets.find(v=>v>tp1);
  }else{
-  const resist=sw.highs.filter(x=>x.i<i&&x.v>entry);sl=resist.length?resist.at(-1).v:Math.max(...candles.slice(i-7,i+1).map(x=>x.high));
+  const resist=sw.highs.filter(x=>x.i<i&&x.v>entry);sl=resist.length?resist.at(-1).v:Math.max(...candles.slice(Math.max(0,i-7),i+1).map(x=>x.high));
   const targets=sw.lows.filter(x=>x.i<i&&x.v<entry).map(x=>x.v).sort((x,y)=>y-x);tp1=targets[0];tp2=targets.find(v=>v<tp1);
  }
  if(!Number.isFinite(tp1)||!Number.isFinite(tp2)||!Number.isFinite(sl)||(dir==="COMPRAR"?(sl>=entry||tp1<=entry||tp2<=tp1):(sl<=entry||tp1>=entry||tp2>=tp1)))return null;
