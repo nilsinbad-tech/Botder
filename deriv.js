@@ -50,10 +50,10 @@ function connectDeriv() {
       renderMarkets(received);
     }
     if (data.msg_type === "history" && responseSymbol(data) === selectedSymbol && data.history && Array.isArray(data.history.times)) {
-      candleBuffer = aggregateTicks(data.history.times, data.history.prices, 30);
+      candleBuffer = aggregateTicks(data.history.times, data.history.prices, 60);
       if (typeof updateCandles === "function") updateCandles(candleBuffer);
       if (typeof analyzeCandles === "function") analyzeCandles(selectedSymbol, selectedMarketName(), candleBuffer);
-      showChartMessage("Historial real de ticks · " + candleBuffer.length + " velas de 30 segundos");
+      showChartMessage("Historial M1 · " + candleBuffer.length + " velas de 1 minuto");
     }
     if (data.msg_type === "candles" && responseSymbol(data) === selectedSymbol && data.req_id === 12) {
       const historicalM1 = (data.candles || []).map(c => ({ time: Number(c.epoch), open: Number(c.open), high: Number(c.high), low: Number(c.low), close: Number(c.close) }));
@@ -78,13 +78,11 @@ function connectDeriv() {
       const el = document.getElementById("current-price"); if (el && Number.isFinite(price)) el.textContent = price.toFixed(4);
       if (Number.isFinite(price) && selectedSymbol) {
         updateOperationPrice(selectedSymbol, price);
-        if (selectedGranularity === 30) {
-          const interval = 30, bucket = Math.floor(Number(data.tick.epoch) / interval) * interval;
-          let live = candleBuffer[candleBuffer.length - 1];
-          if (!live || live.time !== bucket) { live = { time: bucket, open: price, high: price, low: price, close: price }; candleBuffer.push(live); }
-          else { live = { ...live, high: Math.max(live.high, price), low: Math.min(live.low, price), close: price }; candleBuffer[candleBuffer.length - 1] = live; }
-          if (typeof addCandle === "function") addCandle(live);
-        }
+        const interval = 60, bucket = Math.floor(Number(data.tick.epoch) / interval) * interval;
+        let live = candleBuffer[candleBuffer.length - 1];
+        if (!live || live.time !== bucket) { live = { time: bucket, open: price, high: price, low: price, close: price }; candleBuffer.push(live); }
+        else { live = { ...live, high: Math.max(live.high, price), low: Math.min(live.low, price), close: price }; candleBuffer[candleBuffer.length - 1] = live; }
+        if (typeof addCandle === "function") addCandle(live);
         if (typeof updateBacktestTick === "function") updateBacktestTick(Number(data.tick.epoch), price);
       }
     }
@@ -159,13 +157,10 @@ function loadMarketHistory(symbol, granularity = selectedGranularity) {
   if (typeof setChartSymbol === "function") setChartSymbol(symbol);
   const tf = document.getElementById("timeframe"); if (tf) tf.value = String(granularity);
   sendDeriv({ ticks_history: symbol, count: 5000, end: "latest", style: "candles", granularity: 60, req_id: 12 });
-  if (granularity === 30) {
-    sendDeriv({ ticks_history: symbol, count: 5000, end: "latest", style: "ticks", req_id: 10 });
-    showChartMessage("Cargando ticks históricos reales para formar velas de 30 segundos...");
-  } else {
-    sendDeriv({ ticks_history: symbol, start: 0, end: "latest", style: "candles", granularity, subscribe: 1, req_id: 10 });
-    showChartMessage("Cargando el historial disponible en M" + (granularity / 60) + "...");
-  }
+  selectedGranularity = 60;
+  if (typeof setChartGranularity === "function") setChartGranularity(60);
+  sendDeriv({ ticks_history: symbol, start: 0, end: "latest", style: "candles", granularity: 60, subscribe: 1, req_id: 10 });
+  showChartMessage("Cargando historial M1...");
 }
 function openMarket(symbol) {
   if (!symbol || !sendDeriv({ forget_all: "ticks" })) { /* socket may still be connecting */ }
@@ -183,6 +178,6 @@ function getAvailableSymbols() { return availableSymbols; }
 function isDerivConnected() { return derivSocket && derivSocket.readyState === WebSocket.OPEN; }
 document.addEventListener("DOMContentLoaded", () => {
   const tf = document.getElementById("timeframe");
-  if (tf) tf.addEventListener("change", () => { if (selectedSymbol) loadMarketHistory(selectedSymbol, Number(tf.value)); });
+  if (tf) { tf.value = "60"; tf.disabled = true; tf.addEventListener("change", () => { tf.value = "60"; if (selectedSymbol) loadMarketHistory(selectedSymbol, 60); }); }
 });
 connectDeriv();
