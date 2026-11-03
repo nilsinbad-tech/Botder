@@ -20,7 +20,7 @@ function connectDeriv() {
   derivSocket = new WebSocket(DERIV_CONFIG.endpoint);
   derivSocket.onopen = () => {
     setConnectionStatus(true);
-    sendDeriv({ active_symbols: "brief", product_type: "basic", req_id: 1 });
+    sendDeriv({ active_symbols: "brief", req_id: 1 });
   };
   derivSocket.onmessage = event => {
     let data; try { data = JSON.parse(event.data); } catch { return; }
@@ -53,7 +53,7 @@ function selectedMarketName() {
   return item ? item.display_name : selectedSymbol || "";
 }
 function renderMarkets(all) {
-  availableSymbols = all.filter(x => /volatility/i.test((x.display_name || "") + " " + (x.submarket || "")));
+  availableSymbols = all.filter(x => /volatility/i.test([x.display_name, x.underlying_symbol_name, x.symbol, x.underlying_symbol, x.market, x.submarket, x.subgroup].filter(Boolean).join(" ")));
   const area = document.getElementById("markets"), count = document.getElementById("market-count");
   if (!area) return;
   if (count) count.textContent = availableSymbols.length + " índices Volatility";
@@ -66,7 +66,7 @@ function renderMarkets(all) {
     card.append(title, code); card.addEventListener("click", () => selectMarket(item.display_name || item.symbol, item.symbol));
     area.appendChild(card);
   });
-  if (!selectedSymbol) selectMarket(availableSymbols[0].display_name || availableSymbols[0].symbol, availableSymbols[0].symbol);
+  if (!selectedSymbol) selectMarket(symbolName(availableSymbols[0]), symbolCode(availableSymbols[0]));
 }
 function openMarket(symbol) {
   if (!symbol || !sendDeriv({ forget_all: "ticks" })) { /* socket may still be connecting */ }
