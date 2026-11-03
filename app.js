@@ -155,7 +155,7 @@ function optimizeBacktest(){
  const data=m1Candles.slice().sort((a,b)=>a.time-b.time),split=Math.floor(data.length*.7),emaSets=[[9,20,50],[8,21,55],[10,20,50,100]],bbPeriods=[14,20,30],rsiPeriods=[10,14,21],levels=[[55,45],[60,40],[65,35]];let best=null,scored=0;
  for(const emas of emaSets)for(const bb of bbPeriods)for(const rp of rsiPeriods)for(const lv of levels)for(const useBB of [true,false]){
   const cfg={emaPeriods:emas,bollingerPeriod:bb,useBollinger:useBB},rc={...rsiConfig,period:rp,high:lv[0],low:lv[1],mid:50};const trades=simulateCandidate(data,cfg,rc),train=trades.filter(t=>t.entryIndex<split),valid=trades.filter(t=>t.entryIndex>=split);
-  const metric=list=>{const wins=list.filter(t=>t.result==="GANADA").length;return{n:list.length,wr:list.length?wins/list.length*100:0,net:list.reduce((s,t)=>s+(t.realizedR||0),0)};};const tr=metric(train),va=metric(valid);if(tr.n<5||va.n<5)continue;scored++;
+  const metric=list=>{const wins=list.filter(t=>t.result==="GANADA").length;return{n:list.length,wr:list.length?wins/list.length*100:0,net:list.reduce((s,t)=>s+(t.realizedR||0),0)};};const tr=metric(train),va=metric(valid);if(tr.n<5||va.n<5||va.net<=0)continue;scored++;
   const score=va.net+Math.min(va.wr,75)*.015+Math.min(va.n,30)*.03;if(!best||score>best.score)best={score,cfg,rc,tr,va};
  }
  if(!best){setText("optimizer-result","Muestra insuficiente: no hubo combinaciones con al menos 5 operaciones cerradas en entrenamiento y 5 en validación. Carga más historial.");return;}
