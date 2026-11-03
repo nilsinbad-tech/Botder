@@ -78,9 +78,9 @@ function renderMarketChart(){
  const visibleAnnotations=(structureOverlay.items||[]).filter(a=>Number.isFinite(a.price)&&a.time>=visibleStart&&a.time<=visibleEnd);
  const recent=(type,n,side)=>visibleAnnotations.filter(a=>a.type===type&&(!side||a.side===side)).sort((a,b)=>a.time-b.time).slice(-n);
  const annotations=[
-  ...recent("pivot",2,""),...recent("liquidity",2,""),
+  ...recent("pivot",2,"").filter(a=>a.label!=="PIVOTE ALTO"),...recent("liquidity",2,""),
   ...recent("bos",2),...recent("choch",2),...recent("sweep",2),
-  ...["BUY","SELL"].flatMap(side=>["ob","fvg"].flatMap(type=>recent(type,2,side)))
+  ...["BUY","SELL"].flatMap(side=>recent("ob",2,side))
  ];
  const xAt=time=>{const ix=data.findIndex(v=>v.time>=time);return left+(Math.max(0,ix)+.5)*step;};
  const zoneGroups=new Map();
