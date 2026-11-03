@@ -89,7 +89,7 @@ function buildSignal(candles,i,rsis){
 function runBacktest(symbol,market,candles){
  if(!Array.isArray(candles)||candles.length<65)return;
  const data=candles.slice().sort((a,b)=>a.time-b.time),rs=configuredRsiSeries(data);backtestTrades.length=0;let active=null;
- for(let i=Math.max(60,...strategyConfig.emaPeriods,strategyConfig.bollingerPeriod)+2;i<data.length-1;i++){
+ for(let i=Math.max(60,...strategyConfig.emaPeriods,strategyConfig.crtLookback)+2;i<data.length-1;i++){
   const c=data[i];
   if(active){
    let exit=null;const stop=active.protectionSL??active.sl,hitStop=active.direction==="COMPRAR"?c.low<=stop:c.high>=stop,hitTp1=active.direction==="COMPRAR"?c.high>=active.tp1:c.low<=active.tp1,hitTp2=active.direction==="COMPRAR"?c.high>=active.tp2:c.low<=active.tp2,risk=Math.abs(active.entry-active.sl);
@@ -116,7 +116,7 @@ function runBacktest(symbol,market,candles){
 function simulateCandidate(data,config,rsi){
  const oldS={...strategyConfig},oldR={...rsiConfig};Object.assign(strategyConfig,config);Object.assign(rsiConfig,rsi);
  const rs=configuredRsiSeries(data),trades=[];let active=null;
- for(let i=Math.max(60,...strategyConfig.emaPeriods,strategyConfig.bollingerPeriod)+2;i<data.length-1;i++){
+ for(let i=Math.max(60,...strategyConfig.emaPeriods,strategyConfig.crtLookback)+2;i<data.length-1;i++){
   const c=data[i];
   if(active){const stop=active.protectionSL??active.sl,hitStop=active.direction==="COMPRAR"?c.low<=stop:c.high>=stop,hit1=active.direction==="COMPRAR"?c.high>=active.tp1:c.low<=active.tp1,hit2=active.direction==="COMPRAR"?c.high>=active.tp2:c.low<=active.tp2,risk=Math.abs(active.entry-active.sl);let out=null;
    if(!active.tp1Hit&&hitStop)out={result:"PERDIDA",realizedR:-1};else if(!active.tp1Hit&&hit1){active.tp1Hit=true;active.realizedR=.5*Math.abs(active.tp1-active.entry)/risk;active.protectionSL=profitLock(active);}else if(active.tp1Hit&&hitStop&&active.protectionActive!==false)out={result:"GANADA",realizedR:active.realizedR+.25};else if(active.tp1Hit&&hit2)out={result:"GANADA",realizedR:active.realizedR+.5*Math.abs(active.tp2-active.entry)/risk};
