@@ -153,7 +153,7 @@ function analyzeCandles(symbol,market,candles){
  let structureItems=[],structureProjection=null;
  if(mi>=65){
   const last=structureAt(m5,mi,mx);structureProjection=last.projection;
-  for(let k=Math.max(65,mi-100);k<=mi;k++){
+  for(let k=65;k<=mi;k++){
    const part=structureAt(m5,k,mx);structureItems.push(...part.annotations);
   }
  }
