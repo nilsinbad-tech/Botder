@@ -365,3 +365,5 @@ button:active {
 .instrument-list .market strong{font-size:11px;line-height:1.25;overflow-wrap:anywhere}
 .instrument-list .market span{font-size:9px;text-align:left;overflow-wrap:anywhere}
 @media(min-width:700px){.instrument-list{grid-template-columns:repeat(3,minmax(0,1fr))}}
+
+.backtest-compare-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:12px 0}.backtest-compare-grid article{background:#111b2a;border:1px solid #33445b;border-radius:8px;padding:12px}.backtest-compare-grid strong{font-size:12px;color:#70bdff}.backtest-compare-grid p{font-size:12px;margin:7px 0 0;color:#c3cfdd}@media(max-width:480px){.backtest-compare-grid{grid-template-columns:1fr}}
