@@ -4,7 +4,10 @@ function createMarketChart(containerId="chart-area"){
  const host=document.getElementById(containerId);if(!host)return false;
  host.innerHTML="";chartCanvas=document.createElement("canvas");
  chartCanvas.style.cssText="position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:grab";
- host.appendChild(chartCanvas);chartContext=chartCanvas.getContext("2d");if(!chartContext)return false;
+ host.appendChild(chartCanvas);
+ const zoom=document.createElement("div");zoom.style.cssText="position:absolute;right:8px;top:8px;z-index:2;display:flex;gap:5px";
+ [["−",1.25],["+",0.8]].forEach(([label,factor])=>{const b=document.createElement("button");b.type="button";b.textContent=label;b.title=label==="+"?"Acercar":"Alejar";b.style.cssText="width:32px;height:30px;border:1px solid #40536b;border-radius:6px;background:#1b2b40;color:#fff;font-size:18px";b.addEventListener("click",()=>{viewCount=Math.max(15,Math.min(500,Math.round(viewCount*factor)));drawMarketChart();});zoom.appendChild(b);});host.appendChild(zoom);
+ chartContext=chartCanvas.getContext("2d");if(!chartContext)return false;
  if(resizeObserver)resizeObserver.disconnect();resizeObserver=new ResizeObserver(resizeMarketChart);resizeObserver.observe(host);
  chartCanvas.addEventListener("pointerdown",e=>{dragX=e.clientX;dragEnd=viewEnd;chartCanvas.setPointerCapture(e.pointerId);chartCanvas.style.cursor="grabbing";});
  chartCanvas.addEventListener("pointermove",e=>{if(dragX===null)return;const step=(chartCanvas.parentElement.clientWidth-76)/Math.max(1,viewCount);const shift=Math.round((dragX-e.clientX)/Math.max(1,step));viewEnd=Math.max(Math.min(viewCount,candleData.length),Math.min(candleData.length,dragEnd+shift));drawMarketChart();});
