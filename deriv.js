@@ -50,10 +50,16 @@ function connectDeriv() {
       renderMarkets(received);
     }
     if (data.msg_type === "history" && responseSymbol(data) === selectedSymbol && data.history && Array.isArray(data.history.times)) {
-      candleBuffer = aggregateTicks(data.history.times, data.history.prices, selectedGranularity);
+      const historicalTicks = aggregateTicks(data.history.times, data.history.prices, selectedGranularity);
+      if (data.req_id === 12) {
+        candleBuffer = historicalTicks;
+        if (typeof setBacktestHistory === "function") setBacktestHistory(selectedSymbol, selectedMarketName(), historicalTicks);
+      } else {
+        candleBuffer = historicalTicks;
+      }
       if (typeof updateCandles === "function") updateCandles(candleBuffer);
       if (typeof analyzeCandles === "function") analyzeCandles(selectedSymbol, selectedMarketName(), candleBuffer);
-      showChartMessage("Historial · " + (selectedGranularity/60) + " min · " + candleBuffer.length + " velas");
+      showChartMessage("Historial · " + (selectedGranularity === 30 ? "30 segundos" : (selectedGranularity/60) + " min") + " · " + candleBuffer.length + " velas");
     }
     if (data.msg_type === "candles" && responseSymbol(data) === selectedSymbol && data.req_id === 12) {
       const historical = (data.candles || []).map(c => ({ time: Number(c.epoch), open: Number(c.open), high: Number(c.high), low: Number(c.low), close: Number(c.close) }));
@@ -156,11 +162,16 @@ function loadMarketHistory(symbol, granularity = selectedGranularity) {
   candleBuffer = [];
   if (typeof setChartSymbol === "function") setChartSymbol(symbol);
   const tf = document.getElementById("timeframe"); if (tf) tf.value = String(granularity);
-  sendDeriv({ ticks_history: symbol, count: 5000, end: "latest", style: "candles", granularity: selectedGranularity, req_id: 12 });
   if (typeof setChartGranularity === "function") setChartGranularity(selectedGranularity);
   if (typeof setAnalysisGranularity === "function") setAnalysisGranularity(selectedGranularity);
-  sendDeriv({ ticks_history: symbol, start: 0, end: "latest", style: "candles", granularity: selectedGranularity, subscribe: 1, req_id: 10 });
-  showChartMessage("Cargando historial · " + (selectedGranularity/60) + " min...");
+  if (selectedGranularity === 30) {
+    sendDeriv({ ticks_history: symbol, count: 5000, end: "latest", style: "ticks", req_id: 12 });
+    showChartMessage("Construyendo velas de 30 segundos desde ticks de Deriv...");
+  } else {
+    sendDeriv({ ticks_history: symbol, count: 5000, end: "latest", style: "candles", granularity: selectedGranularity, req_id: 12 });
+    sendDeriv({ ticks_history: symbol, start: 0, end: "latest", style: "candles", granularity: selectedGranularity, subscribe: 1, req_id: 10 });
+    showChartMessage("Cargando historial · " + (selectedGranularity/60) + " min...");
+  }
 }
 function openMarket(symbol) {
   if (!symbol || !sendDeriv({ forget_all: "ticks" })) { /* socket may still be connecting */ }
