@@ -338,3 +338,6 @@ button:active {
 .inner-section{padding:0 16px 8px;border-top:1px solid var(--border)}
 .inner-section .section-heading{margin-top:14px}
 @media(max-width:420px){.stats-grid{gap:5px}.stats-grid>div{padding:10px 3px}.stats-grid strong{font-size:18px}.stats-grid span{font-size:8px}}
+
+.chart-controls{display:flex;align-items:center;gap:7px;flex-wrap:wrap;justify-content:flex-end}.chart-controls label{font-size:9px}.chart-controls select{background:#172438;color:#e8eef7;border:1px solid #43546b;border-radius:6px;padding:8px 7px;font-size:11px;max-width:130px;}
+@media(max-width:480px){.chart-panel>.section-heading{align-items:flex-start;flex-wrap:wrap}.chart-controls{justify-content:flex-start;width:100%}.chart-controls select{flex:1;min-width:105px}}
