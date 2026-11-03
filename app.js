@@ -28,7 +28,8 @@ function aggregateRsiCandles(candles,seconds){
  return [...buckets.values()].sort((a,b)=>a.time-b.time);
 }
 function configuredRsiSeries(candles){
- const period=Math.max(2,Math.min(200,Number(rsiConfig.period)||14)),seconds=Math.max(60,Number(rsiConfig.timeframe)||300);
+ const period=Math.max(2,Math.min(200,Number(rsiConfig.period)||14)),seconds=Math.max(60,Number(rsiConfig.timeframe)||60);
+ if(seconds===60)return rsiSeries(candles.map(c=>c.close),period);
  const grouped=aggregateRsiCandles(candles,seconds),values=rsiSeries(grouped.map(c=>c.close),period),out=Array(candles.length).fill(null);
  let j=0,last=null;
  for(let i=0;i<candles.length;i++){
@@ -52,11 +53,11 @@ function applyRsiSettings(){
 document.addEventListener("DOMContentLoaded",()=>{["rsi-timeframe","rsi-period","rsi-low","rsi-mid","rsi-high","ema-periods","crt-lookback","sl-buffer","tp1-r","tp2-r","tp1-close","protect-after-tp1"].forEach(id=>{const e=document.getElementById(id);if(e)e.addEventListener("change",()=>{applyRsiSettings();readStrategySettings();});});});
 
 function swingPoints(candles,at){const highs=[],lows=[];for(let i=2;i<at-2;i++){const c=candles[i];if(c.high>candles[i-1].high&&c.high>candles[i-2].high&&c.high>=candles[i+1].high&&c.high>=candles[i+2].high)highs.push({i,v:c.high});if(c.low<candles[i-1].low&&c.low<candles[i-2].low&&c.low<=candles[i+1].low&&c.low<=candles[i+2].low)lows.push({i,v:c.low});}return{highs,lows};}
-const strategyConfig={emaPeriods:[9,20,50],crtLookback:20,slBufferAtr:.10,tp1R:1.5,tp2R:2.5,tp1Close:50,protectAfterTp1:true};
+const strategyConfig={emaPeriods:[9,20,50],structureLookback:20,slBufferAtr:.10,tp1R:1.5,tp2R:2.5,tp1Close:50,protectAfterTp1:true};
 function readStrategySettings(){
  const e=document.getElementById("ema-periods");
  if(e){const nums=e.value.split(/[ ,;]+/).map(Number).filter(n=>Number.isInteger(n)&&n>=2&&n<=500);if(nums.length>=2)strategyConfig.emaPeriods=[...new Set(nums)].sort((x,y)=>x-y);}
- const cfg=[["crt-lookback","crtLookback",5,100,20],["sl-buffer","slBufferAtr",0,2,.1],["tp1-r","tp1R",.5,10,1.5],["tp2-r","tp2R",1,20,2.5],["tp1-close","tp1Close",1,99,50]];
+ const cfg=[["crt-lookback","structureLookback",5,100,20],["sl-buffer","slBufferAtr",0,2,.1],["tp1-r","tp1R",.5,10,1.5],["tp2-r","tp2R",1,20,2.5],["tp1-close","tp1Close",1,99,50]];
  cfg.forEach(([id,key,min,max,def])=>{const el=document.getElementById(id);if(el)strategyConfig[key]=Math.max(min,Math.min(max,Number(el.value)||def));});
  const protect=document.getElementById("protect-after-tp1");if(protect)strategyConfig.protectAfterTp1=protect.checked;
  if(strategyConfig.tp2R<=strategyConfig.tp1R)strategyConfig.tp2R=strategyConfig.tp1R+.5;
@@ -65,31 +66,54 @@ function readStrategySettings(){
 }
 function strategyTrend(closes,i){
  const ps=strategyConfig.emaPeriods,now=ps.map(p=>emaAt(closes,p,i)),before=ps.map(p=>emaAt(closes,p,i-1));
- if(now.some(x=>x==null)||before.some(x=>x==null))return{bull:false,bear:false};
- const bull=now[0]>now[now.length-1]&&now.every((v,k)=>v>before[k]);
- const bear=now[0]<now[now.length-1]&&now.every((v,k)=>v<before[k]);
- return{bull,bear};
+ if(now.length<3||now.some(x=>x==null)||before.some(x=>x==null))return{bull:false,bear:false,now,before};
+ const bull=now[0]>now[1]&&now[0]>before[0]&&now[1]>before[1]&&now[2]>=before[2]&&closes[i]>now[2];
+ const bear=now[0]<now[1]&&now[0]<before[0]&&now[1]<before[1]&&now[2]<=before[2]&&closes[i]<now[2];
+ return{bull,bear,now,before};
 }
-function bollingerBasis(values,period,end=values.length-1){if(end+1<period)return null;return values.slice(end-period+1,end+1).reduce((a,b)=>a+b,0)/period;}
+function rsiPullbackConfirmed(rsis,i,direction){
+ const start=Math.max(2,i-35);let breakout=-1,pullback=false;
+ for(let k=start+1;k<i-1;k++){
+  if(direction==="COMPRAR"&&rsis[k]!=null&&rsis[k-1]!=null&&rsis[k]>60&&rsis[k-1]<=60)breakout=k;
+  if(direction==="VENDER"&&rsis[k]!=null&&rsis[k-1]!=null&&rsis[k]<40&&rsis[k-1]>=40)breakout=k;
+ }
+ if(breakout<0)return false;
+ for(let k=breakout+1;k<i;k++){
+  if(direction==="COMPRAR"&&rsis[k]!=null&&rsis[k]<=50)pullback=true;
+  if(direction==="VENDER"&&rsis[k]!=null&&rsis[k]>=40&&rsis[k]<=50)pullback=true;
+ }
+ if(!pullback||rsis[i]==null||rsis[i-1]==null)return false;
+ if(direction==="COMPRAR")return rsis[i]>=50&&rsis[i]<=65&&rsis[i]>rsis[i-1];
+ return rsis[i]>=40&&rsis[i]<=50&&rsis[i]<rsis[i-1];
+}
 function buildSignal(candles,i,rsis){
- const required=Math.max(60,...strategyConfig.emaPeriods,strategyConfig.crtLookback)+2;
+ const required=Math.max(60,...strategyConfig.emaPeriods,14)+3;
  if(i<required||rsis[i]==null||rsis[i-1]==null)return null;
- const c=candles[i],r=rsis[i],prev=rsis[i-1],closes=candles.slice(0,i+1).map(x=>x.close),trend=strategyTrend(closes,i);
- const prior=candles.slice(Math.max(0,i-strategyConfig.crtLookback),i);if(prior.length<strategyConfig.crtLookback)return null;
- const rangeHigh=Math.max(...prior.map(x=>x.high)),rangeLow=Math.min(...prior.map(x=>x.low));
- const candleRange=Math.max(c.high-c.low,1e-12),body=Math.abs(c.close-c.open);
- const buy=c.low<rangeLow&&c.close>rangeLow&&c.close>c.open&&body/candleRange>=.35&&trend.bull&&r>prev;
- const sell=c.high>rangeHigh&&c.close<rangeHigh&&c.close<c.open&&body/candleRange>=.35&&trend.bear&&r<prev;
+ const c=candles[i],r=rsis[i],closes=candles.slice(0,i+1).map(x=>x.close),trend=strategyTrend(closes,i);
+ const pivots=swingPoints(candles,i),recent=candles.slice(Math.max(0,i-14),i+1);
+ const atr=recent.reduce((sum,x)=>sum+x.high-x.low,0)/recent.length;
+ if(!Number.isFinite(atr)||atr<=0)return null;
+ const body=Math.abs(c.close-c.open),lowerWick=Math.min(c.open,c.close)-c.low,upperWick=c.high-Math.max(c.open,c.close);
+ const support=[...pivots.lows].reverse().find(p=>i-p.i<=50&&p.v<c.close);
+ const resistance=[...pivots.highs].reverse().find(p=>i-p.i<=50&&p.v>c.close);
+ const buy=trend.bull&&rsiPullbackConfirmed(rsis,i,"COMPRAR")&&!!support&&c.low<=support.v+atr*.35&&c.low>=support.v-atr*.75&&c.close>support.v&&c.close>c.open&&lowerWick>=Math.max(body*.35,atr*.08);
+ const sell=trend.bear&&rsiPullbackConfirmed(rsis,i,"VENDER")&&!!resistance&&c.high>=resistance.v-atr*.35&&c.high<=resistance.v+atr*.75&&c.close<resistance.v&&c.close<c.open&&upperWick>=Math.max(body*.35,atr*.08);
  if(!buy&&!sell)return null;
- const direction=buy?"COMPRAR":"VENDER",entry=c.close,recent=candles.slice(Math.max(0,i-14),i+1),atr=recent.reduce((sum,x)=>sum+x.high-x.low,0)/recent.length,buffer=atr*strategyConfig.slBufferAtr;
- const sl=buy?Math.min(c.low,rangeLow)-buffer:Math.max(c.high,rangeHigh)+buffer,risk=Math.abs(entry-sl);if(!Number.isFinite(risk)||risk<=0)return null;
- const tp1=buy?entry+risk*strategyConfig.tp1R:entry-risk*strategyConfig.tp1R,tp2=buy?entry+risk*strategyConfig.tp2R:entry-risk*strategyConfig.tp2R;
- return{direction,entry,sl,tp1,tp2,rsi:r,time:c.time,index:i,mode:"CRT · BARRIDO + RECUPERACIÓN + EMA",rangeHigh,rangeLow,emaPeriods:strategyConfig.emaPeriods.slice(),tp1Close:strategyConfig.tp1Close,protectAfterTp1:strategyConfig.protectAfterTp1};
+ const direction=buy?"COMPRAR":"VENDER",entry=c.close,buffer=atr*strategyConfig.slBufferAtr;
+ const sl=buy?Math.min(c.low,support.v)-buffer:Math.max(c.high,resistance.v)+buffer;
+ const risk=Math.abs(entry-sl);if(!Number.isFinite(risk)||risk<=0)return null;
+ const prior=candles.slice(Math.max(0,i-100),i),swingTargets=buy?pivots.highs.map(p=>p.v):pivots.lows.map(p=>p.v);
+ const extreme=buy?Math.max(...prior.map(x=>x.high)):Math.min(...prior.map(x=>x.low));
+ const levels=[...new Set([...swingTargets,extreme].filter(v=>Number.isFinite(v)&& (buy?v>entry:v<entry)))].sort((a,b)=>buy?a-b:b-a);
+ const min1=entry+(buy?1:-1)*risk*strategyConfig.tp1R,min2=entry+(buy?1:-1)*risk*strategyConfig.tp2R;
+ const tp1=levels.find(v=>buy?v>=min1:v<=min1),tp2=levels.find(v=>buy?v>=min2&&v>tp1:v<=min2&&v<tp1);
+ if(!Number.isFinite(tp1)||!Number.isFinite(tp2))return null;
+ return{direction,entry,sl,tp1,tp2,rsi:r,time:c.time,index:i,mode:"EMA 9/20/50 · RSI 40/50/60 · ZIGZAG + REBOTE",support:support?.v,resistance:resistance?.v,emaPeriods:strategyConfig.emaPeriods.slice(),tp1Close:strategyConfig.tp1Close,protectAfterTp1:strategyConfig.protectAfterTp1};
 }
 function runBacktest(symbol,market,candles){
  if(!Array.isArray(candles)||candles.length<65)return;
  const data=candles.slice().sort((a,b)=>a.time-b.time),rs=configuredRsiSeries(data);backtestTrades.length=0;let active=null;
- for(let i=Math.max(60,...strategyConfig.emaPeriods,strategyConfig.crtLookback)+2;i<data.length-1;i++){
+ for(let i=Math.max(60,...strategyConfig.emaPeriods,strategyConfig.structureLookback)+2;i<data.length-1;i++){
   const c=data[i];
   if(active){
    let exit=null;const stop=active.protectionSL??active.sl,hitStop=active.direction==="COMPRAR"?c.low<=stop:c.high>=stop,hitTp1=active.direction==="COMPRAR"?c.high>=active.tp1:c.low<=active.tp1,hitTp2=active.direction==="COMPRAR"?c.high>=active.tp2:c.low<=active.tp2,risk=Math.abs(active.entry-active.sl);
@@ -116,7 +140,7 @@ function runBacktest(symbol,market,candles){
 function simulateCandidate(data,config,rsi){
  const oldS={...strategyConfig},oldR={...rsiConfig};Object.assign(strategyConfig,config);Object.assign(rsiConfig,rsi);
  const rs=configuredRsiSeries(data),trades=[];let active=null;
- for(let i=Math.max(60,...strategyConfig.emaPeriods,strategyConfig.crtLookback)+2;i<data.length-1;i++){
+ for(let i=Math.max(60,...strategyConfig.emaPeriods,strategyConfig.structureLookback)+2;i<data.length-1;i++){
   const c=data[i];
   if(active){const stop=active.protectionSL??active.sl,hitStop=active.direction==="COMPRAR"?c.low<=stop:c.high>=stop,hit1=active.direction==="COMPRAR"?c.high>=active.tp1:c.low<=active.tp1,hit2=active.direction==="COMPRAR"?c.high>=active.tp2:c.low<=active.tp2,risk=Math.abs(active.entry-active.sl);let out=null;
    if(!active.tp1Hit&&hitStop)out={result:"PERDIDA",realizedR:-1};else if(!active.tp1Hit&&hit1){active.tp1Hit=true;active.realizedR=.5*Math.abs(active.tp1-active.entry)/risk;active.protectionSL=profitLock(active);}else if(active.tp1Hit&&hitStop&&active.protectionActive!==false)out={result:"GANADA",realizedR:active.realizedR+.25};else if(active.tp1Hit&&hit2)out={result:"GANADA",realizedR:active.realizedR+.5*Math.abs(active.tp2-active.entry)/risk};
