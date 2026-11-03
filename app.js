@@ -63,9 +63,10 @@ function readStrategySettings(){
  if(selectedMarket&&m1Candles.length)analyzeCandles(selectedMarket.symbol,selectedMarket.name,m1Candles);
 }
 function strategyTrend(closes,i){
- const ps=strategyConfig.emaPeriods,now=ps.map(p=>emaAt(closes,p,i)),before=ps.map(p=>emaAt(closes,p,i-1));
- if(now.some(x=>x==null)||before.some(x=>x==null))return{bull:false,bear:false};
- return{bull:now[0]>now[now.length-1]&&now.every((v,k)=>v>before[k]),bear:now[0]<now[now.length-1]&&now.every((v,k)=>v<before[k])};
+ const period=strategyConfig.emaPeriods.includes(20)?20:strategyConfig.emaPeriods[Math.floor(strategyConfig.emaPeriods.length/2)];
+ const ema=emaAt(closes,period,i);
+ if(ema==null)return{bull:false,bear:false};
+ return{bull:closes[i]>ema,bear:closes[i]<ema};
 }
 function buildSignal(candles,i,rsis){
  if(i<Math.max(60,...strategyConfig.emaPeriods)+2||rsis[i]==null||rsis[i-1]==null)return null;
@@ -90,7 +91,9 @@ function runBacktest(symbol,market,candles){
    else if(active.tp1Hit&&hit2)exit={result:"GANADA",price:active.tp2,reason:"TP2",realizedR:active.realizedR+((100-Number(active.tp1Close??strategyConfig.tp1Close))/100)*(Math.abs(active.tp2-active.entry)/risk)};
    if(exit){backtestTrades.push({...active,...exit,exitTime:c.time*1000});active=null;}
   }
-  if(!active){const signal=buildSignal(data,i,rs);if(signal){chartSignals.push({...signal,symbol,market});active={...signal,symbol,market,entryTime:c.time*1000,tp1Hit:false};}}
+  const signal=buildSignal(data,i,rs);
+  if(signal)chartSignals.push({...signal,symbol,market});
+  if(!active&&signal)active={...signal,symbol,market,entryTime:c.time*1000,tp1Hit:false};
  }
  if(active)backtestTrades.push({...active,result:"ABIERTA",exitTime:null});
  backtestSymbol=symbol;backtestReady=true;updateDailyPanel();if(typeof setBacktestTrades==="function")setBacktestTrades(backtestTrades);if(typeof setSignalMarkers==="function")setSignalMarkers(chartSignals);drawRsiPanel(rs,data);
