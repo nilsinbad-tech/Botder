@@ -1,61 +1,108 @@
-
 <!DOCTYPE html>
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Deriv Synthetic Bot</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BOTDER MT5</title>
 <style>
 *{box-sizing:border-box}
-body{margin:0;background:#0b1020;color:#fff;font-family:Arial,sans-serif;padding:18px}
-h1{font-size:24px;margin-bottom:5px}
-p{color:#9ca9c5}
-.panel{background:#151e33;padding:18px;border-radius:14px;margin-top:16px}
-.estado{color:#f5c451;font-weight:bold}
-button{width:100%;padding:16px;margin-top:12px;border:0;border-radius:10px;font-size:16px;font-weight:bold}
-.iniciar{background:#16a36a;color:white}
-.detener{background:#e6a12b;color:#111}
-.cerrar{background:#d83d50;color:white}
-small{color:#9ca9c5}
+body{margin:0;background:#080d18;color:#edf2fa;font-family:Arial;padding:17px}
+header{display:flex;justify-content:space-between;align-items:center;margin-bottom:22px}
+h1{font-size:23px;margin:0;letter-spacing:2px}
+small,.muted{color:#8492a8}
+.status{font-size:11px;color:#f0bd58;border:1px solid #705a2d;padding:7px 10px;border-radius:20px}
+h2{font-size:15px;margin:0 0 15px}
+.panel{background:#111b2b;border:1px solid #202d42;border-radius:14px;padding:16px;margin-bottom:15px}
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.stat{background:#172438;padding:14px;border-radius:11px}
+.stat small{font-size:11px}
+.value{font-size:22px;font-weight:bold;margin-top:8px}
+.green{color:#35d49a}
+.red{color:#ff6979}
+button{width:100%;padding:15px;border:0;border-radius:10px;font-weight:bold;font-size:14px;margin-top:9px}
+.start{background:#0e9d70;color:white}
+.stop{background:#d89b32;color:#111}
+.close{background:#c83d50;color:white}
+table{width:100%;border-collapse:collapse;font-size:12px}
+th,td{text-align:left;padding:11px 5px;border-bottom:1px solid #263247}
+th{color:#8492a8;font-weight:normal}
+.empty{text-align:center;padding:25px 5px;color:#8492a8;font-size:13px}
+.index{display:flex;justify-content:space-between;padding:13px 0;border-bottom:1px solid #263247;font-size:13px}
+.index:last-child{border:0}
+.wait{color:#e8b64f;font-size:11px}
+.footer{text-align:center;color:#65738a;font-size:11px;padding:15px}
 </style>
 </head>
 <body>
-<h1>DERIV SYNTHETIC BOT</h1>
-<p>Panel de control para Deriv MT5</p>
+
+<header>
+<div>
+<h1>BOTDER</h1>
+<small>DERIV MT5 · STANDARD</small>
+</div>
+<div class="status">● SIN CONEXIÓN</div>
+</header>
 
 <div class="panel">
-<h3>Estado del bot</h3>
-<div class="estado" id="estado">DETENIDO</div>
-<p>Cuenta: MT5 Standard</p>
-<p>Temporalidad: M1</p>
-<p>Mercados: Volatility 10, 25, 50 y 75 (1s)</p>
+<h2>RESUMEN DE CUENTA</h2>
+<div class="stats">
+<div class="stat">
+<small>BALANCE</small>
+<div class="value">$0.00</div>
+</div>
+<div class="stat">
+<small>EQUITY</small>
+<div class="value">$0.00</div>
+</div>
+<div class="stat">
+<small>BENEFICIO</small>
+<div class="value green">$0.00</div>
+</div>
+<div class="stat">
+<small>MARGEN LIBRE</small>
+<div class="value">$0.00</div>
+</div>
+</div>
 </div>
 
 <div class="panel">
-<h3>Control de operaciones</h3>
-<button class="iniciar" onclick="control('INICIAR')">INICIAR BOT</button>
-<button class="detener" onclick="control('DETENER')">DETENER BOT</button>
-<button class="cerrar" onclick="control('CERRAR')">CERRAR TODAS</button>
-<p id="mensaje"><small>El panel aún no está conectado a MT5.</small></p>
+<h2>OPERACIONES ABIERTAS <span class="muted">· 0</span></h2>
+<table>
+<thead>
+<tr>
+<th>ÍNDICE</th>
+<th>TIPO</th>
+<th>LOTE</th>
+<th>P/L</th>
+</tr>
+</thead>
+<tbody id="openTrades">
+<tr><td colspan="4" class="empty">No hay operaciones abiertas</td></tr>
+</tbody>
+</table>
 </div>
 
-<script>
-function control(accion){
- const estado=document.getElementById("estado");
- const mensaje=document.getElementById("mensaje");
- if(accion==="INICIAR"){
-  estado.textContent="SOLICITUD DE INICIO";
-  mensaje.textContent="Pendiente de conexión con el motor MT5.";
- }
- if(accion==="DETENER"){
-  estado.textContent="DETENIDO";
-  mensaje.textContent="Solicitud de detener nuevas entradas. Requiere conexión MT5.";
- }
- if(accion==="CERRAR"){
-  estado.textContent="CIERRE SOLICITADO";
-  mensaje.textContent="No se han cerrado operaciones: falta conectar MT5.";
- }
-}
-</script>
+<div class="panel">
+<h2>ÍNDICES SINTÉTICOS</h2>
+<div class="index"><span>Volatility 10 (1s)</span><span class="wait">● Esperando</span></div>
+<div class="index"><span>Volatility 25 (1s)</span><span class="wait">● Esperando</span></div>
+<div class="index"><span>Volatility 50 (1s)</span><span class="wait">● Esperando</span></div>
+<div class="index"><span>Volatility 75 (1s)</span><span class="wait">● Esperando</span></div>
+</div>
+
+<div class="panel">
+<h2>HISTORIAL DE OPERACIONES</h2>
+<div class="empty">Todavía no hay operaciones registradas</div>
+</div>
+
+<div class="panel">
+<h2>CONTROL DEL BOT</h2>
+<button class="start" onclick="alert('Falta conectar el motor MT5. No se ha iniciado ninguna operación.')">INICIAR BOT</button>
+<button class="stop" onclick="alert('Falta conectar el motor MT5.')">DETENER BOT</button>
+<button class="close" onclick="alert('Falta conectar el motor MT5. No se ha cerrado ninguna operación.')">CERRAR TODAS</button>
+</div>
+
+<div class="footer">BOTDER · PANEL DE CONTROL MT5</div>
+
 </body>
 </html>
