@@ -1,36 +1,50 @@
+
 let activeChart = null;
 let candleSeries = null;
-let chartMarkers = [];
+let priceLines = [];
+let chartSymbol = null;
 
-function createMarketChart(containerId) {
+function createMarketChart(containerId = "chart-area") {
   const container = document.getElementById(containerId);
 
   if (!container || !window.LightweightCharts) {
-    console.error("No se encontró el contenedor o la librería del gráfico.");
-    return;
+    console.error("No se pudo cargar el gráfico.");
+    return false;
   }
 
   if (activeChart) {
     activeChart.remove();
+    activeChart = null;
   }
+
+  container.innerHTML = "";
 
   activeChart = LightweightCharts.createChart(container, {
     width: container.clientWidth,
-    height: 350,
+    height: container.clientHeight || 350,
+
     layout: {
-      background: { color: "#121c2b" },
+      background: { color: "#111b2a" },
       textColor: "#d1d5db"
     },
+
     grid: {
-      vertLines: { color: "#263244" },
-      horzLines: { color: "#263244" }
+      vertLines: { color: "#26364b" },
+      horzLines: { color: "#26364b" }
     },
+
+    rightPriceScale: {
+      borderColor: "#26364b"
+    },
+
     timeScale: {
       timeVisible: true,
-      secondsVisible: false
+      secondsVisible: false,
+      borderColor: "#26364b"
     },
-    rightPriceScale: {
-      borderColor: "#263244"
+
+    crosshair: {
+      mode: LightweightCharts.CrosshairMode.Normal
     }
   });
 
@@ -46,29 +60,58 @@ function createMarketChart(containerId) {
     }
   );
 
+  chartSymbol = null;
+
   window.addEventListener("resize", resizeMarketChart);
 
-  return activeChart;
+  return true;
 }
 
 function resizeMarketChart() {
   const container = document.getElementById("chart-area");
 
-  if (activeChart && container) {
-    activeChart.applyOptions({
-      width: container.clientWidth
-    });
-  }
+  if (!activeChart || !container) return;
+
+  activeChart.applyOptions({
+    width: container.clientWidth,
+    height: container.clientHeight || 350
+  });
+}
+
+function setChartSymbol(symbol) {
+  chartSymbol = symbol;
+  clearTradeLevels();
 }
 
 function updateCandles(candles) {
   if (!candleSeries || !Array.isArray(candles)) return;
 
-  candleSeries.setData(candles);
+  const validCandles = candles
+    .filter(c =>
+      Number.isFinite(c.time) &&
+      Number.isFinite(c.open) &&
+      Number.isFinite(c.high) &&
+      Number.isFinite(c.low) &&
+      Number.isFinite(c.close)
+    )
+    .sort((a, b) => a.time - b.time);
+
+  if (validCandles.length) {
+    candleSeries.setData(validCandles);
+    activeChart.timeScale().fitContent();
+  }
 }
 
 function addCandle(candle) {
   if (!candleSeries || !candle) return;
+
+  if (
+    !Number.isFinite(candle.time) ||
+    !Number.isFinite(candle.open) ||
+    !Number.isFinite(candle.high) ||
+    !Number.isFinite(candle.low) ||
+    !Number.isFinite(candle.close)
+  ) return;
 
   candleSeries.update(candle);
 }
@@ -78,37 +121,47 @@ function drawTradeLevels(entry, stopLoss, takeProfit) {
 
   clearTradeLevels();
 
-  window.tradeLines = [
+  priceLines.push(
     candleSeries.createPriceLine({
-      price: entry,
-      color: "#38bdf8",
+      price: Number(entry),
+      color: "#48a8ff",
       lineWidth: 2,
       lineStyle: 0,
       title: "ENTRADA"
-    }),
+    })
+  );
+
+  priceLines.push(
     candleSeries.createPriceLine({
-      price: stopLoss,
+      price: Number(stopLoss),
       color: "#ff5364",
       lineWidth: 2,
       lineStyle: 2,
       title: "STOP LOSS"
-    }),
+    })
+  );
+
+  priceLines.push(
     candleSeries.createPriceLine({
-      price: takeProfit,
+      price: Number(takeProfit),
       color: "#20c997",
       lineWidth: 2,
       lineStyle: 2,
       title: "TAKE PROFIT"
     })
-  ];
+  );
 }
 
 function clearTradeLevels() {
-  if (!candleSeries || !window.tradeLines) return;
+  if (!candleSeries) return;
 
-  window.tradeLines.forEach(line => {
+  priceLines.forEach(line => {
     candleSeries.removePriceLine(line);
   });
 
-  window.tradeLines = [];
+  priceLines = [];
+}
+
+function getActiveChartSymbol() {
+  return chartSymbol;
 }
