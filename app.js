@@ -20,16 +20,17 @@ function emaAt(v,p,end=v.length-1){if(end+1<p)return null;let x=v.slice(0,p).red
 function rsiSeries(values,period=14){const out=Array(values.length).fill(null);if(values.length<=period)return out;let gain=0,loss=0;for(let i=1;i<=period;i++){const d=values[i]-values[i-1];gain+=Math.max(0,d);loss+=Math.max(0,-d);}let ag=gain/period,al=loss/period;out[period]=al===0?100:100-100/(1+ag/al);for(let i=period+1;i<values.length;i++){const d=values[i]-values[i-1];ag=(ag*(period-1)+Math.max(0,d))/period;al=(al*(period-1)+Math.max(0,-d))/period;out[i]=al===0?100:100-100/(1+ag/al);}return out;}
 function swingPoints(candles,at){const highs=[],lows=[];for(let i=2;i<at-2;i++){const c=candles[i];if(c.high>candles[i-1].high&&c.high>candles[i-2].high&&c.high>=candles[i+1].high&&c.high>=candles[i+2].high)highs.push({i,v:c.high});if(c.low<candles[i-1].low&&c.low<candles[i-2].low&&c.low<=candles[i+1].low&&c.low<=candles[i+2].low)lows.push({i,v:c.low});}return{highs,lows};}
 function buildSignal(candles,i,rsis){
- if(i<60||rsis[i]==null)return null;
- const closes=candles.slice(0,i+1).map(c=>c.close),c=candles[i],r=rsis[i],e9=emaAt(closes,9),e20=emaAt(closes,20),e50=emaAt(closes,50);
- if([e9,e20,e50,rsis[i-1]].some(x=>x==null))return null;
- const from=Math.max(1,i-30),window=rsis.slice(from,i+1);
- let buyBreak=-1,sellBreak=-1;
- for(let k=0;k<window.length;k++){const v=window[k],p=window[k-1];if(p!=null&&p<=60&&v>60)buyBreak=k;if(p!=null&&p>=40&&v<40)sellBreak=k;}
- const afterBuy=buyBreak>=0?window.slice(buyBreak+1):[],afterSell=sellBreak>=0?window.slice(sellBreak+1):[];
- const buyPullback=afterBuy.some(v=>v!=null&&v<=52),sellRetest=afterSell.some(v=>v!=null&&v>=48);
- const buySetup=buyPullback&&rsis[i-1]<=50&&r>50&&e9>e20&&e20>e50;
- const sellSetup=sellRetest&&rsis[i-1]>=50&&r<50&&e9<e20&&e20<e50;
+ if(i<60||rsis[i]==null||rsis[i-1]==null)return null;
+ const closes=candles.slice(0,i+1).map(c=>c.close),c=candles[i],r=rsis[i];
+ const e9=emaAt(closes,9),e20=emaAt(closes,20),e50=emaAt(closes,50);
+ const p9=emaAt(closes,9,i-1),p20=emaAt(closes,20,i-1),p50=emaAt(closes,50,i-1);
+ if([e9,e20,e50,p9,p20,p50].some(x=>x==null))return null;
+ const rsiBuyBreak=rsis[i-1]<=60&&r>60;
+ const rsiSellBreak=rsis[i-1]>=40&&r<40;
+ const emaBuyCross=p9<=p20&&e9>e20;
+ const emaSellCross=p9>=p20&&e9<e20;
+ const buySetup=rsiBuyBreak&&emaBuyCross&&e9>p9&&e20>p20&&e9<e50&&e20<e50;
+ const sellSetup=rsiSellBreak&&emaSellCross&&e9<p9&&e20<p20&&e9<e50&&e20<e50;
  if(!buySetup&&!sellSetup)return null;
  const dir=buySetup?"COMPRAR":"VENDER",sw=swingPoints(candles,i),entry=c.close;let sl,tp1,tp2;
  if(buySetup){
