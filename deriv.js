@@ -50,10 +50,10 @@ function connectDeriv() {
       renderMarkets(received);
     }
     if (data.msg_type === "history" && responseSymbol(data) === selectedSymbol && data.history && Array.isArray(data.history.times)) {
-      candleBuffer = aggregateTicks(data.history.times, data.history.prices, 60);
+      candleBuffer = aggregateTicks(data.history.times, data.history.prices, selectedGranularity);
       if (typeof updateCandles === "function") updateCandles(candleBuffer);
       if (typeof analyzeCandles === "function") analyzeCandles(selectedSymbol, selectedMarketName(), candleBuffer);
-      showChartMessage("Historial M1 · " + candleBuffer.length + " velas de 1 minuto");
+      showChartMessage("Historial · " + (selectedGranularity/60) + " min · " + candleBuffer.length + " velas");
     }
     if (data.msg_type === "candles" && responseSymbol(data) === selectedSymbol && data.req_id === 12) {
       const historicalM1 = (data.candles || []).map(c => ({ time: Number(c.epoch), open: Number(c.open), high: Number(c.high), low: Number(c.low), close: Number(c.close) }));
@@ -63,7 +63,7 @@ function connectDeriv() {
       candleBuffer = (data.candles || []).map(c => ({ time: Number(c.epoch), open: Number(c.open), high: Number(c.high), low: Number(c.low), close: Number(c.close) }));
       if (typeof updateCandles === "function") updateCandles(candleBuffer);
       if (typeof analyzeCandles === "function") analyzeCandles(selectedSymbol, selectedMarketName(), candleBuffer);
-      showChartMessage("Historial cargado · " + candleBuffer.length + " velas · M" + (selectedGranularity / 60));
+      showChartMessage("Historial cargado · " + candleBuffer.length + " velas · " + (selectedGranularity/60) + " min");
     }
     if (data.msg_type === "ohlc" && responseSymbol(data) === selectedSymbol && data.ohlc) {
       const o = data.ohlc, candle = { time: Number(o.open_time), open: Number(o.open), high: Number(o.high), low: Number(o.low), close: Number(o.close) };
@@ -78,7 +78,7 @@ function connectDeriv() {
       const el = document.getElementById("current-price"); if (el && Number.isFinite(price)) el.textContent = price.toFixed(4);
       if (Number.isFinite(price) && selectedSymbol) {
         updateOperationPrice(selectedSymbol, price);
-        const interval = 60, bucket = Math.floor(Number(data.tick.epoch) / interval) * interval;
+        const interval = selectedGranularity, bucket = Math.floor(Number(data.tick.epoch) / interval) * interval;
         let live = candleBuffer[candleBuffer.length - 1];
         if (!live || live.time !== bucket) { live = { time: bucket, open: price, high: price, low: price, close: price }; candleBuffer.push(live); }
         else { live = { ...live, high: Math.max(live.high, price), low: Math.min(live.low, price), close: price }; candleBuffer[candleBuffer.length - 1] = live; }
@@ -156,11 +156,11 @@ function loadMarketHistory(symbol, granularity = selectedGranularity) {
   candleBuffer = [];
   if (typeof setChartSymbol === "function") setChartSymbol(symbol);
   const tf = document.getElementById("timeframe"); if (tf) tf.value = String(granularity);
-  sendDeriv({ ticks_history: symbol, count: 5000, end: "latest", style: "candles", granularity: 60, req_id: 12 });
-  selectedGranularity = 60;
-  if (typeof setChartGranularity === "function") setChartGranularity(60);
-  sendDeriv({ ticks_history: symbol, start: 0, end: "latest", style: "candles", granularity: 60, subscribe: 1, req_id: 10 });
-  showChartMessage("Cargando historial M1...");
+  sendDeriv({ ticks_history: symbol, count: 5000, end: "latest", style: "candles", granularity: selectedGranularity, req_id: 12 });
+  if (typeof setChartGranularity === "function") setChartGranularity(selectedGranularity);
+  if (typeof setAnalysisGranularity === "function") setAnalysisGranularity(selectedGranularity);
+  sendDeriv({ ticks_history: symbol, start: 0, end: "latest", style: "candles", granularity: selectedGranularity, subscribe: 1, req_id: 10 });
+  showChartMessage("Cargando historial · " + (selectedGranularity/60) + " min...");
 }
 function openMarket(symbol) {
   if (!symbol || !sendDeriv({ forget_all: "ticks" })) { /* socket may still be connecting */ }
