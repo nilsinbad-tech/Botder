@@ -75,7 +75,25 @@ function renderMarketChart(){
  // SMC overlays: pivots, liquidity, BOS/CHoCH, OB/FVG and projected zone.
  const visibleStart=data[0].time,visibleEnd=data[data.length-1].time;
  const tag=(txt,x,y,color)=>{if(!txt)return;ctx.font="bold 9px Arial";ctx.textAlign="left";let tw=ctx.measureText(txt).width,tx=Math.max(left,Math.min(w-right-tw-8,x)),ty=Math.max(top+10,Math.min(h-bottom,y));ctx.fillStyle="rgba(8,13,22,.9)";ctx.fillRect(tx,ty-10,tw+8,14);ctx.fillStyle=color;ctx.fillText(txt,tx+4,ty+1);};
- (structureOverlay.items||[]).forEach(a=>{if(!Number.isFinite(a.price)||a.time<visibleStart||a.time>visibleEnd)return;let ix=data.findIndex(v=>v.time>=a.time),x=left+(Math.max(0,ix)+.5)*step,y=yOf(a.price),color="#aab7c8";if(a.type==="bos")color=a.side==="BULL"?"#20c997":"#ff5364";if(a.type==="choch")color="#f5c451";if(a.type==="sweep")color="#bd8cff";if(a.type==="liquidity")color="#e2a84a";if(a.type==="ob")color=a.side==="BUY"?"#20a88a":"#d85a68";if(a.type==="fvg")color=a.side==="BUY"?"#3d9eea":"#b07be8";ctx.strokeStyle=color;ctx.setLineDash([3,3]);ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(Math.min(w-right,x+Math.max(20,step*8)),y);ctx.stroke();ctx.setLineDash([]);tag(a.label,x+3,y-3,color);});
+ const annotations=(structureOverlay.items||[]).filter(a=>Number.isFinite(a.price)&&a.time>=visibleStart&&a.time<=visibleEnd);
+ const xAt=time=>{const ix=data.findIndex(v=>v.time>=time);return left+(Math.max(0,ix)+.5)*step;};
+ const zoneGroups=new Map();
+ annotations.filter(a=>a.type==="ob"||a.type==="fvg").forEach(a=>{const key=[a.type,a.time,a.side].join("|");if(!zoneGroups.has(key))zoneGroups.set(key,[]);zoneGroups.get(key).push(a);});
+ zoneGroups.forEach((items,key)=>{if(items.length<2)return;const [type,,side]=key.split("|"),vals=items.map(v=>v.price),topY=yOf(Math.max(...vals)),bottomY=yOf(Math.min(...vals)),x=xAt(items[0].time),color=type==="ob"?(side==="BUY"?"#20c997":"#ff5364"):(side==="BUY"?"#48a8ff":"#bd8cff");ctx.fillStyle=color+"22";ctx.fillRect(x,topY,Math.max(18,step*18),Math.max(3,bottomY-topY));ctx.strokeStyle=color;ctx.setLineDash([4,3]);ctx.strokeRect(x,topY,Math.max(18,step*18),Math.max(3,bottomY-topY));ctx.setLineDash([]);tag(type.toUpperCase()+" "+side,x+3,topY-3,color);});
+ annotations.forEach(a=>{
+  if(a.type==="ob"||a.type==="fvg")return;
+  const x=xAt(a.time),y=yOf(a.price);let color="#aab7c8";
+  if(a.type==="bos")color=a.side==="BULL"?"#20c997":"#ff5364";
+  if(a.type==="choch")color="#f5c451";
+  if(a.type==="sweep")color="#bd8cff";
+  if(a.type==="liquidity")color="#e2a84a";
+  if(a.type==="pivot"){
+   ctx.fillStyle="#d9e2ef";ctx.beginPath();ctx.arc(x,y,3.2,0,Math.PI*2);ctx.fill();
+   tag(a.label==="PIVOTE ALTO"?"PH":"PL",x+4,y-5,"#d9e2ef");return;
+  }
+  ctx.strokeStyle=color;ctx.lineWidth=a.type==="liquidity"?1.5:1.2;ctx.setLineDash(a.type==="liquidity"?[7,4]:[3,3]);ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(a.type==="liquidity"?w-right:Math.min(w-right,x+Math.max(24,step*12)),y);ctx.stroke();ctx.setLineDash([]);
+  tag(a.label,x+3,y-3,color);
+ });
  const p=structureOverlay.projection;if(p&&Number.isFinite(p.low)&&Number.isFinite(p.high)){let y1=yOf(Math.max(p.low,p.high)),y2=yOf(Math.min(p.low,p.high)),col=p.direction==="COMPRAR"?"#20c997":"#ff5364";ctx.fillStyle="rgba(72,168,255,.13)";ctx.fillRect(left,Math.min(y1,y2),pw,Math.max(3,Math.abs(y2-y1)));ctx.strokeStyle=col;ctx.setLineDash([5,4]);ctx.strokeRect(left,Math.min(y1,y2),pw,Math.max(3,Math.abs(y2-y1)));ctx.setLineDash([]);tag(p.stage+" "+p.direction+" "+Number(p.low).toPrecision(6)+"-"+Number(p.high).toPrecision(6),left+5,Math.min(y1,y2)-3,col);}
  // Historical trade zones and exact price labels.
  backtestTradeData.forEach(t=>{
