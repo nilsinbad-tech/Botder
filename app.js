@@ -64,10 +64,14 @@ function buildSignal(candles,i,rsis){
  const dir=buySetup?"COMPRAR":"VENDER",sw=swingPoints(candles,i),entry=c.close;let sl,tp1,tp2;
  if(buySetup){
   const supports=sw.lows.filter(x=>x.i<i&&x.v<entry);sl=supports.length?supports.at(-1).v:Math.min(...candles.slice(Math.max(0,i-7),i+1).map(x=>x.low));
-  const targets=sw.highs.filter(x=>x.i<i&&x.v>entry).map(x=>x.v).sort((x,y)=>x-y);tp1=targets[0];tp2=targets.find(v=>v>tp1);
+  const risk=entry-sl;
+  const targets=sw.highs.filter(x=>x.i<i&&x.v>=entry+risk*1.5).map(x=>x.v).sort((x,y)=>x-y);
+  tp1=targets[0];tp2=targets.find(v=>v>=entry+risk*2.5&&v>tp1);
  }else{
   const resist=sw.highs.filter(x=>x.i<i&&x.v>entry);sl=resist.length?resist.at(-1).v:Math.max(...candles.slice(Math.max(0,i-7),i+1).map(x=>x.high));
-  const targets=sw.lows.filter(x=>x.i<i&&x.v<entry).map(x=>x.v).sort((x,y)=>y-x);tp1=targets[0];tp2=targets.find(v=>v<tp1);
+  const risk=sl-entry;
+  const targets=sw.lows.filter(x=>x.i<i&&x.v<=entry-risk*1.5).map(x=>x.v).sort((x,y)=>y-x);
+  tp1=targets[0];tp2=targets.find(v=>v<=entry-risk*2.5&&v<tp1);
  }
  if(!Number.isFinite(tp1)||!Number.isFinite(tp2)||!Number.isFinite(sl)||(dir==="COMPRAR"?(sl>=entry||tp1<=entry||tp2<=tp1):(sl<=entry||tp1>=entry||tp2>=tp1)))return null;
  return{direction:dir,entry,sl,tp1,tp2,rsi:r,time:c.time,index:i};
@@ -109,7 +113,8 @@ function runBacktest(symbol,market,candles){
  backtestSymbol=symbol;backtestReady=true;updateDailyPanel();
  if(typeof setBacktestTrades==="function")setBacktestTrades(backtestTrades);
  drawRsiPanel(rs,data);
- setText("chart-message","Backtesting M1 · RSI "+(rsiConfig.timeframe/60)+"m ("+rsiConfig.period+") · Estrategia original · "+backtestTrades.length+" operaciones · "+backtestTrades.filter(t=>t.result==="GANADA").length+" ganadas · "+backtestTrades.filter(t=>t.result==="PERDIDA").length+" perdidas");
+ const closed=backtestTrades.filter(t=>t.result!=="ABIERTA"),wins=closed.filter(t=>t.result==="GANADA").length,losses=closed.filter(t=>t.result==="PERDIDA").length,tp1Hits=closed.filter(t=>t.tp1Hit).length,tp2Hits=closed.filter(t=>t.reason==="TP2").length,rate=closed.length?(wins/closed.length*100).toFixed(1):"0.0";
+ setText("chart-message","Backtest M1 · RSI "+(rsiConfig.timeframe/60)+"m ("+rsiConfig.period+") · "+closed.length+" cerradas · "+rate+"% ganadas · TP1 "+tp1Hits+" · TP2 "+tp2Hits+" · "+losses+" pérdidas · Objetivos mínimos 1.5R / 2.5R");
 }
 function drawRsiPanel(series,candles){const host=document.getElementById("rsi-area");if(!host)return;host.innerHTML="";const cv=document.createElement("canvas");cv.style.cssText="width:100%;height:100%;display:block";host.appendChild(cv);const dpr=Math.min(devicePixelRatio||1,2),w=host.clientWidth,h=host.clientHeight;cv.width=w*dpr;cv.height=h*dpr;const x=cv.getContext("2d");x.scale(dpr,dpr);const left=24,right=8,top=10,bottom=18,ph=h-top-bottom,pw=w-left-right;for(const level of [rsiConfig.low,rsiConfig.mid,rsiConfig.high]){const y=top+(100-level)/100*ph;x.strokeStyle=level===50?"#8495aa":"#43546b";x.setLineDash([4,3]);x.beginPath();x.moveTo(left,y);x.lineTo(w-right,y);x.stroke();x.setLineDash([]);x.fillStyle="#a8b5c6";x.font="9px Arial";x.fillText(String(level),2,y+3);}const start=Math.max(0,series.length-200);x.beginPath();let begun=false;for(let i=start;i<series.length;i++){if(series[i]==null)continue;const px=left+(i-start)/Math.max(1,series.length-start-1)*pw,py=top+(100-series[i])/100*ph;if(!begun){x.moveTo(px,py);begun=true;}else x.lineTo(px,py);}x.strokeStyle="#48a8ff";x.lineWidth=1.7;x.stroke();setText("rsi-current","RSI: "+(series.at(-1)==null?"--":series.at(-1).toFixed(1)));}
 function analyzeCandles(symbol,market,candles){if(!candles||candles.length<61)return;const closedIndex=candles.length-2;evaluateOpenOperations(symbol,candles[closedIndex]);const rs=configuredRsiSeries(candles),s=buildSignal(candles,closedIndex,rs);drawRsiPanel(rs,candles);if(!s)return;const key=symbol+":"+s.time+":"+s.direction;if(key===lastSignalKey)return;lastSignalKey=key;addSignal({...s,symbol,market,quality:80,candleTime:s.time});if(typeof drawTradeLevels==="function")drawTradeLevels(s);}
