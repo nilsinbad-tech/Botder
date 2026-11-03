@@ -4,96 +4,110 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>BOTDER Signals</title>
+  <meta name="theme-color" content="#080d16">
+  <title>BOTDER Signals Pro</title>
+
   <link rel="stylesheet" href="style.css">
   <script src="https://unpkg.com/lightweight-charts@5.0.8/dist/lightweight-charts.standalone.production.js"></script>
 </head>
+
 <body>
   <div class="container">
-    <header>
-      <h1>BOTDER <span style="color:#20c997">SIGNALS</span></h1>
-      <div class="subtitle">ANALIZADOR DE MERCADO · DERIV MT5</div>
-      <p id="connection">● Desconectado</p>
+
+    <header class="topbar">
+      <div>
+        <h1>BOTDER <span>SIGNALS</span></h1>
+        <p>ANALIZADOR DE MERCADO EN VIVO</p>
+      </div>
+      <div id="connection" class="connection offline">
+        ● DESCONECTADO
+      </div>
     </header>
 
-    <section class="panel">
-      <h3>Mercados disponibles</h3>
-      <div id="markets" class="grid"></div>
+    <section class="account-panel">
+      <div>
+        <span class="muted">MODO DE FUNCIONAMIENTO</span>
+        <h2>SEÑALES MANUALES</h2>
+      </div>
+      <span class="status-tag">SIN AUTOTRADING</span>
     </section>
 
-    <section class="panel">
-      <h3 id="chart-title">Selecciona un mercado</h3>
-      <div id="chart-area" style="width:100%;height:350px"></div>
-      <div class="muted" id="current-price">Esperando cotizaciones...</div>
+    <section class="section">
+      <div class="section-heading">
+        <h2>Mercados</h2>
+        <span class="muted" id="market-count">0 instrumentos</span>
+      </div>
+
+      <div id="markets" class="market-grid">
+        <div class="empty-state">Conectando con Deriv...</div>
+      </div>
     </section>
 
-    <section class="panel">
-      <h3>Señales activas</h3>
+    <section class="section chart-panel">
+      <div class="section-heading">
+        <div>
+          <span class="muted">GRÁFICO SELECCIONADO</span>
+          <h2 id="chart-title">Selecciona un mercado</h2>
+        </div>
+        <span class="timeframe">M1</span>
+      </div>
+
+      <div id="chart-area"></div>
+
+      <div class="price-bar">
+        <span class="muted">PRECIO ACTUAL</span>
+        <strong id="current-price">---</strong>
+      </div>
+
+      <div id="chart-message" class="muted">
+        Selecciona un instrumento para consultar su gráfico.
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-heading">
+        <h2>Señales activas</h2>
+        <span class="counter" id="signal-count">0</span>
+      </div>
       <div id="signals">
-        <p class="muted">Esperando oportunidades...</p>
+        <div class="empty-state">
+          Todavía no hay señales confirmadas.
+        </div>
       </div>
     </section>
 
-    <section class="panel">
-      <h3>Mis operaciones</h3>
+    <section class="section">
+      <div class="section-heading">
+        <h2>Mis operaciones</h2>
+        <span class="counter" id="operation-count">0</span>
+      </div>
       <div id="operations">
-        <p class="muted">Todavía no has marcado ninguna entrada.</p>
+        <div class="empty-state">
+          Aquí aparecerán las señales en las que marques ENTRÉ.
+        </div>
       </div>
     </section>
 
-    <section class="panel">
-      <h3>Historial</h3>
+    <section class="section">
+      <div class="section-heading">
+        <h2>Historial</h2>
+      </div>
       <div id="history">
-        <p class="muted">Sin operaciones registradas.</p>
+        <div class="empty-state">
+          Todavía no hay resultados registrados.
+        </div>
       </div>
     </section>
+
+    <footer>
+      BOTDER SIGNALS PRO · Herramienta de análisis.
+      Las señales no ejecutan operaciones automáticamente.
+    </footer>
+
   </div>
 
   <script src="charts.js"></script>
   <script src="app.js"></script>
   <script src="deriv.js"></script>
-  <script>
-    const marketList = document.getElementById("markets");
-
-    const instruments = [
-      "Volatility 10 (1s)",
-      "Volatility 25 (1s)",
-      "Volatility 50 (1s)",
-      "Volatility 75 (1s)",
-      "Volatility 10",
-      "Volatility 25",
-      "Volatility 50",
-      "Volatility 75"
-    ];
-
-    instruments.forEach(name => {
-      const button = document.createElement("button");
-      button.className = "market";
-      button.dataset.market = name;
-      button.innerHTML = `<strong>${name}</strong><span class="muted">Seleccionar gráfico</span>`;
-      button.addEventListener("click", () => selectMarket(name));
-      marketList.appendChild(button);
-    });
-
-    document.addEventListener("derivSymbols", event => {
-      document.getElementById("connection").textContent =
-        "● Conectado · Instrumentos recibidos";
-    });
-
-    document.addEventListener("derivTick", event => {
-      const tick = event.detail;
-      if (!tick) return;
-      document.getElementById("current-price").textContent =
-        "Precio en vivo: " + tick.quote;
-    });
-
-    document.addEventListener("derivHistory", event => {
-      if (event.detail.candles.length) {
-        updateCandles(event.detail.candles);
-      }
-    });
-
-    connectDeriv();
-  </script>
 </body>
 </html>
