@@ -20,26 +20,14 @@ function connectDeriv() {
   derivSocket = new WebSocket(DERIV_CONFIG.endpoint);
   derivSocket.onopen = () => {
     setConnectionStatus(true);
-    showChartMessage("Conectado. Solicitando instrumentos a Deriv...");
-    sendDeriv({ active_symbols: "full", req_id: 1 });
+    sendDeriv({ active_symbols: "brief", product_type: "basic", req_id: 1 });
   };
   derivSocket.onmessage = event => {
-    let raw; try { raw = JSON.parse(event.data); } catch { return; }
-    const data = raw.data && typeof raw.data === "object" ? { ...raw, ...raw.data } : raw;
-    if (data.error || (Array.isArray(data.errors) && data.errors.length)) {
-      const message = data.error?.message || data.errors?.[0]?.message || "Error desconocido";
-      showChartMessage("Error de Deriv: " + message);
-      const area = document.getElementById("markets");
-      if (area) area.innerHTML = '<div class="empty-state">Error al cargar instrumentos: ' + message.replace(/[<>&"]/g, "") + '</div>';
-      return;
-    }
-    if (data.msg_type === "active_symbols" || Array.isArray(data.active_symbols)) {
-      renderMarkets(data.active_symbols || []);
-      return;
-    }
+    let data; try { data = JSON.parse(event.data); } catch { return; }
+    if (data.error) { showChartMessage("Deriv: " + data.error.message); return; }
+    if (data.msg_type === "active_symbols") renderMarkets(data.active_symbols || []);
     if (data.msg_type === "candles" || data.msg_type === "history") {
-      const rows = data.candles || data.history?.candles || [];
-      candleBuffer = rows.map(c => ({ time: Number(c.epoch), open: Number(c.open), high: Number(c.high), low: Number(c.low), close: Number(c.close) })).filter(c => Number.isFinite(c.time) && Number.isFinite(c.close));
+      candleBuffer = (data.candles || []).map(c => ({ time: Number(c.epoch), open: Number(c.open), high: Number(c.high), low: Number(c.low), close: Number(c.close) }));
       if (typeof updateCandles === "function") updateCandles(candleBuffer);
       if (typeof analyzeCandles === "function") analyzeCandles(selectedSymbol, selectedMarketName(), candleBuffer);
       showChartMessage("Gráfico M1 en vivo · " + candleBuffer.length + " velas cargadas");
@@ -57,39 +45,28 @@ function connectDeriv() {
       if (selectedSymbol) updateOperationPrice(selectedSymbol, price);
     }
   };
-  derivSocket.onerror = () => showChartMessage("Falló la conexión WebSocket con Deriv.");
+  derivSocket.onerror = () => showChartMessage("No se pudo conectar con Deriv.");
   derivSocket.onclose = () => { setConnectionStatus(false); reconnectTimer = setTimeout(connectDeriv, 5000); };
 }
-function symbolCode(item) { return item.symbol || item.underlying_symbol || item.underlying || ""; }
-function symbolName(item) { return item.display_name || item.underlying_symbol_name || item.name || symbolCode(item) || "Índice"; }
 function selectedMarketName() {
-  const item = availableSymbols.find(x => symbolCode(x) === selectedSymbol);
-  return item ? symbolName(item) : selectedSymbol || "";
+  const item = availableSymbols.find(x => x.symbol === selectedSymbol);
+  return item ? item.display_name : selectedSymbol || "";
 }
 function renderMarkets(all) {
-  const isSynthetic = x => /volatility/i.test([x.display_name, x.underlying_symbol_name, x.symbol, x.name, x.market, x.submarket, x.subgroup, x.market_display_name].filter(Boolean).join(" "))
-    || /^1HZ\d+V$/i.test(symbolCode(x)) || /^R_\d+$/i.test(symbolCode(x));
-  availableSymbols = all.filter(isSynthetic);
+  availableSymbols = all.filter(x => /volatility/i.test((x.display_name || "") + " " + (x.submarket || "")));
   const area = document.getElementById("markets"), count = document.getElementById("market-count");
   if (!area) return;
-  if (count) count.textContent = availableSymbols.length + " instrumentos";
+  if (count) count.textContent = availableSymbols.length + " índices Volatility";
   area.innerHTML = "";
-  if (!availableSymbols.length) {
-    const samples = all.slice(0, 5).map(x => symbolName(x) + " [" + symbolCode(x) + "]").join(" · ");
-    area.innerHTML = '<div class="empty-state">Deriv respondió con ' + all.length + ' instrumentos, pero ninguno coincide con Volatility. Ejemplos recibidos: ' + (samples || "sin datos") + '</div>';
-    showChartMessage("Respuesta de Deriv recibida: " + all.length + " instrumentos. Revisando nombres.");
-    return;
-  }
+  if (!availableSymbols.length) { area.innerHTML = '<div class="empty-state">Deriv no devolvió índices Volatility. Revisa la conexión.</div>'; return; }
   availableSymbols.forEach(item => {
-    const symbol = symbolCode(item);
-    if (!symbol) return;
-    const card = document.createElement("button"); card.className = "market"; card.dataset.symbol = symbol;
-    const title = document.createElement("strong"); title.textContent = symbolName(item);
-    const code = document.createElement("span"); code.textContent = symbol;
-    card.append(title, code); card.addEventListener("click", () => selectMarket(symbolName(item), symbol));
+    const card = document.createElement("button"); card.className = "market"; card.dataset.symbol = item.symbol;
+    const title = document.createElement("strong"); title.textContent = item.display_name || item.symbol;
+    const code = document.createElement("span"); code.textContent = item.symbol;
+    card.append(title, code); card.addEventListener("click", () => selectMarket(item.display_name || item.symbol, item.symbol));
     area.appendChild(card);
   });
-  if (!selectedSymbol && availableSymbols.length) selectMarket(symbolName(availableSymbols[0]), symbolCode(availableSymbols[0]));
+  if (!selectedSymbol) selectMarket(availableSymbols[0].display_name || availableSymbols[0].symbol, availableSymbols[0].symbol);
 }
 function openMarket(symbol) {
   if (!symbol || !sendDeriv({ forget_all: "ticks" })) { /* socket may still be connecting */ }
