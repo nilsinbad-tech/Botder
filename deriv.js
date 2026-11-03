@@ -89,6 +89,7 @@ function connectDeriv() {
         if (!live || live.time !== bucket) { live = { time: bucket, open: price, high: price, low: price, close: price }; candleBuffer.push(live); }
         else { live = { ...live, high: Math.max(live.high, price), low: Math.min(live.low, price), close: price }; candleBuffer[candleBuffer.length - 1] = live; }
         if (typeof addCandle === "function") addCandle(live);
+        if (selectedGranularity === 30 && typeof analyzeCandles === "function") analyzeCandles(selectedSymbol, selectedMarketName(), candleBuffer);
         if (typeof updateBacktestTick === "function") updateBacktestTick(Number(data.tick.epoch), price);
       }
     }
