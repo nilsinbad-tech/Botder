@@ -1,0 +1,121 @@
+const markets = [
+  "Volatility 10 (1s)",
+  "Volatility 25 (1s)",
+  "Volatility 50 (1s)",
+  "Volatility 75 (1s)",
+  "Volatility 10",
+  "Volatility 25",
+  "Volatility 50",
+  "Volatility 75"
+];
+
+let selectedMarket = null;
+let signals = [];
+let operations = [];
+let history = [];
+
+function selectMarket(name) {
+  selectedMarket = name;
+
+  document.querySelectorAll(".market").forEach(card => {
+    card.classList.toggle(
+      "active",
+      card.dataset.market === name
+    );
+  });
+
+  const title = document.getElementById("chart-title");
+  if (title) title.textContent = name;
+}
+
+function markEntered(id) {
+  const signal = signals.find(item => item.id === id);
+  if (!signal || signal.status !== "ACTIVE") return;
+
+  signal.status = "ENTERED";
+
+  operations.push({
+    ...signal,
+    enteredAt: new Date().toISOString(),
+    status: "OPEN"
+  });
+
+  renderSignals();
+  renderOperations();
+}
+
+function markIgnored(id) {
+  const signal = signals.find(item => item.id === id);
+  if (!signal || signal.status !== "ACTIVE") return;
+
+  signal.status = "IGNORED";
+  history.push({ ...signal });
+
+  renderSignals();
+  renderHistory();
+}
+
+function renderSignals() {
+  const area = document.getElementById("signals");
+  if (!area) return;
+
+  area.innerHTML = "";
+
+  signals.filter(s => s.status === "ACTIVE").forEach(signal => {
+    const card = document.createElement("div");
+    card.className = "panel";
+
+    card.innerHTML = `
+      <strong>${signal.market}</strong>
+      <h3>${signal.direction}</h3>
+      <p>Entrada: ${signal.entry}</p>
+      <p>Stop Loss: ${signal.sl}</p>
+      <p>Take Profit: ${signal.tp}</p>
+      <button onclick="markEntered('${signal.id}')">
+        ENTRÉ
+      </button>
+      <button onclick="markIgnored('${signal.id}')">
+        NO ENTRÉ
+      </button>
+    `;
+
+    area.appendChild(card);
+  });
+}
+
+function renderOperations() {
+  const area = document.getElementById("operations");
+  if (!area) return;
+
+  area.innerHTML = operations
+    .filter(op => op.status === "OPEN")
+    .map(op => `
+      <div class="panel">
+        <strong>${op.market}</strong>
+        <p>${op.direction} · EN SEGUIMIENTO</p>
+        <p>Entrada: ${op.entry}</p>
+        <p>SL: ${op.sl} · TP: ${op.tp}</p>
+      </div>
+    `).join("");
+}
+
+function renderHistory() {
+  const area = document.getElementById("history");
+  if (!area) return;
+
+  area.innerHTML = history.map(item => `
+    <div class="panel">
+      ${item.market} · ${item.direction} · ${item.status}
+    </div>
+  `).join("");
+}
+
+function addSignal(data) {
+  signals.unshift({
+    id: crypto.randomUUID(),
+    status: "ACTIVE",
+    ...data
+  });
+
+  renderSignals();
+}
