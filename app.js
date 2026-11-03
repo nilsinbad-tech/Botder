@@ -103,8 +103,8 @@ function buildSignal(candles,i,rsis){
  const sl=buy?Math.min(c.low,support.v)-buffer:Math.max(c.high,resistance.v)+buffer;
  const risk=Math.abs(entry-sl);if(!Number.isFinite(risk)||risk<=0)return null;
  const prior=candles.slice(Math.max(0,i-100),i),swingTargets=buy?pivots.highs.map(p=>p.v):pivots.lows.map(p=>p.v);
- const extreme=buy?Math.max(...prior.map(x=>x.high)):Math.min(...prior.map(x=>x.low));
- const levels=[...new Set([...swingTargets,extreme].filter(v=>Number.isFinite(v)&& (buy?v>entry:v<entry)))].sort((a,b)=>buy?a-b:b-a);
+ const structuralExtremes=[20,50,100].map(n=>{const window=candles.slice(Math.max(0,i-n),i);return buy?Math.max(...window.map(x=>x.high)):Math.min(...window.map(x=>x.low));});
+ const levels=[...new Set([...swingTargets,...structuralExtremes].filter(v=>Number.isFinite(v)&& (buy?v>entry:v<entry)))].sort((a,b)=>buy?a-b:b-a);
  const min1=entry+(buy?1:-1)*risk*strategyConfig.tp1R,min2=entry+(buy?1:-1)*risk*strategyConfig.tp2R;
  const tp1=levels.find(v=>buy?v>=min1:v<=min1),tp2=levels.find(v=>buy?v>=min2&&v>tp1:v<=min2&&v<tp1);
  if(!Number.isFinite(tp1)||!Number.isFinite(tp2))return null;
