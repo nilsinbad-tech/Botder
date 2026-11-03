@@ -1,1 +1,92 @@
+* {
+  box-sizing: border-box;
+}
 
+body {
+  margin: 0;
+  background: #080d16;
+  color: #f1f5f9;
+  font-family: Arial, sans-serif;
+}
+
+.container {
+  padding: 16px;
+  max-width: 1100px;
+  margin: auto;
+}
+
+header {
+  padding: 18px 0;
+  border-bottom: 1px solid #263244;
+}
+
+h1 {
+  font-size: 24px;
+  margin: 0;
+}
+
+.subtitle {
+  color: #8b9bb0;
+  font-size: 12px;
+  margin-top: 7px;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+  margin-top: 20px;
+}
+
+.market {
+  background: #121c2b;
+  border: 1px solid #26364b;
+  border-radius: 12px;
+  padding: 15px;
+  color: white;
+  text-align: left;
+}
+
+.market.active {
+  border-color: #20c997;
+}
+
+.market strong {
+  display: block;
+  margin-bottom: 8px;
+}
+
+.muted {
+  color: #8b9bb0;
+  font-size: 12px;
+}
+
+.panel {
+  background: #121c2b;
+  border: 1px solid #26364b;
+  border-radius: 14px;
+  padding: 16px;
+  margin-top: 18px;
+}
+
+button {
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.signal-button {
+  width: 100%;
+  background: #087f5b;
+  color: white;
+  border: 0;
+  border-radius: 9px;
+  padding: 14px;
+  margin-top: 12px;
+  font-weight: bold;
+}
+
+@media (min-width: 700px) {
+  .grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
