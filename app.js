@@ -6,7 +6,7 @@ function panamaDay(ts){const p=panamaParts(ts);return p.year+"-"+p.month+"-"+p.d
 function updateDailyPanel(){const now=new Date(),date=panamaDay(now.getTime());const clock=new Intl.DateTimeFormat("es-PA",{timeZone:TZ,hour:"2-digit",minute:"2-digit",second:"2-digit",hour12:false}).format(now);const label=new Intl.DateTimeFormat("es-PA",{timeZone:TZ,day:"2-digit",month:"2-digit",year:"numeric"}).format(now);const c=document.getElementById("panama-clock");if(c)c.textContent=clock+" · "+label;const today=backtestTrades.filter(t=>panamaDay(t.exitTime||t.entryTime)===date);const wins=today.filter(t=>t.result==="GANADA").length,losses=today.filter(t=>t.result==="PERDIDA").length,total=wins+losses;setText("daily-wins",wins);setText("daily-losses",losses);setText("daily-total",total);setText("daily-rate",total?(wins/total*100).toFixed(1)+"%":"0%");setText("daily-date",date);}
 function setText(id,value){const e=document.getElementById(id);if(e)e.textContent=value;}
 function selectMarket(name,symbol){selectedMarket={name,symbol};document.querySelectorAll(".market").forEach(c=>c.classList.toggle("active",c.dataset.symbol===symbol));setText("chart-title",name);setText("chart-message","Cargando historial real...");if(typeof openMarket==="function")openMarket(symbol);}
-function addSignal(data){if(!data||signals.some(s=>s.symbol===data.symbol&&s.status==="ACTIVE"))return;signalCounter++;signals.unshift({id:"SIG-"+String(signalCounter).padStart(4,"0"),createdAt:Date.now(),status:"ACTIVE",...data});renderSignals();}
+function addSignal(data){if(!data||signals.some(s=>s.symbol===data.symbol&&s.candleTime===data.candleTime&&s.direction===data.direction))return;signalCounter++;signals.unshift({id:"SIG-"+String(signalCounter).padStart(4,"0"),createdAt:Date.now(),status:"ACTIVE",...data});renderSignals();}
 function markEntered(id){const s=signals.find(x=>x.id===id);if(!s||s.status!=="ACTIVE")return;s.status="ENTERED";operations.unshift({...s,enteredAt:Date.now(),currentPrice:Number(s.entry),result:"OPEN"});renderSignals();renderOperations();}
 function markIgnored(id){const s=signals.find(x=>x.id===id);if(!s||s.status!=="ACTIVE")return;s.status="IGNORED";history.unshift({...s,result:"NO ENTRÉ",finishedAt:Date.now()});renderSignals();renderHistory();}
 function signedMove(direction,from,to){return direction==="COMPRAR"?to-from:from-to;}
@@ -72,19 +72,19 @@ function strategyTrend(closes,i){
  return{bull,bear,now,before};
 }
 function rsiPullbackConfirmed(rsis,i,direction){
- const start=Math.max(2,i-35);let breakout=-1,pullback=false;
+ const start=Math.max(2,i-35),high=rsiConfig.high,low=rsiConfig.low,mid=rsiConfig.mid;let breakout=-1,pullback=false;
  for(let k=start+1;k<i-1;k++){
-  if(direction==="COMPRAR"&&rsis[k]!=null&&rsis[k-1]!=null&&rsis[k]>60&&rsis[k-1]<=60)breakout=k;
-  if(direction==="VENDER"&&rsis[k]!=null&&rsis[k-1]!=null&&rsis[k]<40&&rsis[k-1]>=40)breakout=k;
+  if(direction==="COMPRAR"&&rsis[k]!=null&&rsis[k-1]!=null&&rsis[k]>high&&rsis[k-1]<=high)breakout=k;
+  if(direction==="VENDER"&&rsis[k]!=null&&rsis[k-1]!=null&&rsis[k]<low&&rsis[k-1]>=low)breakout=k;
  }
  if(breakout<0)return false;
  for(let k=breakout+1;k<i;k++){
-  if(direction==="COMPRAR"&&rsis[k]!=null&&rsis[k]<=50)pullback=true;
-  if(direction==="VENDER"&&rsis[k]!=null&&rsis[k]>=40&&rsis[k]<=50)pullback=true;
+  if(direction==="COMPRAR"&&rsis[k]!=null&&rsis[k]<=mid)pullback=true;
+  if(direction==="VENDER"&&rsis[k]!=null&&rsis[k]>=low&&rsis[k]<=mid)pullback=true;
  }
  if(!pullback||rsis[i]==null||rsis[i-1]==null)return false;
- if(direction==="COMPRAR")return rsis[i]>=50&&rsis[i]<=65&&rsis[i]>rsis[i-1];
- return rsis[i]>=40&&rsis[i]<=50&&rsis[i]<rsis[i-1];
+ if(direction==="COMPRAR")return rsis[i]>=mid&&rsis[i]<=high+5&&rsis[i]>rsis[i-1];
+ return rsis[i]>=low&&rsis[i]<=mid&&rsis[i]<rsis[i-1];
 }
 function buildSignal(candles,i,rsis){
  const required=Math.max(60,...strategyConfig.emaPeriods,14)+3;
