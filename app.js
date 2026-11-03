@@ -20,7 +20,7 @@ function renderHistory(){const a=document.getElementById("history");if(!a)return
 function fmt(v){return Number(v).toPrecision(7).replace(/0+$/,"").replace(/\.$/,"");}
 function emaAt(v,p,end=v.length-1){if(end+1<p)return null;let x=v.slice(0,p).reduce((a,b)=>a+b,0)/p,k=2/(p+1);for(let i=p;i<=end;i++)x=v[i]*k+x*(1-k);return x;}
 function rsiSeries(values,period=14){const out=Array(values.length).fill(null);if(values.length<=period)return out;let gain=0,loss=0;for(let i=1;i<=period;i++){const d=values[i]-values[i-1];gain+=Math.max(0,d);loss+=Math.max(0,-d);}let ag=gain/period,al=loss/period;out[period]=al===0?100:100-100/(1+ag/al);for(let i=period+1;i<values.length;i++){const d=values[i]-values[i-1];ag=(ag*(period-1)+Math.max(0,d))/period;al=(al*(period-1)+Math.max(0,-d))/period;out[i]=al===0?100:100-100/(1+ag/al);}return out;}
-const rsiConfig={timeframe:60,period:14,low:40,mid:50,high:60};
+const rsiConfig={timeframe:60,period:14,low:25,mid:50,high:60};
 const signalZones={buyMin:60,buyMax:100,sellMin:0,sellMax:40};
 function aggregateRsiCandles(candles,seconds){
  if(seconds<=60)return candles.map((c,i)=>({...c,_sourceIndex:i}));
@@ -45,7 +45,7 @@ function applyRsiSettings(){
  const tf=document.getElementById("rsi-timeframe"),per=document.getElementById("rsi-period"),lo=document.getElementById("rsi-low"),mi=document.getElementById("rsi-mid"),hi=document.getElementById("rsi-high");
  if(tf)rsiConfig.timeframe=Number(tf.value)||300;
  if(per)rsiConfig.period=Math.max(2,Math.min(200,Number(per.value)||14));
- if(lo)rsiConfig.low=Math.max(1,Math.min(98,Number(lo.value)||40));
+ if(lo)rsiConfig.low=Math.max(1,Math.min(98,Number(lo.value)||25));
  if(mi)rsiConfig.mid=Math.max(rsiConfig.low+1,Math.min(99,Number(mi.value)||50));
  if(hi)rsiConfig.high=Math.max(rsiConfig.mid+1,Math.min(100,Number(hi.value)||60));
  lastSignalKey="";
@@ -55,7 +55,7 @@ function applyRsiSettings(){
 document.addEventListener("DOMContentLoaded",()=>{["rsi-timeframe","rsi-period","rsi-low","rsi-mid","rsi-high","ema-periods","sl-buffer","tp1-r","tp2-r","tp1-close","protect-after-tp1"].forEach(id=>{const e=document.getElementById(id);if(e)e.addEventListener("change",()=>{applyRsiSettings();readStrategySettings();});});});
 
 function swingPoints(candles,at){const highs=[],lows=[];for(let i=2;i<at-2;i++){const c=candles[i];if(c.high>candles[i-1].high&&c.high>candles[i-2].high&&c.high>=candles[i+1].high&&c.high>=candles[i+2].high)highs.push({i,v:c.high});if(c.low<candles[i-1].low&&c.low<candles[i-2].low&&c.low<=candles[i+1].low&&c.low<=candles[i+2].low)lows.push({i,v:c.low});}return{highs,lows};}
-const strategyConfig={emaPeriods:[9,20,50],slBufferAtr:.10,tp1R:1.5,tp2R:2.5,tp1Close:50,protectAfterTp1:true};
+const strategyConfig={emaPeriods:[20],slBufferAtr:.10,tp1R:1.5,tp2R:2.5,tp1Close:50,protectAfterTp1:true};
 function readStrategySettings(){
  const e=document.getElementById("ema-periods");if(e){const nums=e.value.split(/[ ,;]+/).map(Number).filter(n=>Number.isInteger(n)&&n>=2&&n<=500);if(nums.length>=2)strategyConfig.emaPeriods=[...new Set(nums)].sort((x,y)=>x-y);}
  const cfg=[["sl-buffer","slBufferAtr",0,2,.1],["tp1-r","tp1R",.5,10,1.5],["tp2-r","tp2R",1,20,2.5],["tp1-close","tp1Close",1,99,50]];
@@ -78,8 +78,8 @@ function buildSignal(candles,i,rsis){
  const e9=emaAt(closes,9),e20=emaAt(closes,20),e50=emaAt(closes,50);
  const p9=emaAt(closes,9,i-1),p20=emaAt(closes,20,i-1),p50=emaAt(closes,50,i-1);
  if([e9,e20,e50,p9,p20,p50].some(x=>x==null))return null;
- const buy=r>=60&&p9<=p20&&p9<=p50&&e9>e20&&e9>e50;
- const sell=r<=40&&p9>=p20&&p9>=p50&&e9<e20&&e9<e50;
+ const buy=r<=rsiConfig.low&&candles[i-1].close<=p20&&c.close>e20;
+ const sell=r>=rsiConfig.high&&candles[i-1].close>=p20&&c.close<e20;
  if(!buy&&!sell)return null;
  const direction=buy?"COMPRAR":"VENDER",entry=c.close;
  const recent=candles.slice(Math.max(0,i-20),i+1),atr=recent.reduce((sum,x)=>sum+x.high-x.low,0)/recent.length,buffer=atr*.10;
@@ -96,7 +96,7 @@ function buildSignal(candles,i,rsis){
  const valid=structural.filter(v=>Math.abs(v-entry)>=risk*1.1);
  if(!valid.length)return null;
  const tp1=valid[0],tp2=valid.find(v=>Math.abs(v-entry)>=Math.max(risk*1.8,Math.abs(tp1-entry)*1.2));
- return{direction,entry,sl:riskStop,tp1,tp2:tp2??tp1,rsi:r,time:c.time,index:i,mode:"RSI ≥60 compra / ≤40 venta · EMA9 cruza EMA20 y EMA50 · TP por pivotes/liquidez/soporte-resistencia",emaPeriods:[9,20,50],tp1Close:strategyConfig.tp1Close,protectAfterTp1:strategyConfig.protectAfterTp1};
+ return{direction,entry,sl:riskStop,tp1,tp2:tp2??tp1,rsi:r,time:c.time,index:i,mode:"COMPRA: RSI ≤25 + precio cruza EMA20 arriba · VENTA: RSI ≥60 + precio cruza EMA20 abajo · TP estructural por pivotes/liquidez/soporte-resistencia",emaPeriods:[20],tp1Close:strategyConfig.tp1Close,protectAfterTp1:strategyConfig.protectAfterTp1};
 }
 function runBacktest(symbol,market,candles){
  if(!Array.isArray(candles)||candles.length<65)return;
