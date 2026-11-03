@@ -356,3 +356,12 @@ button:active {
 .market strong{font-size:12px;margin:0}
 .market span{font-size:10px;text-align:right}
 @media(min-width:700px){#chart-area{height:560px;min-height:500px}}
+
+/* Instrumentos agrupados por familia */
+.instrument-group{margin:10px 0 14px}
+.instrument-group h3{margin:8px 4px;font-size:11px;letter-spacing:.7px;color:var(--green)}
+.instrument-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}
+.instrument-list .market{min-width:0;min-height:54px;padding:9px 10px;display:flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:4px}
+.instrument-list .market strong{font-size:11px;line-height:1.25;overflow-wrap:anywhere}
+.instrument-list .market span{font-size:9px;text-align:left;overflow-wrap:anywhere}
+@media(min-width:700px){.instrument-list{grid-template-columns:repeat(3,minmax(0,1fr))}}
