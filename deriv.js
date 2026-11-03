@@ -2,6 +2,7 @@ const DERIV_CONFIG = { endpoint: "wss://api.derivws.com/trading/v1/options/ws/pu
 let derivSocket = null, availableSymbols = [], selectedSymbol = null;
 let candleBuffer = [], tickSubId = null, candleSubId = null, reconnectTimer = null, symbolsTimer = null, selectedGranularity = 60;
 
+function responseSymbol(data) { const q=data && data.echo_req || {}; return q.ticks_history || q.ticks || q.symbol || null; }
 function sendDeriv(data) {
   if (!derivSocket || derivSocket.readyState !== WebSocket.OPEN) return false;
   derivSocket.send(JSON.stringify(data)); return true;
@@ -48,23 +49,23 @@ function connectDeriv() {
       showApiDiagnostic("Deriv respondió: " + received.length + " símbolos. Buscando índices Volatility...");
       renderMarkets(received);
     }
-    if (data.msg_type === "history" && data.history && Array.isArray(data.history.times)) {
+    if (data.msg_type === "history" && responseSymbol(data) === selectedSymbol && data.history && Array.isArray(data.history.times)) {
       candleBuffer = aggregateTicks(data.history.times, data.history.prices, 30);
       if (typeof updateCandles === "function") updateCandles(candleBuffer);
       if (typeof analyzeCandles === "function") analyzeCandles(selectedSymbol, selectedMarketName(), candleBuffer);
       showChartMessage("Historial real de ticks · " + candleBuffer.length + " velas de 30 segundos");
     }
-    if (data.msg_type === "candles" && data.req_id === 12) {
+    if (data.msg_type === "candles" && responseSymbol(data) === selectedSymbol && data.req_id === 12) {
       const historicalM1 = (data.candles || []).map(c => ({ time: Number(c.epoch), open: Number(c.open), high: Number(c.high), low: Number(c.low), close: Number(c.close) }));
       if (typeof setBacktestHistory === "function") setBacktestHistory(selectedSymbol, selectedMarketName(), historicalM1);
     }
-    if (data.msg_type === "candles" && data.req_id !== 12) {
+    if (data.msg_type === "candles" && responseSymbol(data) === selectedSymbol && data.req_id !== 12) {
       candleBuffer = (data.candles || []).map(c => ({ time: Number(c.epoch), open: Number(c.open), high: Number(c.high), low: Number(c.low), close: Number(c.close) }));
       if (typeof updateCandles === "function") updateCandles(candleBuffer);
       if (typeof analyzeCandles === "function") analyzeCandles(selectedSymbol, selectedMarketName(), candleBuffer);
       showChartMessage("Historial cargado · " + candleBuffer.length + " velas · M" + (selectedGranularity / 60));
     }
-    if (data.msg_type === "ohlc" && data.ohlc) {
+    if (data.msg_type === "ohlc" && responseSymbol(data) === selectedSymbol && data.ohlc) {
       const o = data.ohlc, candle = { time: Number(o.open_time), open: Number(o.open), high: Number(o.high), low: Number(o.low), close: Number(o.close) };
       if (candleBuffer.length && candleBuffer[candleBuffer.length - 1].time === candle.time) candleBuffer[candleBuffer.length - 1] = candle;
       else candleBuffer.push(candle);
@@ -72,22 +73,18 @@ function connectDeriv() {
       const priceEl = document.getElementById("current-price"); if (priceEl) priceEl.textContent = candle.close.toFixed(4);
       if (typeof analyzeCandles === "function") analyzeCandles(selectedSymbol, selectedMarketName(), candleBuffer);
     }
-    if (data.msg_type === "tick" && data.tick) {
+    if (data.msg_type === "tick" && responseSymbol(data) === selectedSymbol && data.tick) {
       const price = Number(data.tick.quote);
       const el = document.getElementById("current-price"); if (el && Number.isFinite(price)) el.textContent = price.toFixed(4);
       if (Number.isFinite(price) && selectedSymbol) {
         updateOperationPrice(selectedSymbol, price);
-        const interval = selectedGranularity;
-        const bucket = Math.floor(Number(data.tick.epoch) / interval) * interval;
-        let live = candleBuffer[candleBuffer.length - 1];
-        if (!live || live.time !== bucket) {
-          live = { time: bucket, open: price, high: price, low: price, close: price };
-          candleBuffer.push(live);
-        } else {
-          live = { ...live, high: Math.max(live.high, price), low: Math.min(live.low, price), close: price };
-          candleBuffer[candleBuffer.length - 1] = live;
+        if (selectedGranularity === 30) {
+          const interval = 30, bucket = Math.floor(Number(data.tick.epoch) / interval) * interval;
+          let live = candleBuffer[candleBuffer.length - 1];
+          if (!live || live.time !== bucket) { live = { time: bucket, open: price, high: price, low: price, close: price }; candleBuffer.push(live); }
+          else { live = { ...live, high: Math.max(live.high, price), low: Math.min(live.low, price), close: price }; candleBuffer[candleBuffer.length - 1] = live; }
+          if (typeof addCandle === "function") addCandle(live);
         }
-        if (typeof addCandle === "function") addCandle(live);
         if (typeof updateBacktestTick === "function") updateBacktestTick(Number(data.tick.epoch), price);
       }
     }
@@ -174,6 +171,8 @@ function openMarket(symbol) {
   if (!symbol || !sendDeriv({ forget_all: "ticks" })) { /* socket may still be connecting */ }
   if (!derivSocket || derivSocket.readyState !== WebSocket.OPEN) return;
   selectedSymbol = symbol; candleBuffer = []; tickSubId = null; candleSubId = null;
+  sendDeriv({ forget_all: "candles" });
+  sendDeriv({ forget_all: "ticks" });
   if (typeof setChartSymbol === "function") setChartSymbol(symbol);
   const price = document.getElementById("current-price"); if (price) price.textContent = "---";
   loadMarketHistory(symbol, selectedGranularity);
