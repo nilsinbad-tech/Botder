@@ -157,7 +157,7 @@ function loadMarketHistory(symbol, granularity = selectedGranularity) {
   if (typeof setChartGranularity === "function") setChartGranularity(selectedGranularity);
   if (typeof setAnalysisGranularity === "function") setAnalysisGranularity(selectedGranularity);
   if (selectedGranularity === 30) {
-    sendDeriv({ ticks_history: symbol, count: 5000, end: "latest", style: "ticks", req_id: 12 });
+    sendDeriv({ ticks_history: symbol, count: 1000, end: "latest", style: "ticks", req_id: 12 });
     showChartMessage("Construyendo velas de 30 segundos desde ticks de Deriv...");
   } else {
     sendDeriv({ ticks_history: symbol, count: 5000, end: "latest", style: "candles", granularity: selectedGranularity, req_id: 12 });
