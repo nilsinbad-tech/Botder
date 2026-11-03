@@ -61,7 +61,7 @@ function renderMarketChart(){
  for(let i=0;i<=4;i++){let y=top+ph*i/4;ctx.beginPath();ctx.moveTo(left,y);ctx.lineTo(w-right,y);ctx.stroke();}
  if(!candleData.length){ctx.fillStyle="#8495aa";ctx.textAlign="center";ctx.font="12px Arial";ctx.fillText("Esperando datos reales del mercado...",w/2,h/2);return;}
  const end=Math.max(0,Math.min(candleData.length,viewEnd||candleData.length)),start=Math.max(0,end-viewCount),raw=candleData.slice(0,end),data=(candleStyle==="heikin"?toHeikinAshi(raw):raw).slice(start,end);
- if(!data.length)return;const windowKey=start+":"+end+":"+viewCount;let lows=data.map(c=>c.low),highs=data.map(c=>c.high);const candleMin=Math.min(...lows),candleMax=Math.max(...highs);tradeLevels.forEach(x=>{if(Number.isFinite(x.value)&&x.value>=candleMin-(candleMax-candleMin)*.25&&x.value<=candleMax+(candleMax-candleMin)*.25){lows.push(x.value);highs.push(x.value);}});
+ if(!data.length)return;const windowKey=start+":"+end+":"+viewCount;let lows=data.map(c=>c.low),highs=data.map(c=>c.high);const visibleStart=data[0].time,visibleEnd=data[data.length-1].time;const visibleTrades=backtestTradeData.filter(t=>{const et=Number(t.entryTime)/1000,xt=Number(t.exitTime||Date.now())/1000;return Number.isFinite(et)&&et<=visibleEnd&&xt>=visibleStart;});visibleTrades.forEach(t=>[t.entry,t.sl,t.tp1,t.tp2,t.price].forEach(v=>{v=Number(v);if(Number.isFinite(v)){lows.push(v);highs.push(v);}}));const candleMin=Math.min(...data.map(c=>c.low)),candleMax=Math.max(...data.map(c=>c.high));tradeLevels.forEach(x=>{if(Number.isFinite(x.value)&&x.value>=candleMin-(candleMax-candleMin)*.25&&x.value<=candleMax+(candleMax-candleMin)*.25){lows.push(x.value);highs.push(x.value);}});
  const rawMin=Math.min(...lows),rawMax=Math.max(...highs);
  if(scaleWindow!==windowKey||scaleMin===null||scaleMax===null){const pad=(rawMax-rawMin)*.08||Math.abs(rawMax)*.0001||1;scaleMin=rawMin-pad;scaleMax=rawMax+pad;scaleWindow=windowKey;}else{const span=scaleMax-scaleMin,pad=span*.08;if(rawMin<scaleMin+pad)scaleMin=rawMin-pad;if(rawMax>scaleMax-pad)scaleMax=rawMax+pad;}
  const min=scaleMin,max=scaleMax;
@@ -73,7 +73,7 @@ function renderMarketChart(){
  [9,20,50].forEach((period,n)=>{if(raw.length<period)return;let alpha=2/(period+1),v=raw.slice(0,period).reduce((s,c)=>s+c.close,0)/period,series=Array(raw.length).fill(null);series[period-1]=v;for(let k=period;k<raw.length;k++){v=raw[k].close*alpha+v*(1-alpha);series[k]=v;}ctx.beginPath();let begun=false;for(let k=start;k<end;k++){if(series[k]==null)continue;let x=left+step*(k-start+.5),y=yOf(series[k]);if(!begun){ctx.moveTo(x,y);begun=true;}else ctx.lineTo(x,y);}ctx.strokeStyle=["#f5bd4f","#48a8ff","#bd8cff"][n];ctx.lineWidth=period===50?1.8:1.3;ctx.stroke();});
 
  // SMC overlays: pivots, liquidity, BOS/CHoCH, OB/FVG and projected zone.
- const visibleStart=data[0].time,visibleEnd=data[data.length-1].time;
+
  const tag=(txt,x,y,color)=>{if(!txt)return;ctx.font="bold 9px Arial";ctx.textAlign="left";let tw=ctx.measureText(txt).width,tx=Math.max(left,Math.min(w-right-tw-8,x)),ty=Math.max(top+10,Math.min(h-bottom,y));ctx.fillStyle="rgba(8,13,22,.9)";ctx.fillRect(tx,ty-10,tw+8,14);ctx.fillStyle=color;ctx.fillText(txt,tx+4,ty+1);};
  const visibleAnnotations=(structureOverlay.items||[]).filter(a=>Number.isFinite(a.price)&&a.time>=visibleStart&&a.time<=visibleEnd);
  const recent=(type,n,side)=>visibleAnnotations.filter(a=>a.type===type&&(!side||a.side===side)).sort((a,b)=>a.time-b.time);
@@ -102,9 +102,8 @@ function renderMarketChart(){
  });
  const p=structureOverlay.projection;if(p&&Number.isFinite(p.low)&&Number.isFinite(p.high)){const col=p.direction==="COMPRAR"?"#20c997":"#ff5364",level=p.direction==="COMPRAR"?p.low:p.high,y=yOf(level);ctx.strokeStyle=col;ctx.globalAlpha=.7;ctx.setLineDash([3,5]);ctx.beginPath();ctx.moveTo(left,y);ctx.lineTo(w-right,y);ctx.stroke();ctx.setLineDash([]);ctx.globalAlpha=1;}
  // Historical trade zones and exact price labels.
- backtestTradeData.forEach(t=>{
+ visibleTrades.forEach(t=>{
   const entryTime=Number(t.entryTime)/1000,exitTime=Number(t.exitTime||Date.now())/1000;
-  if(!Number.isFinite(entryTime)||entryTime>data[data.length-1].time||exitTime<data[0].time)return;
   const idx=data.findIndex(v=>v.time>=entryTime),endIdx=data.findIndex(v=>v.time>=exitTime);
   const ix=idx<0?data.length-1:idx,ex=endIdx<0?data.length-1:endIdx;
   const x1=left+step*(ix+.5),x2=left+step*(Math.max(ix,ex)+.5);
