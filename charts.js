@@ -75,7 +75,13 @@ function renderMarketChart(){
  // SMC overlays: pivots, liquidity, BOS/CHoCH, OB/FVG and projected zone.
  const visibleStart=data[0].time,visibleEnd=data[data.length-1].time;
  const tag=(txt,x,y,color)=>{if(!txt)return;ctx.font="bold 9px Arial";ctx.textAlign="left";let tw=ctx.measureText(txt).width,tx=Math.max(left,Math.min(w-right-tw-8,x)),ty=Math.max(top+10,Math.min(h-bottom,y));ctx.fillStyle="rgba(8,13,22,.9)";ctx.fillRect(tx,ty-10,tw+8,14);ctx.fillStyle=color;ctx.fillText(txt,tx+4,ty+1);};
- const annotations=(structureOverlay.items||[]).filter(a=>Number.isFinite(a.price)&&a.time>=visibleStart&&a.time<=visibleEnd);
+ const visibleAnnotations=(structureOverlay.items||[]).filter(a=>Number.isFinite(a.price)&&a.time>=visibleStart&&a.time<=visibleEnd);
+ const recent=(type,n,side)=>visibleAnnotations.filter(a=>a.type===type&&(!side||a.side===side)).sort((a,b)=>a.time-b.time).slice(-n);
+ const annotations=[
+  ...recent("pivot",2,""),...recent("liquidity",2,""),
+  ...recent("bos",2),...recent("choch",2),...recent("sweep",2),
+  ...["BUY","SELL"].flatMap(side=>["ob","fvg"].flatMap(type=>recent(type,2,side)))
+ ];
  const xAt=time=>{const ix=data.findIndex(v=>v.time>=time);return left+(Math.max(0,ix)+.5)*step;};
  const zoneGroups=new Map();
  annotations.filter(a=>a.type==="ob"||a.type==="fvg").forEach(a=>{const key=[a.type,a.time,a.side].join("|");if(!zoneGroups.has(key))zoneGroups.set(key,[]);zoneGroups.get(key).push(a);});
@@ -94,7 +100,7 @@ function renderMarketChart(){
   ctx.strokeStyle=color;ctx.lineWidth=a.type==="liquidity"?1.5:1.2;ctx.setLineDash(a.type==="liquidity"?[7,4]:[3,3]);ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(a.type==="liquidity"?w-right:Math.min(w-right,x+Math.max(24,step*12)),y);ctx.stroke();ctx.setLineDash([]);
   tag(a.label,x+3,y-3,color);
  });
- const p=structureOverlay.projection;if(p&&Number.isFinite(p.low)&&Number.isFinite(p.high)){let y1=yOf(Math.max(p.low,p.high)),y2=yOf(Math.min(p.low,p.high)),col=p.direction==="COMPRAR"?"#20c997":"#ff5364";ctx.fillStyle="rgba(72,168,255,.13)";ctx.fillRect(left,Math.min(y1,y2),pw,Math.max(3,Math.abs(y2-y1)));ctx.strokeStyle=col;ctx.setLineDash([5,4]);ctx.strokeRect(left,Math.min(y1,y2),pw,Math.max(3,Math.abs(y2-y1)));ctx.setLineDash([]);tag(p.stage+" "+p.direction+" "+Number(p.low).toPrecision(6)+"-"+Number(p.high).toPrecision(6),left+5,Math.min(y1,y2)-3,col);}
+ const p=structureOverlay.projection;if(p&&Number.isFinite(p.low)&&Number.isFinite(p.high)){const col=p.direction==="COMPRAR"?"#20c997":"#ff5364",level=p.direction==="COMPRAR"?p.low:p.high,y=yOf(level);ctx.strokeStyle=col;ctx.globalAlpha=.7;ctx.setLineDash([3,5]);ctx.beginPath();ctx.moveTo(left,y);ctx.lineTo(w-right,y);ctx.stroke();ctx.setLineDash([]);ctx.globalAlpha=1;}
  // Historical trade zones and exact price labels.
  backtestTradeData.forEach(t=>{
   const entryTime=Number(t.entryTime)/1000,exitTime=Number(t.exitTime||Date.now())/1000;
