@@ -1,1 +1,61 @@
 
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Deriv Synthetic Bot</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#0b1020;color:#fff;font-family:Arial,sans-serif;padding:18px}
+h1{font-size:24px;margin-bottom:5px}
+p{color:#9ca9c5}
+.panel{background:#151e33;padding:18px;border-radius:14px;margin-top:16px}
+.estado{color:#f5c451;font-weight:bold}
+button{width:100%;padding:16px;margin-top:12px;border:0;border-radius:10px;font-size:16px;font-weight:bold}
+.iniciar{background:#16a36a;color:white}
+.detener{background:#e6a12b;color:#111}
+.cerrar{background:#d83d50;color:white}
+small{color:#9ca9c5}
+</style>
+</head>
+<body>
+<h1>DERIV SYNTHETIC BOT</h1>
+<p>Panel de control para Deriv MT5</p>
+
+<div class="panel">
+<h3>Estado del bot</h3>
+<div class="estado" id="estado">DETENIDO</div>
+<p>Cuenta: MT5 Standard</p>
+<p>Temporalidad: M1</p>
+<p>Mercados: Volatility 10, 25, 50 y 75 (1s)</p>
+</div>
+
+<div class="panel">
+<h3>Control de operaciones</h3>
+<button class="iniciar" onclick="control('INICIAR')">INICIAR BOT</button>
+<button class="detener" onclick="control('DETENER')">DETENER BOT</button>
+<button class="cerrar" onclick="control('CERRAR')">CERRAR TODAS</button>
+<p id="mensaje"><small>El panel aún no está conectado a MT5.</small></p>
+</div>
+
+<script>
+function control(accion){
+ const estado=document.getElementById("estado");
+ const mensaje=document.getElementById("mensaje");
+ if(accion==="INICIAR"){
+  estado.textContent="SOLICITUD DE INICIO";
+  mensaje.textContent="Pendiente de conexión con el motor MT5.";
+ }
+ if(accion==="DETENER"){
+  estado.textContent="DETENIDO";
+  mensaje.textContent="Solicitud de detener nuevas entradas. Requiere conexión MT5.";
+ }
+ if(accion==="CERRAR"){
+  estado.textContent="CIERRE SOLICITADO";
+  mensaje.textContent="No se han cerrado operaciones: falta conectar MT5.";
+ }
+}
+</script>
+</body>
+</html>
