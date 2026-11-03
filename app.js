@@ -78,20 +78,6 @@ function buildSignal(candles,i,rsis){
  if(!Number.isFinite(tp1)||!Number.isFinite(tp2)||!Number.isFinite(sl)||(dir==="COMPRAR"?(sl>=entry||tp1<=entry||tp2<=tp1):(sl<=entry||tp1>=entry||tp2>=tp1)))return null;
  return{direction:dir,entry,sl,tp1,tp2,rsi:r,time:c.time,index:i};
 }
-function rejectionExit(dir,c){return !isDoji(c)&&(dir==="COMPRAR"?c.close<c.open:c.close>c.open);}
-function structuralLevels(candles,i,direction,entry){
- const sw=swingPoints(candles,i);let sl,tp1,tp2;
- if(direction==="COMPRAR"){
-  const supports=sw.lows.filter(x=>x.i<i&&x.v<entry);sl=supports.length?supports.at(-1).v:Math.min(...candles.slice(Math.max(0,i-7),i+1).map(x=>x.low));
-  const targets=sw.highs.filter(x=>x.i<i&&x.v>entry).map(x=>x.v).sort((a,b)=>a-b);tp1=targets[0];tp2=targets.find(v=>v>tp1);
- }else{
-  const resist=sw.highs.filter(x=>x.i<i&&x.v>entry);sl=resist.length?resist.at(-1).v:Math.max(...candles.slice(Math.max(0,i-7),i+1).map(x=>x.high));
-  const targets=sw.lows.filter(x=>x.i<i&&x.v<entry).map(x=>x.v).sort((a,b)=>b-a);tp1=targets[0];tp2=targets.find(v=>v<tp1);
- }
- if(!Number.isFinite(sl)||!Number.isFinite(tp1)||!Number.isFinite(tp2))return null;
- if(direction==="COMPRAR"?(sl>=entry||tp1<=entry||tp2<=tp1):(sl<=entry||tp1>=entry||tp2>=tp1))return null;
- return{sl,tp1,tp2};
-}
 function runBacktest(symbol,market,candles){
  if(!Array.isArray(candles)||candles.length<65)return;
  const data=candles.slice().sort((a,b)=>a.time-b.time),rs=configuredRsiSeries(data);backtestTrades.length=0;let active=null;
