@@ -80,11 +80,18 @@ function buildSignal(candles,i,rsis){
  const bbSell=strategyConfig.useBollinger&&basis!=null&&prevBasis!=null&&prevC.close>=prevBasis&&c.close<basis&&trend.bear;
  const sw=swingPoints(candles,i),body=Math.abs(c.close-c.open),range=Math.max(c.high-c.low,1e-12),lowerWick=Math.min(c.open,c.close)-c.low,upperWick=c.high-Math.max(c.open,c.close);
  const recent=candles.slice(Math.max(0,i-14),i),atr=recent.length?recent.reduce((sum,x)=>sum+(x.high-x.low),0)/recent.length:range,tolerance=Math.max(atr*0.18,range*0.08);
- const support=sw.lows.filter(x=>x.i<i&&c.low<=x.v+tolerance&&c.close>x.v).at(-1),resistance=sw.highs.filter(x=>x.i<i&&c.high>=x.v-tolerance&&c.close<x.v).at(-1);
- const structuralBuy=!!support&&c.close>c.open&&lowerWick>=Math.max(body*1.2,range*0.18)&&r>prev&&trend.bull;
- const structuralSell=!!resistance&&c.close<c.open&&upperWick>=Math.max(body*1.2,range*0.18)&&r<prev&&trend.bear;
+ const priorHighs=sw.highs.filter(x=>x.i<i),priorLows=sw.lows.filter(x=>x.i<i);
+ const support=priorLows.filter(x=>c.low<=x.v+tolerance&&c.close>x.v).at(-1),resistance=priorHighs.filter(x=>c.high>=x.v-tolerance&&c.close<x.v).at(-1);
+ const lastHighs=priorHighs.slice(-2),lastLows=priorLows.slice(-2);
+ const bullishStructure=lastHighs.length===2&&lastLows.length===2&&lastHighs[1].v>lastHighs[0].v&&lastLows[1].v>lastLows[0].v;
+ const bearishStructure=lastHighs.length===2&&lastLows.length===2&&lastHighs[1].v<lastHighs[0].v&&lastLows[1].v<lastLows[0].v;
+ const structuralBuy=!!support&&bullishStructure&&c.close>c.open&&lowerWick>=Math.max(body*1.2,range*0.18)&&r>prev&&trend.bull;
+ const structuralSell=!!resistance&&bearishStructure&&c.close<c.open&&upperWick>=Math.max(body*1.2,range*0.18)&&r<prev&&trend.bear;
+ // Ningún disparador opera aislado: RSI/Bollinger también necesitan estructura HH+HL o LH+LL.
+ const validRsiBuy=rsiBuy&&bullishStructure,validRsiSell=rsiSell&&bearishStructure;
+ const validBbBuy=bbBuy&&bullishStructure,validBbSell=bbSell&&bearishStructure;
  let direction,mode,entry=c.close,sl,tp1,tp2;
- if(rsiBuy||bbBuy||rsiSell||bbSell){direction=(rsiBuy||bbBuy)?"COMPRAR":"VENDER";mode=[rsiBuy||rsiSell?"RSI":null,bbBuy||bbSell?"BOLLINGER CENTRAL":null].filter(Boolean).join(" + ")+" + EMA";}
+ if(validRsiBuy||validBbBuy||validRsiSell||validBbSell){direction=(validRsiBuy||validBbBuy)?"COMPRAR":"VENDER";mode=[validRsiBuy||validRsiSell?"RSI":null,validBbBuy||validBbSell?"BOLLINGER CENTRAL":null,"ESTRUCTURA "+((validRsiBuy||validBbBuy)?"HH + HL":"LH + LL"),"EMA"].filter(Boolean).join(" + ");}
  else if(structuralBuy||structuralSell){direction=structuralBuy?"VENDER":"COMPRAR";mode="REBOTE ESTRUCTURAL INVERTIDO";}
  else return null;
  if(direction==="COMPRAR"){
