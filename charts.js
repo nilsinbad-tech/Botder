@@ -76,7 +76,7 @@ function renderMarketChart(){
  const visibleStart=data[0].time,visibleEnd=data[data.length-1].time;
  const tag=(txt,x,y,color)=>{if(!txt)return;ctx.font="bold 9px Arial";ctx.textAlign="left";let tw=ctx.measureText(txt).width,tx=Math.max(left,Math.min(w-right-tw-8,x)),ty=Math.max(top+10,Math.min(h-bottom,y));ctx.fillStyle="rgba(8,13,22,.9)";ctx.fillRect(tx,ty-10,tw+8,14);ctx.fillStyle=color;ctx.fillText(txt,tx+4,ty+1);};
  const visibleAnnotations=(structureOverlay.items||[]).filter(a=>Number.isFinite(a.price)&&a.time>=visibleStart&&a.time<=visibleEnd);
- const recent=(type,n,side)=>visibleAnnotations.filter(a=>a.type===type&&(!side||a.side===side)).sort((a,b)=>a.time-b.time).slice(-n);
+ const recent=(type,n,side)=>visibleAnnotations.filter(a=>a.type===type&&(!side||a.side===side)).sort((a,b)=>a.time-b.time);
  const annotations=[
   ...recent("pivot",2,"").filter(a=>a.label!=="PIVOTE ALTO"),...recent("liquidity",2,""),
   ...recent("bos",2),...recent("choch",2),...recent("sweep",2),
