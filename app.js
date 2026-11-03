@@ -101,8 +101,8 @@ function runBacktest(symbol,market,candles){
    let exit=null;const stop=active.protectionSL??active.sl,hitStop=active.direction==="COMPRAR"?c.low<=stop:c.high>=stop,hitTp1=active.direction==="COMPRAR"?c.high>=active.tp1:c.low<=active.tp1,hitTp2=active.direction==="COMPRAR"?c.high>=active.tp2:c.low<=active.tp2,risk=Math.abs(active.entry-active.sl);
    if(!active.tp1Hit&&hitStop)exit={result:"PERDIDA",price:stop,reason:"SL INICIAL",realizedR:-1};
    else if(!active.tp1Hit&&hitTp1){active.tp1Hit=true;active.tp1Time=c.time*1000;active.protectionSL=profitLock(active);active.realizedR=0.5*(Math.abs(active.tp1-active.entry)/risk);}
-   else if(active.tp1Hit&&hitTp2)exit={result:"GANADA",price:active.tp2,reason:"TP2",realizedR:active.realizedR+0.5*(Math.abs(active.tp2-active.entry)/risk)};
    else if(active.tp1Hit&&hitStop)exit={result:"GANADA",price:stop,reason:"PROTECCIÓN +0.5R",realizedR:active.realizedR+0.25};
+   else if(active.tp1Hit&&hitTp2)exit={result:"GANADA",price:active.tp2,reason:"TP2",realizedR:active.realizedR+0.5*(Math.abs(active.tp2-active.entry)/risk)};
    if(exit){backtestTrades.push({...active,...exit,exitTime:c.time*1000});active=null;}
   }
   if(!active){
