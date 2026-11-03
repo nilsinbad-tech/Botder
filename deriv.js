@@ -178,6 +178,7 @@ function getAvailableSymbols() { return availableSymbols; }
 function isDerivConnected() { return derivSocket && derivSocket.readyState === WebSocket.OPEN; }
 document.addEventListener("DOMContentLoaded", () => {
   const tf = document.getElementById("timeframe");
-  if (tf) { tf.value = "60"; tf.disabled = true; tf.addEventListener("change", () => { tf.value = "60"; if (selectedSymbol) loadMarketHistory(selectedSymbol, 60); }); }
+  if (tf) { tf.value = "60"; tf.disabled = false; tf.addEventListener("change", () => { const n=Number(tf.value); if([30,60,120,180].includes(n)&&selectedSymbol)loadMarketHistory(selectedSymbol,n); }); }
+  const style=document.getElementById("candle-style");if(style)style.addEventListener("change",()=>{if(typeof setCandleStyle==="function")setCandleStyle(style.value);});
 });
 connectDeriv();
