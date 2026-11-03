@@ -1,5 +1,5 @@
 const signals=[],operations=[],history=[],backtestTrades=[];
-let signalCounter=0,lastSignalKey="",selectedMarket=null,backtestSymbol=null,m1Candles=[],backtestReady=false;
+let signalCounter=0,lastSignalKey="",selectedMarket=null,backtestSymbol=null,m1Candles=[],m5Candles=[],backtestReady=false;
 const TZ="America/Panama";
 function panamaParts(ts=Date.now()){const p=new Intl.DateTimeFormat("en-CA",{timeZone:TZ,year:"numeric",month:"2-digit",day:"2-digit"}).formatToParts(new Date(ts));return Object.fromEntries(p.map(x=>[x.type,x.value]));}
 function panamaDay(ts){const p=panamaParts(ts);return p.year+"-"+p.month+"-"+p.day;}
@@ -64,6 +64,41 @@ function readStrategySettings(){
  lastSignalKey="";if(m1Candles.length)runBacktest(backtestSymbol||selectedMarket?.symbol,selectedMarket?.name||"",m1Candles);
  if(selectedMarket&&m1Candles.length)analyzeCandles(selectedMarket.symbol,selectedMarket.name,m1Candles);
 }
+function setM5History(symbol,candles){
+ if(!Array.isArray(candles)||!candles.length)return;
+ m5Candles=candles.slice().filter(c=>[c.time,c.open,c.high,c.low,c.close].every(Number.isFinite)).sort((a,b)=>a.time-b.time);
+ if(m1Candles.length)runBacktest(backtestSymbol||symbol,selectedMarket?.name||"",m1Candles);
+}
+function updateM5Candle(candle){
+ if(!candle||![candle.time,candle.open,candle.high,candle.low,candle.close].every(Number.isFinite))return;
+ const last=m5Candles[m5Candles.length-1];
+ if(last&&last.time===candle.time)m5Candles[m5Candles.length-1]=candle;
+ else if(!last||candle.time>last.time)m5Candles.push(candle);
+ if(m5Candles.length>1200)m5Candles=m5Candles.slice(-1200);
+}
+function confirmM5(direction,signalTime){
+ const closed=m5Candles.filter(c=>c.time+300<=signalTime);
+ if(closed.length<25)return false;
+ const i=closed.length-1,closes=closed.map(c=>c.close),ema=emaAt(closes,20,i),prior=emaAt(closes,20,i-1);
+ if(ema==null||prior==null)return false;
+ return direction==="COMPRAR"?(closes[i]>ema&&ema>prior):(closes[i]<ema&&ema<prior);
+}
+function m5Targets(direction,entry,risk,signalTime){
+ const closed=m5Candles.filter(c=>c.time+300<=signalTime),slice=closed.slice(-80);
+ if(slice.length<10)return null;
+ const highs=[],lows=[];
+ for(let i=2;i<slice.length-2;i++){
+  const c=slice[i];
+  if(c.high>slice[i-1].high&&c.high>slice[i-2].high&&c.high>=slice[i+1].high&&c.high>=slice[i+2].high)highs.push(c.high);
+  if(c.low<slice[i-1].low&&c.low<slice[i-2].low&&c.low<=slice[i+1].low&&c.low<=slice[i+2].low)lows.push(c.low);
+ }
+ if(direction==="COMPRAR"){
+  const levels=highs.filter(v=>v>entry).sort((a,b)=>a-b);
+  return{tp1:levels[0]??entry+risk*1.5,tp2:levels[1]??entry+risk*2.5};
+ }
+ const levels=lows.filter(v=>v<entry).sort((a,b)=>b-a);
+ return{tp1:levels[0]??entry-risk*1.5,tp2:levels[1]??entry-risk*2.5};
+}
 function strategyTrend(closes,i){
  const period=strategyConfig.emaPeriods.includes(20)?20:strategyConfig.emaPeriods[0];
  const ema=emaAt(closes,period,i);
@@ -76,10 +111,13 @@ function buildSignal(candles,i,rsis){
  const buy=r<=rsiConfig.low&&r>prev&&trend.bull;
  const sell=r>=rsiConfig.high&&r<prev&&trend.bear;
  if(!buy&&!sell)return null;
- const direction=buy?"COMPRAR":"VENDER",entry=c.close,recent=candles.slice(Math.max(0,i-14),i+1),atr=recent.reduce((sum,x)=>sum+x.high-x.low,0)/recent.length,buffer=atr*strategyConfig.slBufferAtr;
+ const direction=buy?"COMPRAR":"VENDER";
+ if(!confirmM5(direction,c.time))return null;
+ const entry=c.close,recent=candles.slice(Math.max(0,i-14),i+1),atr=recent.reduce((sum,x)=>sum+x.high-x.low,0)/recent.length,buffer=atr*strategyConfig.slBufferAtr;
  const sl=buy?Math.min(...recent.map(x=>x.low))-buffer:Math.max(...recent.map(x=>x.high))+buffer,risk=Math.abs(entry-sl);if(!Number.isFinite(risk)||risk<=0)return null;
- const tp1=buy?entry+risk*strategyConfig.tp1R:entry-risk*strategyConfig.tp1R,tp2=buy?entry+risk*strategyConfig.tp2R:entry-risk*strategyConfig.tp2R;
- return{direction,entry,sl,tp1,tp2,rsi:r,time:c.time,index:i,mode:"RSI + EMA",emaPeriods:strategyConfig.emaPeriods.slice(),tp1Close:strategyConfig.tp1Close,protectAfterTp1:strategyConfig.protectAfterTp1};
+ const targets=m5Targets(direction,entry,risk,c.time),tp1=targets.tp1,tp2=targets.tp2;
+ if((buy&&(tp1<=entry||tp2<=tp1))||(!buy&&(tp1>=entry||tp2>=tp1)))return null;
+ return{direction,entry,sl,tp1,tp2,rsi:r,time:c.time,index:i,mode:"RSI + EMA M1 · CONFIRMACIÓN M5",confirmation:"M5 EMA20 + pendiente",tpSource:"Estructura M5",emaPeriods:strategyConfig.emaPeriods.slice(),tp1Close:strategyConfig.tp1Close,protectAfterTp1:strategyConfig.protectAfterTp1};
 }
 function runBacktest(symbol,market,candles){
  if(!Array.isArray(candles)||candles.length<65)return;
@@ -100,7 +138,7 @@ function runBacktest(symbol,market,candles){
  if(active)backtestTrades.push({...active,result:"ABIERTA",exitTime:null});
  backtestSymbol=symbol;backtestReady=true;updateDailyPanel();if(typeof setBacktestTrades==="function")setBacktestTrades(backtestTrades);if(typeof setSignalMarkers==="function")setSignalMarkers(chartSignals);drawRsiPanel(rs,data);
  const closed=backtestTrades.filter(t=>t.result!=="ABIERTA"),wins=closed.filter(t=>t.result==="GANADA").length,losses=closed.filter(t=>t.result==="PERDIDA").length,rate=closed.length?(wins/closed.length*100).toFixed(1):"0.0";
- setText("chart-message","Backtest M1 · RSI "+(rsiConfig.timeframe/60)+"m ("+rsiConfig.period+") · "+closed.length+" cerradas · "+rate+"% ganadas · "+losses+" pérdidas.");
+ setText("chart-message","Entrada M1 · Confirmación M5 · TP por estructura M5 · "+closed.length+" cerradas · "+rate+"% ganadas · "+losses+" pérdidas.");
 }
 function drawRsiPanel(series,candles){const host=document.getElementById("rsi-area");if(!host)return;host.innerHTML="";const cv=document.createElement("canvas");cv.style.cssText="width:100%;height:100%;display:block";host.appendChild(cv);const dpr=Math.min(devicePixelRatio||1,2),w=host.clientWidth,h=host.clientHeight;cv.width=w*dpr;cv.height=h*dpr;const x=cv.getContext("2d");x.scale(dpr,dpr);const left=24,right=8,top=10,bottom=18,ph=h-top-bottom,pw=w-left-right;for(const level of [rsiConfig.low,rsiConfig.mid,rsiConfig.high]){const y=top+(100-level)/100*ph;x.strokeStyle=level===50?"#8495aa":"#43546b";x.setLineDash([4,3]);x.beginPath();x.moveTo(left,y);x.lineTo(w-right,y);x.stroke();x.setLineDash([]);x.fillStyle="#a8b5c6";x.font="9px Arial";x.fillText(String(level),2,y+3);}const start=Math.max(0,series.length-200);x.beginPath();let begun=false;for(let i=start;i<series.length;i++){if(series[i]==null)continue;const px=left+(i-start)/Math.max(1,series.length-start-1)*pw,py=top+(100-series[i])/100*ph;if(!begun){x.moveTo(px,py);begun=true;}else x.lineTo(px,py);}x.strokeStyle="#48a8ff";x.lineWidth=1.7;x.stroke();setText("rsi-current","RSI: "+(series.at(-1)==null?"--":series.at(-1).toFixed(1)));}
 function analyzeCandles(symbol,market,candles){
