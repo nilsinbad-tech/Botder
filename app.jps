@@ -17,37 +17,31 @@ function selectMarket(name, symbol) {
   document.getElementById("chart-message").textContent =
     "Cargando velas de un minuto...";
 
-  if (typeof openMarket === "function") {
-    openMarket(symbol);
-  }
+  if (typeof openMarket === "function") openMarket(symbol);
 }
 
 function addSignal(data) {
-  if (!data || !data.symbol || !data.entry || !data.sl || !data.tp) return;
+  if (!data || !data.symbol || data.entry == null ||
+      data.sl == null || data.tp == null) return;
 
-  const duplicate = signals.some(s =>
-    s.symbol === data.symbol &&
-    s.status === "ACTIVE"
-  );
-
-  if (duplicate) return;
+  if (signals.some(s =>
+    s.symbol === data.symbol && s.status === "ACTIVE"
+  )) return;
 
   signalCounter++;
 
-  const signal = {
+  signals.unshift({
     id: "SIG-" + String(signalCounter).padStart(4, "0"),
     createdAt: Date.now(),
     status: "ACTIVE",
     ...data
-  };
+  });
 
-  signals.unshift(signal);
   renderSignals();
 }
 
 function markEntered(id) {
   const signal = signals.find(s => s.id === id);
-
   if (!signal || signal.status !== "ACTIVE") return;
 
   signal.status = "ENTERED";
@@ -55,7 +49,7 @@ function markEntered(id) {
   operations.unshift({
     ...signal,
     enteredAt: Date.now(),
-    currentPrice: signal.entry,
+    currentPrice: Number(signal.entry),
     result: "OPEN"
   });
 
@@ -65,7 +59,6 @@ function markEntered(id) {
 
 function markIgnored(id) {
   const signal = signals.find(s => s.id === id);
-
   if (!signal || signal.status !== "ACTIVE") return;
 
   signal.status = "IGNORED";
@@ -84,20 +77,19 @@ function updateOperationPrice(symbol, price) {
   operations.forEach(op => {
     if (op.symbol !== symbol || op.result !== "OPEN") return;
 
-    op.currentPrice = price;
+    op.currentPrice = Number(price);
 
     const hitTP = op.direction === "COMPRAR"
-      ? price >= op.tp
-      : price <= op.tp;
+      ? price >= Number(op.tp)
+      : price <= Number(op.tp);
 
     const hitSL = op.direction === "COMPRAR"
-      ? price <= op.sl
-      : price >= op.sl;
+      ? price <= Number(op.sl)
+      : price >= Number(op.sl);
 
     if (hitTP || hitSL) {
       op.result = hitTP ? "GANADA" : "PERDIDA";
       op.finishedAt = Date.now();
-
       history.unshift({ ...op });
     }
   });
@@ -108,7 +100,6 @@ function updateOperationPrice(symbol, price) {
 
 function expireSignal(id) {
   const signal = signals.find(s => s.id === id);
-
   if (!signal || signal.status !== "ACTIVE") return;
 
   signal.status = "EXPIRED";
@@ -130,25 +121,34 @@ function renderSignals() {
   document.getElementById("signal-count").textContent = active.length;
 
   if (!active.length) {
-    area.innerHTML = '<div class="empty-state">No hay señales activas.</div>';
+    area.innerHTML =
+      '<div class="empty-state">No hay señales activas.</div>';
     return;
   }
 
   area.innerHTML = active.map(s => `
     <article class="signal-card">
-      <div class="muted">${s.id} · ${s.market}</div>
+      <div class="muted">${s.id} · ${s.market || s.symbol}</div>
       <h3 class="${s.direction === "COMPRAR" ? "buy" : "sell"}">
         ${s.direction}
       </h3>
       <div class="levels">
-        <div class="level"><span>ENTRADA</span><strong>${s.entry}</strong></div>
-        <div class="level"><span>STOP LOSS</span><strong>${s.sl}</strong></div>
-        <div class="level"><span>TAKE PROFIT</span><strong>${s.tp}</strong></div>
+        <div class="level">
+          <span>ENTRADA</span><strong>${s.entry}</strong>
+        </div>
+        <div class="level">
+          <span>STOP LOSS</span><strong>${s.sl}</strong>
+        </div>
+        <div class="level">
+          <span>TAKE PROFIT</span><strong>${s.tp}</strong>
+        </div>
       </div>
-      <div class="muted">Calidad: ${s.quality || "--"}/100</div>
+      <div class="muted">Calidad: ${s.quality ?? "--"}/100</div>
       <div class="action-row">
-        <button class="enter-button" onclick="markEntered('${s.id}')">ENTRÉ</button>
-        <button class="ignore-button" onclick="markIgnored('${s.id}')">NO ENTRÉ</button>
+        <button class="enter-button"
+          onclick="markEntered('${s.id}')">ENTRÉ</button>
+        <button class="ignore-button"
+          onclick="markIgnored('${s.id}')">NO ENTRÉ</button>
       </div>
     </article>
   `).join("");
@@ -161,13 +161,14 @@ function renderOperations() {
   document.getElementById("operation-count").textContent = open.length;
 
   if (!open.length) {
-    area.innerHTML = '<div class="empty-state">No tienes operaciones en seguimiento.</div>';
+    area.innerHTML =
+      '<div class="empty-state">No tienes operaciones en seguimiento.</div>';
     return;
   }
 
   area.innerHTML = open.map(op => `
     <article class="operation-card">
-      <div class="muted">${op.id} · ${op.market}</div>
+      <div class="muted">${op.id} · ${op.market || op.symbol}</div>
       <h3>${op.direction}</h3>
       <p>Entrada: ${op.entry}</p>
       <p>Precio actual: <strong>${op.currentPrice}</strong></p>
@@ -181,22 +182,20 @@ function renderHistory() {
   const area = document.getElementById("history");
 
   if (!history.length) {
-    area.innerHTML = '<div class="empty-state">Sin resultados registrados.</div>';
+    area.innerHTML =
+      '<div class="empty-state">Sin resultados registrados.</div>';
     return;
   }
 
   area.innerHTML = history.map(item => `
     <article class="history-card">
-      <strong>${item.market}</strong>
-      <p>${item.direction} · ${item.result}</p>
-      <span class="${item.result === "GANADA" ? "result-win" :
-        item.result === "PERDIDA" ? "result-loss" : "result-warning"}">
-        ${item.result}
-      </span>
+      <strong>${item.market || item.symbol}</strong>
+      <p>${item.direction || ""} · ${item.result}</p>
+      <span class="${
+        item.result === "GANADA" ? "result-win" :
+        item.result === "PERDIDA" ? "result-loss" :
+        "result-warning"
+      }">${item.result}</span>
     </article>
   `).join("");
 }
-
-window.addEventListener("beforeunload", () => {
-  // No se cierran operaciones reales: este panel solo registra seguimiento manual.
-});
