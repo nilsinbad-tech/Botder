@@ -1,138 +1,27 @@
-const signals = [];
-const operations = [];
-const history = [];
-let signalCounter = 0;
-let lastSignalKey = "";
-let selectedMarket = null;
-
-function selectMarket(name, symbol) {
-  selectedMarket = { name, symbol };
-  document.querySelectorAll(".market").forEach(card => {
-    card.classList.toggle("active", card.dataset.symbol === symbol);
-  });
-  document.getElementById("chart-title").textContent = name;
-  document.getElementById("chart-message").textContent = "Cargando velas M1...";
-  if (typeof openMarket === "function") openMarket(symbol);
-}
-
-function addSignal(data) {
-  if (!data || signals.some(s => s.symbol === data.symbol && s.status === "ACTIVE")) return;
-  signalCounter++;
-  signals.unshift({ id: "SIG-" + String(signalCounter).padStart(4, "0"), createdAt: Date.now(), status: "ACTIVE", ...data });
-  renderSignals();
-}
-
-function markEntered(id) {
-  const s = signals.find(x => x.id === id);
-  if (!s || s.status !== "ACTIVE") return;
-  s.status = "ENTERED";
-  operations.unshift({ ...s, enteredAt: Date.now(), currentPrice: Number(s.entry), result: "OPEN" });
-  renderSignals(); renderOperations();
-}
-
-function markIgnored(id) {
-  const s = signals.find(x => x.id === id);
-  if (!s || s.status !== "ACTIVE") return;
-  s.status = "IGNORED";
-  history.unshift({ ...s, result: "NO ENTRÉ", finishedAt: Date.now() });
-  renderSignals(); renderHistory();
-}
-
-function updateOperationPrice(symbol, price) {
-  operations.forEach(op => {
-    if (op.symbol !== symbol || op.result !== "OPEN") return;
-    op.currentPrice = Number(price);
-    const tp = op.direction === "COMPRAR" ? price >= op.tp : price <= op.tp;
-    const sl = op.direction === "COMPRAR" ? price <= op.sl : price >= op.sl;
-    if (tp || sl) {
-      op.result = tp ? "GANADA" : "PERDIDA";
-      op.finishedAt = Date.now();
-      history.unshift({ ...op });
-    }
-  });
-  renderOperations(); renderHistory();
-}
-
-function renderSignals() {
-  const area = document.getElementById("signals");
-  const active = signals.filter(s => s.status === "ACTIVE");
-  document.getElementById("signal-count").textContent = active.length;
-  if (!active.length) { area.innerHTML = '<div class="empty-state">No hay señales activas.</div>'; return; }
-  area.innerHTML = active.map(s => `
-    <article class="signal-card">
-      <div class="muted">${s.id} · ${s.market}</div>
-      <h3 class="${s.direction === "COMPRAR" ? "buy" : "sell"}">${s.direction}</h3>
-      <div class="levels">
-        <div class="level"><span>ENTRADA</span><strong>${s.entry}</strong></div>
-        <div class="level"><span>STOP LOSS</span><strong>${s.sl}</strong></div>
-        <div class="level"><span>TAKE PROFIT</span><strong>${s.tp}</strong></div>
-      </div>
-      <div class="muted">Confirmación M1 · Calidad: ${s.quality}/100</div>
-      <div class="action-row">
-        <button class="enter-button" onclick="markEntered('${s.id}')">ENTRÉ</button>
-        <button class="ignore-button" onclick="markIgnored('${s.id}')">NO ENTRÉ</button>
-      </div>
-    </article>`).join("");
-}
-
-function renderOperations() {
-  const area = document.getElementById("operations");
-  const open = operations.filter(x => x.result === "OPEN");
-  document.getElementById("operation-count").textContent = open.length;
-  if (!open.length) { area.innerHTML = '<div class="empty-state">No tienes operaciones en seguimiento.</div>'; return; }
-  area.innerHTML = open.map(op => `
-    <article class="operation-card">
-      <div class="muted">${op.market}</div><h3 class="${op.direction === "COMPRAR" ? "buy" : "sell"}">${op.direction}</h3>
-      <p>Entrada: ${op.entry} · Actual: <strong>${op.currentPrice}</strong></p>
-      <p>SL: ${op.sl} · TP: ${op.tp}</p><span class="result-warning">EN SEGUIMIENTO</span>
-    </article>`).join("");
-}
-
-function renderHistory() {
-  const area = document.getElementById("history");
-  if (!history.length) { area.innerHTML = '<div class="empty-state">Sin resultados registrados.</div>'; return; }
-  area.innerHTML = history.map(x => `
-    <article class="history-card"><strong>${x.market}</strong><p>${x.direction || ""} · ${x.result}</p>
-    <span class="${x.result === "GANADA" ? "result-win" : x.result === "PERDIDA" ? "result-loss" : "result-warning"}">${x.result}</span></article>`).join("");
-}
-
-function ema(values, period) {
-  if (values.length < period) return null;
-  const k = 2 / (period + 1);
-  let value = values.slice(0, period).reduce((a, b) => a + b, 0) / period;
-  for (let i = period; i < values.length; i++) value = values[i] * k + value * (1 - k);
-  return value;
-}
-
-function rsi(values, period = 14) {
-  if (values.length <= period) return 50;
-  let gains = 0, losses = 0;
-  for (let i = values.length - period; i < values.length; i++) {
-    const d = values[i] - values[i - 1];
-    if (d > 0) gains += d; else losses -= d;
-  }
-  if (!losses) return 100;
-  return 100 - 100 / (1 + gains / losses);
-}
-
-function analyzeCandles(symbol, market, candles) {
-  if (!candles || candles.length < 55) return;
-  const c = candles.slice(-55), closes = c.map(x => Number(x.close));
-  const a = c[c.length - 1], b = c[c.length - 2];
-  const e9 = ema(closes, 9), e20 = ema(closes, 20), e50 = ema(closes, 50);
-  const momentum = rsi(closes), range = Math.max(a.high - a.low, Math.abs(a.close) * 0.00001);
-  const buy = e9 > e20 && e20 > e50 && a.close > a.open && b.close < b.open && a.close > b.high && momentum >= 50 && momentum <= 70;
-  const sell = e9 < e20 && e20 < e50 && a.close < a.open && b.close > b.open && a.close < b.low && momentum >= 30 && momentum <= 50;
-  const direction = buy ? "COMPRAR" : sell ? "VENDER" : null;
-  if (!direction) return;
-  const key = symbol + ":" + a.time + ":" + direction;
-  if (key === lastSignalKey) return;
-  lastSignalKey = key;
-  const entry = Number(a.close), sl = buy ? Math.min(...c.slice(-7).map(x => x.low)) : Math.max(...c.slice(-7).map(x => x.high));
-  const risk = Math.max(Math.abs(entry - sl), range * 0.5), tp = buy ? entry + risk * 1.5 : entry - risk * 1.5;
-  addSignal({ symbol, market, direction, entry, sl, tp, quality: 75, candleTime: a.time });
-}
-
-document.addEventListener("DOMContentLoaded", () => {
-  if (typeof createMarketChart === "function") createMarketChart();
-});
+const signals=[],operations=[],history=[],backtestTrades=[];
+let signalCounter=0,lastSignalKey="",selectedMarket=null,backtestSymbol=null,m1Candles=[],backtestReady=false;
+const TZ="America/Panama";
+function panamaParts(ts=Date.now()){const p=new Intl.DateTimeFormat("en-CA",{timeZone:TZ,year:"numeric",month:"2-digit",day:"2-digit"}).formatToParts(new Date(ts));return Object.fromEntries(p.map(x=>[x.type,x.value]));}
+function panamaDay(ts){const p=panamaParts(ts);return p.year+"-"+p.month+"-"+p.day;}
+function updateDailyPanel(){const now=new Date(),date=panamaDay(now.getTime());const clock=new Intl.DateTimeFormat("es-PA",{timeZone:TZ,hour:"2-digit",minute:"2-digit",second:"2-digit",hour12:false}).format(now);const label=new Intl.DateTimeFormat("es-PA",{timeZone:TZ,day:"2-digit",month:"2-digit",year:"numeric"}).format(now);const c=document.getElementById("panama-clock");if(c)c.textContent=clock+" · "+label;const today=backtestTrades.filter(t=>panamaDay(t.exitTime||t.entryTime)===date);const wins=today.filter(t=>t.result==="GANADA").length,losses=today.filter(t=>t.result==="PERDIDA").length,total=wins+losses;setText("daily-wins",wins);setText("daily-losses",losses);setText("daily-total",total);setText("daily-rate",total?(wins/total*100).toFixed(1)+"%":"0%");setText("daily-date",date);}
+function setText(id,value){const e=document.getElementById(id);if(e)e.textContent=value;}
+function selectMarket(name,symbol){selectedMarket={name,symbol};document.querySelectorAll(".market").forEach(c=>c.classList.toggle("active",c.dataset.symbol===symbol));setText("chart-title",name);setText("chart-message","Cargando historial real...");if(typeof openMarket==="function")openMarket(symbol);}
+function addSignal(data){if(!data||signals.some(s=>s.symbol===data.symbol&&s.status==="ACTIVE"))return;signalCounter++;signals.unshift({id:"SIG-"+String(signalCounter).padStart(4,"0"),createdAt:Date.now(),status:"ACTIVE",...data});renderSignals();}
+function markEntered(id){const s=signals.find(x=>x.id===id);if(!s||s.status!=="ACTIVE")return;s.status="ENTERED";operations.unshift({...s,enteredAt:Date.now(),currentPrice:Number(s.entry),result:"OPEN"});renderSignals();renderOperations();}
+function markIgnored(id){const s=signals.find(x=>x.id===id);if(!s||s.status!=="ACTIVE")return;s.status="IGNORED";history.unshift({...s,result:"NO ENTRÉ",finishedAt:Date.now()});renderSignals();renderHistory();}
+function updateOperationPrice(symbol,price){operations.forEach(op=>{if(op.symbol!==symbol||op.result!=="OPEN")return;op.currentPrice=Number(price);const tp=op.direction==="COMPRAR"?price>=op.tp2:price<=op.tp2,sl=op.direction==="COMPRAR"?price<=op.sl:price>=op.sl;if(tp||sl){op.result=sl?"PERDIDA":"GANADA";op.finishedAt=Date.now();history.unshift({...op});}});renderOperations();renderHistory();}
+function renderSignals(){const area=document.getElementById("signals");if(!area)return;const active=signals.filter(s=>s.status==="ACTIVE");setText("signal-count",active.length);area.innerHTML=active.length?active.map(s=>`<article class="signal-card"><div class="muted">${s.id} · ${s.market}</div><h3 class="${s.direction==="COMPRAR"?"buy":"sell"}">${s.direction}</h3><div class="levels"><div class="level"><span>ENTRADA</span><strong>${fmt(s.entry)}</strong></div><div class="level"><span>SL</span><strong>${fmt(s.sl)}</strong></div><div class="level"><span>TP1</span><strong>Rechazo M1</strong></div><div class="level"><span>TP2</span><strong>${fmt(s.tp2)}</strong></div></div><div class="muted">RSI ${s.rsi.toFixed(1)} · EMA 9/20/50</div><div class="action-row"><button class="enter-button" onclick="markEntered('${s.id}')">ENTRÉ</button><button class="ignore-button" onclick="markIgnored('${s.id}')">NO ENTRÉ</button></div></article>`).join(""):'<div class="empty-state">No hay señales activas.</div>';}
+function renderOperations(){const area=document.getElementById("operations");if(!area)return;const open=operations.filter(x=>x.result==="OPEN");setText("operation-count",open.length);area.innerHTML=open.length?open.map(o=>`<article class="operation-card"><strong>${o.market} · ${o.direction}</strong><p>Entrada ${fmt(o.entry)} · Actual ${fmt(o.currentPrice)}</p><p>SL ${fmt(o.sl)} · TP2 ${fmt(o.tp2)}</p><span class="result-warning">EN SEGUIMIENTO</span></article>`).join(""):'<div class="empty-state">No tienes operaciones manuales abiertas.</div>';}
+function renderHistory(){const a=document.getElementById("history");if(!a)return;a.innerHTML=history.length?history.slice(0,100).map(x=>`<article class="history-card"><strong>${x.market||""}</strong><p>${x.direction||""} · ${x.result}</p></article>`).join(""):'<div class="empty-state">Sin resultados registrados.</div>';}
+function fmt(v){return Number(v).toPrecision(7).replace(/0+$/,"").replace(/\.$/,"");}
+function emaAt(v,p,end=v.length-1){if(end+1<p)return null;let x=v.slice(0,p).reduce((a,b)=>a+b,0)/p,k=2/(p+1);for(let i=p;i<=end;i++)x=v[i]*k+x*(1-k);return x;}
+function rsiSeries(values,period=14){const out=Array(values.length).fill(null);if(values.length<=period)return out;let gain=0,loss=0;for(let i=1;i<=period;i++){const d=values[i]-values[i-1];gain+=Math.max(0,d);loss+=Math.max(0,-d);}let ag=gain/period,al=loss/period;out[period]=al===0?100:100-100/(1+ag/al);for(let i=period+1;i<values.length;i++){const d=values[i]-values[i-1];ag=(ag*(period-1)+Math.max(0,d))/period;al=(al*(period-1)+Math.max(0,-d))/period;out[i]=al===0?100:100-100/(1+ag/al);}return out;}
+function swingPoints(candles,at){const highs=[],lows=[];for(let i=2;i<at-2;i++){const c=candles[i];if(c.high>candles[i-1].high&&c.high>candles[i-2].high&&c.high>=candles[i+1].high&&c.high>=candles[i+2].high)highs.push({i,v:c.high});if(c.low<candles[i-1].low&&c.low<candles[i-2].low&&c.low<=candles[i+1].low&&c.low<=candles[i+2].low)lows.push({i,v:c.low});}return{highs,lows};}
+function buildSignal(candles,i,rsis){if(i<55||rsis[i]==null)return null;const closes=candles.slice(0,i+1).map(c=>c.close),c=candles[i],r=rsis[i],prev=rsis[i-1];const e9=emaAt(closes,9),e20=emaAt(closes,20),e50=emaAt(closes,50);if([e9,e20,e50,prev].some(x=>x==null))return null;const recent=rsis.slice(Math.max(0,i-30),i);const buySetup=recent.some((v,j)=>v>=60&&recent.slice(j+1).some(x=>x<=51))&&prev<=51&&r>prev&&r>=50&&r<60&&e9>e20&&e20>e50;const sellSetup=recent.some((v,j)=>v<=25&&recent.slice(j+1).some(x=>x>=49))&&prev>=49&&r<prev&&r<=50&&r>25&&e9<e20&&e20<e50;if(!buySetup&&!sellSetup)return null;const dir=buySetup?"COMPRAR":"VENDER",sw=swingPoints(candles,i),entry=c.close;let sl,tp2;if(buySetup){const supports=sw.lows.filter(x=>x.i<i).map(x=>x.v).filter(x=>x<entry);sl=supports.length?Math.min(...supports.slice(-3)):Math.min(...candles.slice(Math.max(0,i-7),i+1).map(x=>x.low));const targets=sw.highs.filter(x=>x.i<i&&x.v>entry).map(x=>x.v);tp2=targets.length?Math.min(...targets):null;}else{const resist=sw.highs.filter(x=>x.i<i).map(x=>x.v).filter(x=>x>entry);sl=resist.length?Math.max(...resist.slice(-3)):Math.max(...candles.slice(Math.max(0,i-7),i+1).map(x=>x.high));const targets=sw.lows.filter(x=>x.i<i&&x.v<entry).map(x=>x.v);tp2=targets.length?Math.max(...targets):null;}if(!Number.isFinite(tp2)||!Number.isFinite(sl)|| (dir==="COMPRAR"?(sl>=entry||tp2<=entry):(sl<=entry||tp2>=entry)))return null;return{direction:dir,entry,sl,tp2,rsi:r,time:c.time,index:i};}
+function rejectionExit(dir,c){const body=Math.abs(c.close-c.open),range=c.high-c.low;if(body<=0||range<=0)return false;const eps=range*0.015;if(dir==="COMPRAR")return c.close<c.open&&c.high-Math.max(c.open,c.close)<=eps;return c.close>c.open&&Math.min(c.open,c.close)-c.low<=eps;}
+function runBacktest(symbol,market,candles){if(!Array.isArray(candles)||candles.length<60)return;const data=candles.slice().sort((a,b)=>a.time-b.time),cl=data.map(c=>c.close),rs=rsiSeries(cl);backtestTrades.length=0;let active=null;for(let i=55;i<data.length;i++){const c=data[i];if(active){let exit=null;if(active.direction==="COMPRAR"?(c.low<=active.sl):(c.high>=active.sl))exit={result:"PERDIDA",price:active.sl,reason:"SL"};else if(active.direction==="COMPRAR"?(c.high>=active.tp2):(c.low<=active.tp2))exit={result:"GANADA",price:active.tp2,reason:"TP2"};else if(rejectionExit(active.direction,c))exit={result:"GANADA",price:c.close,reason:"TP1 · RECHAZO M1"};if(exit){backtestTrades.push({...active,...exit,exitTime:c.time*1000});active=null;}}if(!active){const s=buildSignal(data,i,rs);if(s)active={...s,symbol,market,entryTime:c.time*1000};}}if(active)backtestTrades.push({...active,result:"ABIERTA",exitTime:null});backtestSymbol=symbol;backtestReady=true;updateDailyPanel();if(typeof setBacktestTrades==="function")setBacktestTrades(backtestTrades);drawRsiPanel(rs,data);setText("chart-message","Backtesting reconstruido · "+backtestTrades.length+" operaciones históricas · M1");}
+function drawRsiPanel(series,candles){const host=document.getElementById("rsi-area");if(!host)return;host.innerHTML="";const cv=document.createElement("canvas");cv.style.cssText="width:100%;height:100%;display:block";host.appendChild(cv);const dpr=Math.min(devicePixelRatio||1,2),w=host.clientWidth,h=host.clientHeight;cv.width=w*dpr;cv.height=h*dpr;const x=cv.getContext("2d");x.scale(dpr,dpr);const left=24,right=8,top=10,bottom=18,ph=h-top-bottom,pw=w-left-right;for(const level of [25,50,60]){const y=top+(100-level)/100*ph;x.strokeStyle=level===50?"#8495aa":"#43546b";x.setLineDash([4,3]);x.beginPath();x.moveTo(left,y);x.lineTo(w-right,y);x.stroke();x.setLineDash([]);x.fillStyle="#a8b5c6";x.font="9px Arial";x.fillText(String(level),2,y+3);}const start=Math.max(0,series.length-200);x.beginPath();let begun=false;for(let i=start;i<series.length;i++){if(series[i]==null)continue;const px=left+(i-start)/Math.max(1,series.length-start-1)*pw,py=top+(100-series[i])/100*ph;if(!begun){x.moveTo(px,py);begun=true;}else x.lineTo(px,py);}x.strokeStyle="#48a8ff";x.lineWidth=1.7;x.stroke();setText("rsi-current","RSI: "+(series.at(-1)==null?"--":series.at(-1).toFixed(1)));}
+function analyzeCandles(symbol,market,candles){if(!candles||candles.length<60)return;const rs=rsiSeries(candles.map(c=>c.close)),i=candles.length-1,s=buildSignal(candles,i,rs);drawRsiPanel(rs,candles);if(!s)return;const key=symbol+":"+s.time+":"+s.direction;if(key===lastSignalKey)return;lastSignalKey=key;addSignal({...s,symbol,market,quality:80,candleTime:s.time});if(typeof drawTradeLevels==="function")drawTradeLevels(s.entry,s.sl,s.tp2);}
+function setBacktestHistory(symbol,market,candles){if(!candles||!candles.length)return;m1Candles=candles.slice();runBacktest(symbol,market,m1Candles);}
+function updateBacktestLive(candle){if(!candle||!m1Candles.length)return;const last=m1Candles.at(-1);if(last&&last.time===candle.time)m1Candles[m1Candles.length-1]=candle;else if(!last||candle.time>last.time)m1Candles.push(candle);runBacktest(backtestSymbol||selectedMarket?.symbol,selectedMarket?.name||"",m1Candles);}
+document.addEventListener("DOMContentLoaded",()=>{if(typeof createMarketChart==="function")createMarketChart();updateDailyPanel();setInterval(updateDailyPanel,1000);});
