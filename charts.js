@@ -85,18 +85,18 @@ function renderMarketChart(){
   const dot=(x,y,color)=>{ctx.fillStyle=color;ctx.beginPath();ctx.arc(x,y,4,0,Math.PI*2);ctx.fill();ctx.strokeStyle="#101827";ctx.lineWidth=1;ctx.stroke();};
   dot(x1,yEntry,"#48a8ff");dot(x1,yStop,"#ff5364");
   const label=(txt,x,y,color)=>{ctx.font="bold 10px Arial";ctx.textAlign="left";const tw=ctx.measureText(txt).width;ctx.fillStyle="rgba(8,13,22,.88)";ctx.fillRect(x,y-10,tw+8,14);ctx.fillStyle=color;ctx.fillText(txt,x+4,y+1);};
-  label("ENTRADA "+Number(t.entry).toPrecision(7),Math.min(w-right-150,x1+5),yEntry-5,"#70bdff");
-  label("SL "+Number(t.sl).toPrecision(7),Math.min(w-right-110,x1+5),yStop-5,"#ff7180");
+  label("E "+Number(t.entry).toPrecision(6),Math.min(w-right-100,x1+5),yEntry-5,"#70bdff");
+  label("SL "+Number(t.sl).toPrecision(6),Math.min(w-right-90,x1+5),yStop-5,"#ff7180");
   const yTp2=yOf(t.tp2);
   ctx.strokeStyle="#20c997";ctx.setLineDash([3,3]);ctx.beginPath();ctx.moveTo(x1,yTp2);ctx.lineTo(x2,yTp2);ctx.stroke();ctx.setLineDash([]);
   dot(x1,yTp2,"#20c997");
-  label("TP2 "+Number(t.tp2).toPrecision(7),Math.min(w-right-130,x1+5),yTp2-5,"#43e0b0");
+  label("T2 "+Number(t.tp2).toPrecision(6),Math.min(w-right-90,x1+5),yTp2-5,"#43e0b0");
   const tp1=Number(t.tp1);
   if(Number.isFinite(tp1)){
    const yTp1=yOf(tp1);
    ctx.strokeStyle="#f5c451";ctx.setLineDash([3,3]);ctx.beginPath();ctx.moveTo(x1,yTp1);ctx.lineTo(x2,yTp1);ctx.stroke();ctx.setLineDash([]);
    dot(x1,yTp1,"#f5c451");
-   label("TP1 "+tp1.toPrecision(7),Math.min(w-right-130,x1+5),yTp1-5,"#f5c451");
+   label("T1 "+tp1.toPrecision(6),Math.min(w-right-90,x1+5),yTp1-5,"#f5c451");
   }
   if(t.exitTime&&Number.isFinite(exitPrice)){
    const won=t.result==="GANADA";dot(x2,yExit,won?"#20c997":"#ff5364");
@@ -104,7 +104,7 @@ function renderMarketChart(){
    label(resultText+" · "+exitPrice.toPrecision(7),Math.min(w-right-145,x2+5),Math.max(top+12,yExit-19),won?"#43e0b0":"#ff7180");
   }
  });
- tradeLevels.forEach((a,i)=>{const y=yOf(a.value);ctx.strokeStyle=a.color;ctx.globalAlpha=.72;ctx.lineWidth=1;ctx.setLineDash(i===0?[]:[4,4]);ctx.beginPath();ctx.moveTo(left,y);ctx.lineTo(w-right,y);ctx.stroke();ctx.setLineDash([]);ctx.globalAlpha=1;const tag=a.label+"  "+Number(a.value).toPrecision(7);ctx.font="bold 9px Arial";const tw=ctx.measureText(tag).width+10;ctx.fillStyle="rgba(8,13,22,.88)";ctx.fillRect(w-right+2,y-8,Math.min(right-4,tw),15);ctx.fillStyle=a.color;ctx.textAlign="left";ctx.fillText(tag,w-right+7,y+3);}); if(signalMarker){const si=data.findIndex(v=>v.time===signalMarker.time);if(si>=0){const candle=data[si],sx=left+step*(si+.5),sy=yOf(signalMarker.direction==="COMPRAR"?candle.low:candle.high);ctx.fillStyle=signalMarker.direction==="COMPRAR"?"#20c997":"#ff5364";ctx.beginPath();if(signalMarker.direction==="COMPRAR"){ctx.moveTo(sx,sy+10);ctx.lineTo(sx-6,sy+20);ctx.lineTo(sx+6,sy+20);}else{ctx.moveTo(sx,sy-10);ctx.lineTo(sx-6,sy-20);ctx.lineTo(sx+6,sy-20);}ctx.closePath();ctx.fill();ctx.font="bold 9px Arial";ctx.textAlign="center";ctx.fillText(signalMarker.direction,sx,signalMarker.direction==="COMPRAR"?sy+31:sy-24);}}
+ tradeLevels.forEach((a,i)=>{const y=yOf(a.value);ctx.strokeStyle=a.color;ctx.globalAlpha=.72;ctx.lineWidth=1;ctx.setLineDash(i===0?[]:[4,4]);ctx.beginPath();ctx.moveTo(left,y);ctx.lineTo(w-right,y);ctx.stroke();ctx.setLineDash([]);ctx.globalAlpha=1;const tag=({ENTRADA:"E",TP1:"T1",TP2:"T2"}[a.label]||a.label)+" "+Number(a.value).toPrecision(6);ctx.font="bold 9px Arial";const tw=ctx.measureText(tag).width+10;ctx.fillStyle="rgba(8,13,22,.88)";ctx.fillRect(w-right+2,y-8,Math.min(right-4,tw),15);ctx.fillStyle=a.color;ctx.textAlign="left";ctx.fillText(tag,w-right+7,y+3);}); if(signalMarker){const si=data.findIndex(v=>v.time===signalMarker.time);if(si>=0){const candle=data[si],sx=left+step*(si+.5),sy=yOf(signalMarker.direction==="COMPRAR"?candle.low:candle.high);ctx.fillStyle=signalMarker.direction==="COMPRAR"?"#20c997":"#ff5364";ctx.beginPath();if(signalMarker.direction==="COMPRAR"){ctx.moveTo(sx,sy+10);ctx.lineTo(sx-6,sy+20);ctx.lineTo(sx+6,sy+20);}else{ctx.moveTo(sx,sy-10);ctx.lineTo(sx-6,sy-20);ctx.lineTo(sx+6,sy-20);}ctx.closePath();ctx.fill();ctx.font="bold 9px Arial";ctx.textAlign="center";ctx.fillText(signalMarker.direction,sx,signalMarker.direction==="COMPRAR"?sy+31:sy-24);}}
  ctx.fillStyle="#8495aa";ctx.textAlign="left";ctx.fillText((candleStyle==="heikin"?"HEIKIN ASHI":"VELAS NORMALES")+" · "+(chartGranularity===30?"30s":"M"+(chartGranularity/60))+" · "+data.length+" velas",left,h-7);ctx.textAlign="right";ctx.fillText(new Date(data[data.length-1].time*1000).toLocaleTimeString("es-PA",{hour:"2-digit",minute:"2-digit"}),w-right,h-7);{const remain=chartGranularity-(Math.floor(Date.now()/1000)%chartGranularity);const mm=String(Math.floor(remain/60)).padStart(2,"0"),ss=String(remain%60).padStart(2,"0");ctx.textAlign="left";ctx.font="bold 11px Arial";ctx.fillStyle="#f5c451";ctx.fillText("CIERRE "+(chartGranularity===30?"30s":"M"+(chartGranularity/60))+" "+mm+":"+ss,left+4,top+13);}
 }
 function setCandleStyle(style){candleStyle=style==="normal"?"normal":"heikin";drawMarketChart();}
