@@ -123,7 +123,7 @@ function openMarket(symbol) {
   selectedSymbol = symbol; candleBuffer = []; tickSubId = null; candleSubId = null;
   if (typeof setChartSymbol === "function") setChartSymbol(symbol);
   const price = document.getElementById("current-price"); if (price) price.textContent = "---";
-  sendDeriv({ ticks_history: symbol, count: 120, end: "latest", style: "candles", granularity: 60, subscribe: 1, req_id: 10 });
+  sendDeriv({ ticks_history: symbol, count: 100, end: "latest", style: "candles", granularity: 60, subscribe: 1, req_id: 10 });
   sendDeriv({ ticks: symbol, subscribe: 1, req_id: 11 });
   showChartMessage("Solicitando velas M1 y precio en vivo...");
 }
