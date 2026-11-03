@@ -20,11 +20,11 @@ function connectDeriv() {
   derivSocket = new WebSocket(DERIV_CONFIG.endpoint);
   derivSocket.onopen = () => {
     setConnectionStatus(true);
-    sendDeriv({ active_symbols: "brief", product_type: "basic", req_id: 1 });
+    sendDeriv({ active_symbols: "brief", req_id: 1 });
   };
   derivSocket.onmessage = event => {
     let data; try { data = JSON.parse(event.data); } catch { return; }
-    if (data.error) { showChartMessage("Deriv: " + data.error.message); return; }
+    if (data.error) { showChartMessage("Error de Deriv: " + data.error.message); const diagnostic = document.getElementById("api-diagnostic"); if (diagnostic) diagnostic.textContent = "Error API: " + data.error.message; return; }
     if (data.msg_type === "active_symbols") renderMarkets(data.active_symbols || []);
     if (data.msg_type === "candles" || data.msg_type === "history") {
       candleBuffer = (data.candles || []).map(c => ({ time: Number(c.epoch), open: Number(c.open), high: Number(c.high), low: Number(c.low), close: Number(c.close) }));
@@ -48,25 +48,39 @@ function connectDeriv() {
   derivSocket.onerror = () => showChartMessage("No se pudo conectar con Deriv.");
   derivSocket.onclose = () => { setConnectionStatus(false); reconnectTimer = setTimeout(connectDeriv, 5000); };
 }
+function symbolCode(item) {
+  return item.underlying_symbol || item.symbol || "";
+}
+function symbolName(item) {
+  return item.underlying_symbol_name || item.display_name || item.name || symbolCode(item);
+}
 function selectedMarketName() {
-  const item = availableSymbols.find(x => x.symbol === selectedSymbol);
-  return item ? item.display_name : selectedSymbol || "";
+  const item = availableSymbols.find(x => symbolCode(x) === selectedSymbol);
+  return item ? symbolName(item) : selectedSymbol || "";
 }
 function renderMarkets(all) {
-  availableSymbols = all.filter(x => /volatility/i.test((x.display_name || "") + " " + (x.submarket || ""))).slice(0, 10);
+  availableSymbols = all.filter(x =>
+    /volatility/i.test(symbolName(x) + " " + (x.submarket || "") + " " + (x.subgroup || ""))
+  ).slice(0, 10);
   const area = document.getElementById("markets"), count = document.getElementById("market-count");
   if (!area) return;
   if (count) count.textContent = availableSymbols.length + " / 10 instrumentos";
   area.innerHTML = "";
-  if (!availableSymbols.length) { area.innerHTML = '<div class="empty-state">Deriv conectó, pero no devolvió índices Volatility. Revisa la respuesta de símbolos.</div>'; return; }
+  const diagnostic = document.getElementById("api-diagnostic");
+  if (diagnostic) diagnostic.remove();
+  if (!availableSymbols.length) {
+    area.innerHTML = '<div class="empty-state">Deriv respondió, pero no se encontraron instrumentos Volatility. Símbolos recibidos: ' + all.length + '.</div>';
+    return;
+  }
   availableSymbols.forEach(item => {
-    const card = document.createElement("button"); card.className = "market"; card.dataset.symbol = item.symbol;
-    const title = document.createElement("strong"); title.textContent = item.display_name || item.symbol;
-    const code = document.createElement("span"); code.textContent = item.symbol;
-    card.append(title, code); card.addEventListener("click", () => selectMarket(item.display_name || item.symbol, item.symbol));
+    const symbol = symbolCode(item), name = symbolName(item);
+    const card = document.createElement("button"); card.className = "market"; card.dataset.symbol = symbol;
+    const title = document.createElement("strong"); title.textContent = name;
+    const code = document.createElement("span"); code.textContent = symbol;
+    card.append(title, code); card.addEventListener("click", () => selectMarket(name, symbol));
     area.appendChild(card);
   });
-  if (!selectedSymbol) selectMarket(availableSymbols[0].display_name || availableSymbols[0].symbol, availableSymbols[0].symbol);
+  if (!selectedSymbol) selectMarket(symbolName(availableSymbols[0]), symbolCode(availableSymbols[0]));
 }
 function openMarket(symbol) {
   if (!symbol || !sendDeriv({ forget_all: "ticks" })) { /* socket may still be connecting */ }
