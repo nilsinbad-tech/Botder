@@ -176,4 +176,8 @@ function openMarket(symbol) {
 }
 function getAvailableSymbols() { return availableSymbols; }
 function isDerivConnected() { return derivSocket && derivSocket.readyState === WebSocket.OPEN; }
-document.addEventListener("DOMContentLoaded", () => {\n  const tf = document.getElementById("timeframe");\n  if (tf) tf.addEventListener("change", () => { if (selectedSymbol) loadMarketHistory(selectedSymbol, Number(tf.value)); });\n});\nconnectDeriv();
+document.addEventListener("DOMContentLoaded", () => {
+  const tf = document.getElementById("timeframe");
+  if (tf) tf.addEventListener("change", () => { if (selectedSymbol) loadMarketHistory(selectedSymbol, Number(tf.value)); });
+});
+connectDeriv();
