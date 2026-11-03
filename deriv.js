@@ -54,7 +54,11 @@ function connectDeriv() {
       if (typeof analyzeCandles === "function") analyzeCandles(selectedSymbol, selectedMarketName(), candleBuffer);
       showChartMessage("Historial real de ticks · " + candleBuffer.length + " velas de 30 segundos");
     }
-    if (data.msg_type === "candles") {
+    if (data.msg_type === "candles" && data.req_id === 12) {
+      const historicalM1 = (data.candles || []).map(c => ({ time: Number(c.epoch), open: Number(c.open), high: Number(c.high), low: Number(c.low), close: Number(c.close) }));
+      if (typeof setBacktestHistory === "function") setBacktestHistory(selectedSymbol, selectedMarketName(), historicalM1);
+    }
+    if (data.msg_type === "candles" && data.req_id !== 12) {
       candleBuffer = (data.candles || []).map(c => ({ time: Number(c.epoch), open: Number(c.open), high: Number(c.high), low: Number(c.low), close: Number(c.close) }));
       if (typeof updateCandles === "function") updateCandles(candleBuffer);
       if (typeof analyzeCandles === "function") analyzeCandles(selectedSymbol, selectedMarketName(), candleBuffer);
@@ -84,6 +88,7 @@ function connectDeriv() {
           candleBuffer[candleBuffer.length - 1] = live;
         }
         if (typeof addCandle === "function") addCandle(live);
+        if (typeof updateBacktestTick === "function") updateBacktestTick(Number(data.tick.epoch), price);
       }
     }
   };
@@ -156,6 +161,7 @@ function loadMarketHistory(symbol, granularity = selectedGranularity) {
   candleBuffer = [];
   if (typeof setChartSymbol === "function") setChartSymbol(symbol);
   const tf = document.getElementById("timeframe"); if (tf) tf.value = String(granularity);
+  sendDeriv({ ticks_history: symbol, count: 5000, end: "latest", style: "candles", granularity: 60, req_id: 12 });
   if (granularity === 30) {
     sendDeriv({ ticks_history: symbol, count: 5000, end: "latest", style: "ticks", req_id: 10 });
     showChartMessage("Cargando ticks históricos reales para formar velas de 30 segundos...");
