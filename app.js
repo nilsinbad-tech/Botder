@@ -70,7 +70,6 @@ function strategyTrend(closes,i){
  const bear=now[0]<now[now.length-1]&&now.every((v,k)=>v<before[k]);
  return{bull,bear};
 }
-function bollingerBasis(values,period,end=values.length-1){if(end+1<period)return null;return values.slice(end-period+1,end+1).reduce((a,b)=>a+b,0)/period;}
 function buildSignal(candles,i,rsis){
  const required=Math.max(60,...strategyConfig.emaPeriods,strategyConfig.crtLookback)+2;
  if(i<required||rsis[i]==null||rsis[i-1]==null)return null;
@@ -89,14 +88,14 @@ function buildSignal(candles,i,rsis){
 function runBacktest(symbol,market,candles){
  if(!Array.isArray(candles)||candles.length<65)return;
  const data=candles.slice().sort((a,b)=>a.time-b.time),rs=configuredRsiSeries(data);backtestTrades.length=0;let active=null;
- for(let i=Math.max(60,...strategyConfig.emaPeriods,strategyConfig.bollingerPeriod)+2;i<data.length-1;i++){
+ for(let i=Math.max(60,...strategyConfig.emaPeriods,strategyConfig.crtLookback)+2;i<data.length-1;i++){
   const c=data[i];
   if(active){
    let exit=null;const stop=active.protectionSL??active.sl,hitStop=active.direction==="COMPRAR"?c.low<=stop:c.high>=stop,hitTp1=active.direction==="COMPRAR"?c.high>=active.tp1:c.low<=active.tp1,hitTp2=active.direction==="COMPRAR"?c.high>=active.tp2:c.low<=active.tp2,risk=Math.abs(active.entry-active.sl);
    if(!active.tp1Hit&&hitStop)exit={result:"PERDIDA",price:stop,reason:"SL INICIAL",realizedR:-1};
-   else if(!active.tp1Hit&&hitTp1){active.tp1Hit=true;active.tp1Time=c.time*1000;active.protectAfterTp1=strategyConfig.protectAfterTp1;active.protectionActive=strategyConfig.protectAfterTp1;if(active.protectionActive)active.protectionSL=profitLock(active);active.realizedR=0.5*(Math.abs(active.tp1-active.entry)/risk);}
+   else if(!active.tp1Hit&&hitTp1){active.tp1Hit=true;active.tp1Time=c.time*1000;active.protectAfterTp1=strategyConfig.protectAfterTp1;active.protectionActive=strategyConfig.protectAfterTp1;if(active.protectionActive)active.protectAfterTp1=strategyConfig.protectAfterTp1;active.protectionActive=strategyConfig.protectAfterTp1;if(active.protectionActive)active.protectAfterTp1=strategyConfig.protectAfterTp1;active.protectionActive=strategyConfig.protectAfterTp1;if(active.protectionActive)active.protectionSL=profitLock(active);active.realizedR=(Number(active.tp1Close??strategyConfig.tp1Close??50)/100)*(Math.abs(active.tp1-active.entry)/risk);}
    else if(active.tp1Hit&&hitStop&&active.protectionActive!==false)exit={result:"GANADA",price:stop,reason:"PROTECCIÓN +0.5R",realizedR:active.realizedR+0.25};
-   else if(active.tp1Hit&&hitTp2)exit={result:"GANADA",price:active.tp2,reason:"TP2",realizedR:active.realizedR+0.5*(Math.abs(active.tp2-active.entry)/risk)};
+   else if(active.tp1Hit&&hitTp2)exit={result:"GANADA",price:active.tp2,reason:"TP2",realizedR:active.realizedR+((100-Number(active.tp1Close??strategyConfig.tp1Close??50))/100)*(Math.abs(active.tp2-active.entry)/risk)};
    if(exit){backtestTrades.push({...active,...exit,exitTime:c.time*1000});active=null;}
   }
   if(!active){
@@ -116,10 +115,10 @@ function runBacktest(symbol,market,candles){
 function simulateCandidate(data,config,rsi){
  const oldS={...strategyConfig},oldR={...rsiConfig};Object.assign(strategyConfig,config);Object.assign(rsiConfig,rsi);
  const rs=configuredRsiSeries(data),trades=[];let active=null;
- for(let i=Math.max(60,...strategyConfig.emaPeriods,strategyConfig.bollingerPeriod)+2;i<data.length-1;i++){
+ for(let i=Math.max(60,...strategyConfig.emaPeriods,strategyConfig.crtLookback)+2;i<data.length-1;i++){
   const c=data[i];
   if(active){const stop=active.protectionSL??active.sl,hitStop=active.direction==="COMPRAR"?c.low<=stop:c.high>=stop,hit1=active.direction==="COMPRAR"?c.high>=active.tp1:c.low<=active.tp1,hit2=active.direction==="COMPRAR"?c.high>=active.tp2:c.low<=active.tp2,risk=Math.abs(active.entry-active.sl);let out=null;
-   if(!active.tp1Hit&&hitStop)out={result:"PERDIDA",realizedR:-1};else if(!active.tp1Hit&&hit1){active.tp1Hit=true;active.realizedR=.5*Math.abs(active.tp1-active.entry)/risk;active.protectionSL=profitLock(active);}else if(active.tp1Hit&&hitStop&&active.protectionActive!==false)out={result:"GANADA",realizedR:active.realizedR+.25};else if(active.tp1Hit&&hit2)out={result:"GANADA",realizedR:active.realizedR+.5*Math.abs(active.tp2-active.entry)/risk};
+   if(!active.tp1Hit&&hitStop)out={result:"PERDIDA",realizedR:-1};else if(!active.tp1Hit&&hit1){active.tp1Hit=true;active.realizedR=.5*Math.abs(active.tp1-active.entry)/risk;active.protectAfterTp1=strategyConfig.protectAfterTp1;active.protectionActive=strategyConfig.protectAfterTp1;if(active.protectionActive)active.protectAfterTp1=strategyConfig.protectAfterTp1;active.protectionActive=strategyConfig.protectAfterTp1;if(active.protectionActive)active.protectionSL=profitLock(active);}else if(active.tp1Hit&&hitStop&&active.protectionActive!==false)out={result:"GANADA",realizedR:active.realizedR+.25};else if(active.tp1Hit&&hit2)out={result:"GANADA",realizedR:active.realizedR+.5*Math.abs(active.tp2-active.entry)/risk};
    if(out){trades.push({...active,...out,exitIndex:i});active=null;}}
   if(!active){const s=buildSignal(data,i,rs);if(s)active={...s,entryIndex:i,tp1Hit:false};}
  }
