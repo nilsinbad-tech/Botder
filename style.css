@@ -463,3 +463,6 @@ body{background:#050b14}
  .bot-sidebar #signals .level strong{font-size:10px}
  .bot-sidebar #signals .level span{font-size:7px}
 }
+
+/* Ajustes solicitados: señal/precio arriba, RSI ampliado, etiquetas discretas */
+.price-bar-top{display:flex;justify-content:space-between;align-items:center;margin:5px 0 10px;padding:10px 12px;background:#0d1a2a;border:1px solid #20344a;border-radius:8px}.price-bar-top strong{font-size:19px;font-variant-numeric:tabular-nums}.top-signal-wrap{margin:0 0 10px}.top-signal-wrap .signal-card{padding:8px 10px;margin:0}.top-signal-wrap .signal-card h3{font-size:14px;margin:3px 0}.top-signal-wrap .signal-card .levels{margin:6px 0;gap:5px}.top-signal-wrap .signal-card .level{padding:6px}.top-signal-wrap .signal-card .action-row{margin-top:6px}#rsi-area{height:150px!important;min-height:135px!important}@media(max-width:560px){#rsi-area{height:155px!important;min-height:140px!important}.price-bar-top{padding:8px 10px}.price-bar-top strong{font-size:17px}}
