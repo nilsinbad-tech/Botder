@@ -32,7 +32,6 @@ function configuredRsiSeries(candles){
  for(let i=0;i<candles.length;i++){
   const bucket=Math.floor(candles[i].time/seconds)*seconds;
   while(j<grouped.length&&grouped[j].time<bucket){if(values[j]!=null)last=values[j];j++;}
-  if(j<grouped.length&&grouped[j].time===bucket&&values[j]!=null&&candles[i].time>=bucket+seconds-60)last=values[j];
   out[i]=last;
  }
  return out;
