@@ -99,9 +99,16 @@ function connectDeriv() {
       }
 
       if (!volatility.length) {
-        area.innerHTML =
-          '<div class="empty-state">Deriv respondió, pero no encontramos nombres Volatility. Revisa la respuesta de diagnóstico.</div>';
-        return;
+  area.innerHTML = `
+    <div class="empty-state">
+      <strong>INSTRUMENTOS RECIBIDOS</strong>
+      <br><br>
+      ${availableSymbols.slice(0, 20).map(item =>
+        `${item.display_name || "Sin nombre"} (${item.symbol})`
+      ).join("<br>")}
+    </div>
+  `;
+  return;
       }
 
       area.innerHTML = volatility.map(item => {
