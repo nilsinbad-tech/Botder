@@ -131,7 +131,7 @@ function renderMarkets(all) {
   });
   if (!selectedSymbol) selectMarket(symbolName(availableSymbols[0]), symbolCode(availableSymbols[0]));
 }
-function loadMarketHistory(symbol, granularity = selectedGranularity) {\n  selectedGranularity = granularity;\n  if (!symbol || !derivSocket || derivSocket.readyState !== WebSocket.OPEN) return;\n  candleBuffer = [];\n  if (typeof setChartSymbol === "function") setChartSymbol(symbol);\n  const tf = document.getElementById("timeframe"); if (tf) tf.value = String(granularity);\n  sendDeriv({ ticks_history: symbol, start: 0, end: "latest", style: "candles", granularity, subscribe: 1, req_id: 10 });\n  showChartMessage("Cargando el historial disponible en M" + (granularity / 60) + "...");\n}\nfunction openMarket(symbol) {
+function loadMarketHistory(symbol, granularity = selectedGranularity) {\n  selectedGranularity = granularity;\n  if (typeof setChartGranularity === "function") setChartGranularity(granularity);\n  if (!symbol || !derivSocket || derivSocket.readyState !== WebSocket.OPEN) return;\n  candleBuffer = [];\n  if (typeof setChartSymbol === "function") setChartSymbol(symbol);\n  const tf = document.getElementById("timeframe"); if (tf) tf.value = String(granularity);\n  sendDeriv({ ticks_history: symbol, start: 0, end: "latest", style: "candles", granularity, subscribe: 1, req_id: 10 });\n  showChartMessage("Cargando el historial disponible en M" + (granularity / 60) + "...");\n}\nfunction openMarket(symbol) {
   if (!symbol || !sendDeriv({ forget_all: "ticks" })) { /* socket may still be connecting */ }
   if (!derivSocket || derivSocket.readyState !== WebSocket.OPEN) return;
   selectedSymbol = symbol; candleBuffer = []; tickSubId = null; candleSubId = null;
