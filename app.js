@@ -14,7 +14,7 @@ function profitLock(op){const risk=Math.abs(op.entry-op.sl);return op.direction=
 function updateOperationPrice(symbol,price){operations.forEach(op=>{if(op.symbol!==symbol||op.result!=="OPEN")return;op.currentPrice=Number(price);const favorable=signedMove(op.direction,op.entry,price);if(!op.tp1Hit&&favorable>=Math.abs(op.tp1-op.entry)){op.tp1Hit=true;op.partialClosed=true;op.realizedR=0.5*(Math.abs(op.tp1-op.entry)/Math.abs(op.entry-op.sl));op.protectionActive=true;op.protectionSL=profitLock(op);op.managementMessage="TP1 ALCANZADO · 50% asegurado · SL restante en +0.5R";}if(op.tp1Hit&&favorable>=Math.abs(op.tp2-op.entry)){op.result="GANADA";op.exitPrice=Number(price);op.realizedR+=0.5*(Math.abs(op.tp2-op.entry)/Math.abs(op.entry-op.sl));op.exitReason="TP2 · OBJETIVO FINAL";op.finishedAt=Date.now();history.unshift({...op});}else if(op.tp1Hit&&(op.direction==="COMPRAR"?price<=op.protectionSL:price>=op.protectionSL)){op.result="GANADA";op.exitPrice=op.protectionSL;op.realizedR+=0.5*0.5;op.exitReason="PROTECCIÓN +0.5R · RESTO CERRADO";op.finishedAt=Date.now();history.unshift({...op});}});renderOperations();renderHistory();}
 function isDoji(c){const range=c.high-c.low;if(range<=0)return false;return Math.abs(c.close-c.open)/range<=0.12;}
 function evaluateOpenOperations(symbol,candle){operations.forEach(op=>{if(op.symbol!==symbol||op.result!=="OPEN"||op.lastManagedCandle===candle.time)return;op.lastManagedCandle=candle.time;const risk=Math.abs(op.entry-op.sl),hitTp1=op.direction==="COMPRAR"?candle.high>=op.tp1:candle.low<=op.tp1,hitTp2=op.direction==="COMPRAR"?candle.high>=op.tp2:candle.low<=op.tp2,hitStop=op.direction==="COMPRAR"?candle.low<= (op.protectionSL??op.sl):candle.high>=(op.protectionSL??op.sl);if(!op.tp1Hit&&hitStop){op.result="PERDIDA";op.exitPrice=op.sl;op.realizedR=-1;op.exitReason="SL INICIAL";op.finishedAt=candle.time*1000;history.unshift({...op});return;}if(!op.tp1Hit&&hitTp1){op.tp1Hit=true;op.partialClosed=true;op.realizedR=0.5*(Math.abs(op.tp1-op.entry)/risk);op.protectionActive=true;op.protectionSL=profitLock(op);op.managementMessage="TP1 ALCANZADO · CIERRA 50% · PROTEGE EL RESTO EN +0.5R";return;}if(op.tp1Hit){if(hitTp2){op.result="GANADA";op.exitPrice=op.tp2;op.realizedR+=0.5*(Math.abs(op.tp2-op.entry)/risk);op.exitReason="TP2 · OBJETIVO FINAL";op.finishedAt=candle.time*1000;history.unshift({...op});}else if(hitStop){op.result="GANADA";op.exitPrice=op.protectionSL;op.realizedR+=0.25;op.exitReason="PROTECCIÓN +0.5R";op.finishedAt=candle.time*1000;history.unshift({...op});}else{op.managementMessage="TP1 COBRADO · RESTO PROTEGIDO EN +0.5R";}}});renderOperations();renderHistory();}
-function renderSignals(){const area=document.getElementById("signals");if(!area)return;const active=signals.filter(s=>s.status==="ACTIVE");setText("signal-count",active.length);area.innerHTML=active.length?active.map(s=>`<article class="signal-card"><div class="muted">${s.id} · ${s.market}</div><h3 class="${s.direction==="COMPRAR"?"buy":"sell"}">${s.direction}</h3><div class="levels"><div class="level"><span>ENTRADA</span><strong>${fmt(s.entry)}</strong></div><div class="level"><span>SL</span><strong>${fmt(s.sl)}</strong></div><div class="level"><span>TP1 ESTRUCTURAL</span><strong>${fmt(s.tp1)}</strong></div><div class="level"><span>TP2</span><strong>${fmt(s.tp2)}</strong></div></div><div class="muted">${s.mode||"RSI + EMA"} · RSI ${s.rsi.toFixed(1)} · EMA 9/20/50</div><div class="action-row"><button class="enter-button" onclick="markEntered('${s.id}')">ENTRÉ</button><button class="ignore-button" onclick="markIgnored('${s.id}')">NO ENTRÉ</button></div></article>`).join(""):'<div class="empty-state">No hay señales activas.</div>';}
+function renderSignals(){const area=document.getElementById("signals");if(!area)return;const active=signals.filter(s=>s.status==="ACTIVE");setText("signal-count",active.length);area.innerHTML=active.length?active.map(s=>`<article class="signal-card"><div class="muted">${s.id} · ${s.market}</div><h3 class="${s.direction==="COMPRAR"?"buy":"sell"}">${s.direction}</h3><div class="levels"><div class="level"><span>ENTRADA</span><strong>${fmt(s.entry)}</strong></div><div class="level"><span>SL</span><strong>${fmt(s.sl)}</strong></div><div class="level"><span>TP1 ESTRUCTURAL</span><strong>${fmt(s.tp1)}</strong></div><div class="level"><span>TP2</span><strong>${fmt(s.tp2)}</strong></div></div><div class="muted">${s.mode||"RSI + EMA"} · RSI ${s.rsi.toFixed(1)} · EMA ${(s.emaPeriods||strategyConfig.emaPeriods).join("/")}</div><div class="action-row"><button class="enter-button" onclick="markEntered('${s.id}')">ENTRÉ</button><button class="ignore-button" onclick="markIgnored('${s.id}')">NO ENTRÉ</button></div></article>`).join(""):'<div class="empty-state">No hay señales activas.</div>';}
 function renderOperations(){const area=document.getElementById("operations");if(!area)return;const open=operations.filter(x=>x.result==="OPEN");setText("operation-count",open.length);area.innerHTML=open.length?open.map(o=>`<article class="operation-card"><strong>${o.market} · ${o.direction}</strong><p>Entrada ${fmt(o.entry)} · Actual ${fmt(o.currentPrice)}</p><p>SL inicial ${fmt(o.sl)} · TP1 ${fmt(o.tp1)} · TP2 ${fmt(o.tp2)}</p>${o.tp1Hit?`<p class="result-warning">TP1: 50% COBRADO · SL RESTANTE: ${fmt(o.protectionSL)} (+0.5R)</p>`:`<p class="result-warning">${o.managementMessage||"EN SEGUIMIENTO · TP1 COBRA 50%"}</p>`}</article>`).join(""):'<div class="empty-state">No tienes operaciones manuales abiertas.</div>'; }
 function renderHistory(){const a=document.getElementById("history");if(!a)return;a.innerHTML=history.length?history.slice(0,100).map(x=>`<article class="history-card"><strong>${x.market||""}</strong><p>${x.direction||""} · ${x.result}</p></article>`).join(""):'<div class="empty-state">Sin resultados registrados.</div>';}
 function fmt(v){return Number(v).toPrecision(7).replace(/0+$/,"").replace(/\.$/,"");}
@@ -49,48 +49,65 @@ function applyRsiSettings(){
  if(m1Candles.length)runBacktest(backtestSymbol||selectedMarket?.symbol,selectedMarket?.name||"",m1Candles);
  if(selectedMarket&&typeof openMarket==="function")analyzeCandles(selectedMarket.symbol,selectedMarket.name,m1Candles);
 }
-document.addEventListener("DOMContentLoaded",()=>{["rsi-timeframe","rsi-period","rsi-low","rsi-mid","rsi-high"].forEach(id=>{const e=document.getElementById(id);if(e)e.addEventListener("change",applyRsiSettings);});});
+document.addEventListener("DOMContentLoaded",()=>{["rsi-timeframe","rsi-period","rsi-low","rsi-mid","rsi-high","ema-periods","bb-period","bb-enabled"].forEach(id=>{const e=document.getElementById(id);if(e)e.addEventListener("change",()=>{applyRsiSettings();readStrategySettings();});});});
 
 function swingPoints(candles,at){const highs=[],lows=[];for(let i=2;i<at-2;i++){const c=candles[i];if(c.high>candles[i-1].high&&c.high>candles[i-2].high&&c.high>=candles[i+1].high&&c.high>=candles[i+2].high)highs.push({i,v:c.high});if(c.low<candles[i-1].low&&c.low<candles[i-2].low&&c.low<=candles[i+1].low&&c.low<=candles[i+2].low)lows.push({i,v:c.low});}return{highs,lows};}
+const strategyConfig={emaPeriods:[9,20,50],bollingerPeriod:20,useBollinger:true};
+function readStrategySettings(){
+ const e=document.getElementById("ema-periods"),b=document.getElementById("bb-period"),on=document.getElementById("bb-enabled");
+ if(e){const nums=e.value.split(/[ ,;]+/).map(Number).filter(n=>Number.isInteger(n)&&n>=2&&n<=500);if(nums.length>=2)strategyConfig.emaPeriods=[...new Set(nums)].sort((x,y)=>x-y);}
+ if(b)strategyConfig.bollingerPeriod=Math.max(2,Math.min(500,Number(b.value)||20));
+ if(on)strategyConfig.useBollinger=on.checked;
+ lastSignalKey="";
+ if(m1Candles.length)runBacktest(backtestSymbol||selectedMarket?.symbol,selectedMarket?.name||"",m1Candles);
+ if(selectedMarket&&m1Candles.length)analyzeCandles(selectedMarket.symbol,selectedMarket.name,m1Candles);
+}
+function strategyTrend(closes,i){
+ const ps=strategyConfig.emaPeriods,now=ps.map(p=>emaAt(closes,p,i)),before=ps.map(p=>emaAt(closes,p,i-1));
+ if(now.some(x=>x==null)||before.some(x=>x==null))return{bull:false,bear:false};
+ const bull=now.every((v,k)=>k===0||v>now[k-1])&&now.every((v,k)=>v>before[k]);
+ const bear=now.every((v,k)=>k===0||v<now[k-1])&&now.every((v,k)=>v<before[k]);
+ return{bull,bear};
+}
+function bollingerBasis(values,period,end=values.length-1){if(end+1<period)return null;return values.slice(end-period+1,end+1).reduce((a,b)=>a+b,0)/period;}
 function buildSignal(candles,i,rsis){
- if(i<60||rsis[i]==null||rsis[i-1]==null)return null;
- const closes=candles.slice(0,i+1).map(c=>c.close),c=candles[i],r=rsis[i],prev=rsis[i-1];
- const e9=emaAt(closes,9),e20=emaAt(closes,20),e50=emaAt(closes,50);
- const p9=emaAt(closes,9,i-1),p20=emaAt(closes,20,i-1),p50=emaAt(closes,50,i-1);
- if([e9,e20,e50,p9,p20,p50].some(x=>x==null))return null;
- const bullishTrend=e9>e20&&e20>e50&&e9>p9&&e20>p20&&e50>=p50;
- const bearishTrend=e9<e20&&e20<e50&&e9<p9&&e20<p20&&e50<=p50;
- const rsiBuy=prev<rsiConfig.high&&r>=rsiConfig.high&&bullishTrend;
- const rsiSell=prev>rsiConfig.low&&r<=rsiConfig.low&&bearishTrend;
- const sw=swingPoints(candles,i),body=Math.abs(c.close-c.open),range=Math.max(c.high-c.low,1e-12);
- const lowerWick=Math.min(c.open,c.close)-c.low,upperWick=c.high-Math.max(c.open,c.close);
- const recent=candles.slice(Math.max(0,i-14),i),atr=recent.length?recent.reduce((sum,x)=>sum+(x.high-x.low),0)/recent.length:range;
- const tolerance=Math.max(atr*0.18,range*0.08);
- const supports=sw.lows.filter(x=>x.i<i&&c.low<=x.v+tolerance&&c.close>x.v);
- const resistances=sw.highs.filter(x=>x.i<i&&c.high>=x.v-tolerance&&c.close<x.v);
- const support=supports.at(-1),resistance=resistances.at(-1);
- const structuralBuy=!!support&&c.close>c.open&&lowerWick>=Math.max(body*1.2,range*0.18)&&r>prev&&e9>e20;
- const structuralSell=!!resistance&&c.close<c.open&&upperWick>=Math.max(body*1.2,range*0.18)&&r<prev&&e9<e20;
- if(!rsiBuy&&!rsiSell&&!structuralBuy&&!structuralSell)return null;
- const buy= rsiBuy||(!rsiSell&&structuralBuy),dir=buy?"COMPRAR":"VENDER";
- const mode=(buy?(rsiBuy?"RSI + EMA":"REBOTE ESTRUCTURAL"):(rsiSell?"RSI + EMA":"REBOTE ESTRUCTURAL"));
- const entry=c.close;let sl,tp1,tp2;
- if(buy){
-  const supportsBelow=sw.lows.filter(x=>x.i<i&&x.v<entry);sl=supportsBelow.length?supportsBelow.at(-1).v:Math.min(...candles.slice(Math.max(0,i-7),i+1).map(x=>x.low));
-  const risk=entry-sl,targets=sw.highs.filter(x=>x.i<i&&x.v>=entry+risk*1.5).map(x=>x.v).sort((x,y)=>x-y);
-  tp1=targets[0];tp2=targets.find(v=>v>=entry+risk*2.5&&v>tp1);
+ const required=Math.max(60,...strategyConfig.emaPeriods,strategyConfig.bollingerPeriod)+2;
+ if(i<required||rsis[i]==null||rsis[i-1]==null)return null;
+ const closes=candles.slice(0,i+1).map(c=>c.close),c=candles[i],prevC=candles[i-1],r=rsis[i],prev=rsis[i-1],trend=strategyTrend(closes,i);
+ const rsiBuy=prev<rsiConfig.high&&r>=rsiConfig.high&&trend.bull,rsiSell=prev>rsiConfig.low&&r<=rsiConfig.low&&trend.bear;
+ const basis=bollingerBasis(closes,strategyConfig.bollingerPeriod,i),prevBasis=bollingerBasis(closes,strategyConfig.bollingerPeriod,i-1);
+ const bbBuy=strategyConfig.useBollinger&&basis!=null&&prevBasis!=null&&prevC.close<=prevBasis&&c.close>basis&&trend.bull;
+ const bbSell=strategyConfig.useBollinger&&basis!=null&&prevBasis!=null&&prevC.close>=prevBasis&&c.close<basis&&trend.bear;
+ const sw=swingPoints(candles,i),body=Math.abs(c.close-c.open),range=Math.max(c.high-c.low,1e-12),lowerWick=Math.min(c.open,c.close)-c.low,upperWick=c.high-Math.max(c.open,c.close);
+ const recent=candles.slice(Math.max(0,i-14),i),atr=recent.length?recent.reduce((sum,x)=>sum+(x.high-x.low),0)/recent.length:range,tolerance=Math.max(atr*0.18,range*0.08);
+ const support=sw.lows.filter(x=>x.i<i&&c.low<=x.v+tolerance&&c.close>x.v).at(-1),resistance=sw.highs.filter(x=>x.i<i&&c.high>=x.v-tolerance&&c.close<x.v).at(-1);
+ const structuralBuy=!!support&&c.close>c.open&&lowerWick>=Math.max(body*1.2,range*0.18)&&r>prev&&trend.bull;
+ const structuralSell=!!resistance&&c.close<c.open&&upperWick>=Math.max(body*1.2,range*0.18)&&r<prev&&trend.bear;
+ let direction,mode,entry=c.close,sl,tp1,tp2;
+ if(rsiBuy||bbBuy||rsiSell||bbSell){direction=(rsiBuy||bbBuy)?"COMPRAR":"VENDER";mode=[rsiBuy||rsiSell?"RSI":null,bbBuy||bbSell?"BOLLINGER CENTRAL":null].filter(Boolean).join(" + ")+" + EMA";}
+ else if(structuralBuy||structuralSell){direction=structuralBuy?"VENDER":"COMPRAR";mode="REBOTE ESTRUCTURAL INVERTIDO";}
+ else return null;
+ if(direction==="COMPRAR"){
+  const lows=sw.lows.filter(x=>x.i<i&&x.v<entry),highs=sw.highs.filter(x=>x.i<i&&x.v>entry);
+  sl=lows.length?lows.at(-1).v:Math.min(...candles.slice(Math.max(0,i-7),i+1).map(x=>x.low));
+  tp1=structuralSell?resistance?.v:undefined;
+  const risk=entry-sl;tp2=highs.filter(x=>x.v>=entry+risk*2.5&&x.v>(tp1??entry)).map(x=>x.v).sort((x,y)=>x-y)[0];
  }else{
-  const resist=sw.highs.filter(x=>x.i<i&&x.v>entry);sl=resist.length?resist.at(-1).v:Math.max(...candles.slice(Math.max(0,i-7),i+1).map(x=>x.high));
-  const risk=sl-entry,targets=sw.lows.filter(x=>x.i<i&&x.v<=entry-risk*1.5).map(x=>x.v).sort((x,y)=>y-x);
-  tp1=targets[0];tp2=targets.find(v=>v<=entry-risk*2.5&&v<tp1);
+  const highs=sw.highs.filter(x=>x.i<i&&x.v>entry),lows=sw.lows.filter(x=>x.i<i&&x.v<entry);
+  sl=highs.length?highs.at(-1).v:Math.max(...candles.slice(Math.max(0,i-7),i+1).map(x=>x.high));
+  tp1=structuralBuy?support?.v:undefined;
+  const risk=sl-entry;tp2=lows.filter(x=>x.v<=entry-risk*2.5&&x.v<(tp1??entry)).map(x=>x.v).sort((x,y)=>y-x)[0];
  }
- if(!Number.isFinite(tp1)||!Number.isFinite(tp2)||!Number.isFinite(sl)||(dir==="COMPRAR"?(sl>=entry||tp1<=entry||tp2<=tp1):(sl<=entry||tp1>=entry||tp2>=tp1)))return null;
- return{direction:dir,entry,sl,tp1,tp2,rsi:r,time:c.time,index:i,mode,structuralLevel:buy?(support?.v??null):(resistance?.v??null)};
+ const risk=Math.abs(entry-sl);
+ if(!Number.isFinite(tp1)){if(direction==="COMPRAR")tp1=sw.highs.filter(x=>x.i<i&&x.v>=entry+risk*1.5).map(x=>x.v).sort((x,y)=>x-y)[0];else tp1=sw.lows.filter(x=>x.i<i&&x.v<=entry-risk*1.5).map(x=>x.v).sort((x,y)=>y-x)[0];}
+ if(!Number.isFinite(tp2)){if(direction==="COMPRAR")tp2=sw.highs.filter(x=>x.i<i&&x.v>=entry+risk*2.5&&x.v>tp1).map(x=>x.v).sort((x,y)=>x-y)[0];else tp2=sw.lows.filter(x=>x.i<i&&x.v<=entry-risk*2.5&&x.v<tp1).map(x=>x.v).sort((x,y)=>y-x)[0];}
+ if(!Number.isFinite(sl)||!Number.isFinite(tp1)||!Number.isFinite(tp2)||(direction==="COMPRAR"?(sl>=entry||tp1<=entry||tp2<=tp1):(sl<=entry||tp1>=entry||tp2>=tp1)))return null;
+ return{direction,entry,sl,tp1,tp2,rsi:r,time:c.time,index:i,mode,structuralLevel:structuralBuy?support?.v:structuralSell?resistance?.v:null,emaPeriods:strategyConfig.emaPeriods.slice(),bollingerPeriod:strategyConfig.bollingerPeriod};
 }
 function runBacktest(symbol,market,candles){
  if(!Array.isArray(candles)||candles.length<65)return;
  const data=candles.slice().sort((a,b)=>a.time-b.time),rs=configuredRsiSeries(data);backtestTrades.length=0;let active=null;
- for(let i=60;i<data.length-1;i++){
+ for(let i=Math.max(60,...strategyConfig.emaPeriods,strategyConfig.bollingerPeriod)+2;i<data.length-1;i++){
   const c=data[i];
   if(active){
    let exit=null;const stop=active.protectionSL??active.sl,hitStop=active.direction==="COMPRAR"?c.low<=stop:c.high>=stop,hitTp1=active.direction==="COMPRAR"?c.high>=active.tp1:c.low<=active.tp1,hitTp2=active.direction==="COMPRAR"?c.high>=active.tp2:c.low<=active.tp2,risk=Math.abs(active.entry-active.sl);
