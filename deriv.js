@@ -59,12 +59,26 @@ function connectDeriv() {
       if (candleBuffer.length && candleBuffer[candleBuffer.length - 1].time === candle.time) candleBuffer[candleBuffer.length - 1] = candle;
       else candleBuffer.push(candle);
       if (typeof addCandle === "function") addCandle(candle);
+      const priceEl = document.getElementById("current-price"); if (priceEl) priceEl.textContent = candle.close.toFixed(4);
       if (typeof analyzeCandles === "function") analyzeCandles(selectedSymbol, selectedMarketName(), candleBuffer);
     }
     if (data.msg_type === "tick" && data.tick) {
       const price = Number(data.tick.quote);
-      const el = document.getElementById("current-price"); if (el) el.textContent = price.toFixed(4);
-      if (selectedSymbol) updateOperationPrice(selectedSymbol, price);
+      const el = document.getElementById("current-price"); if (el && Number.isFinite(price)) el.textContent = price.toFixed(4);
+      if (Number.isFinite(price) && selectedSymbol) {
+        updateOperationPrice(selectedSymbol, price);
+        const minute = Math.floor(Number(data.tick.epoch) / 60) * 60;
+        let live = candleBuffer[candleBuffer.length - 1];
+        if (!live || live.time !== minute) {
+          live = { time: minute, open: price, high: price, low: price, close: price };
+          candleBuffer.push(live);
+          if (candleBuffer.length > 500) candleBuffer.shift();
+        } else {
+          live = { ...live, high: Math.max(live.high, price), low: Math.min(live.low, price), close: price };
+          candleBuffer[candleBuffer.length - 1] = live;
+        }
+        if (typeof addCandle === "function") addCandle(live);
+      }
     }
   };
   derivSocket.onerror = () => {
