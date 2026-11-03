@@ -50,7 +50,7 @@ function renderMarketChart(){
  for(let i=0;i<=4;i++){let y=top+ph*i/4;ctx.beginPath();ctx.moveTo(left,y);ctx.lineTo(w-right,y);ctx.stroke();}
  if(!candleData.length){ctx.fillStyle="#8495aa";ctx.textAlign="center";ctx.font="12px Arial";ctx.fillText("Esperando datos reales del mercado...",w/2,h/2);return;}
  const end=Math.max(0,Math.min(candleData.length,viewEnd||candleData.length)),start=Math.max(0,end-viewCount),data=candleData.slice(start,end);
- if(!data.length)return;const windowKey=start+":"+end+":"+viewCount;let lows=data.map(c=>c.low),highs=data.map(c=>c.high);tradeLevels.forEach(x=>{if(Number.isFinite(x.value)){lows.push(x.value);highs.push(x.value);}});
+ if(!data.length)return;const windowKey=start+":"+end+":"+viewCount;let lows=data.map(c=>c.low),highs=data.map(c=>c.high);const candleMin=Math.min(...lows),candleMax=Math.max(...highs);tradeLevels.forEach(x=>{if(Number.isFinite(x.value)&&x.value>=candleMin-(candleMax-candleMin)*.25&&x.value<=candleMax+(candleMax-candleMin)*.25){lows.push(x.value);highs.push(x.value);}});
  const rawMin=Math.min(...lows),rawMax=Math.max(...highs);
  if(scaleWindow!==windowKey||scaleMin===null||scaleMax===null){const pad=(rawMax-rawMin)*.08||Math.abs(rawMax)*.0001||1;scaleMin=rawMin-pad;scaleMax=rawMax+pad;scaleWindow=windowKey;}else{const span=scaleMax-scaleMin,pad=span*.08;if(rawMin<scaleMin+pad)scaleMin=rawMin-pad;if(rawMax>scaleMax-pad)scaleMax=rawMax+pad;}
  const min=scaleMin,max=scaleMax;
@@ -75,11 +75,22 @@ function renderMarketChart(){
   const dot=(x,y,color)=>{ctx.fillStyle=color;ctx.beginPath();ctx.arc(x,y,4,0,Math.PI*2);ctx.fill();ctx.strokeStyle="#101827";ctx.lineWidth=1;ctx.stroke();};
   dot(x1,yEntry,"#48a8ff");dot(x1,yStop,"#ff5364");
   const label=(txt,x,y,color)=>{ctx.font="bold 10px Arial";ctx.textAlign="left";const tw=ctx.measureText(txt).width;ctx.fillStyle="rgba(8,13,22,.88)";ctx.fillRect(x,y-10,tw+8,14);ctx.fillStyle=color;ctx.fillText(txt,x+4,y+1);};
-  label("ENTRADA "+Number(t.entry).toPrecision(7),Math.min(w-right-130,x1+5),yEntry-5,"#70bdff");
+  label("ENTRADA "+Number(t.entry).toPrecision(7),Math.min(w-right-150,x1+5),yEntry-5,"#70bdff");
   label("SL "+Number(t.sl).toPrecision(7),Math.min(w-right-110,x1+5),yStop-5,"#ff7180");
+  const yTp2=yOf(t.tp2);
+  ctx.strokeStyle="#20c997";ctx.setLineDash([3,3]);ctx.beginPath();ctx.moveTo(x1,yTp2);ctx.lineTo(x2,yTp2);ctx.stroke();ctx.setLineDash([]);
+  dot(x1,yTp2,"#20c997");
+  label("TP2 "+Number(t.tp2).toPrecision(7),Math.min(w-right-130,x1+5),yTp2-5,"#43e0b0");
+  if(t.reason&&String(t.reason).includes("TP1")){
+   const tp1=Number(t.price),yTp1=yOf(tp1);dot(x2,yTp1,"#f5c451");
+   label("TP1 "+tp1.toPrecision(7),Math.min(w-right-130,x2+5),yTp1-5,"#f5c451");
+  }else{
+   label("TP1 · RECHAZO M1",Math.min(w-right-130,x1+5),yEntry+15,"#f5c451");
+  }
   if(t.exitTime&&Number.isFinite(exitPrice)){
    const won=t.result==="GANADA";dot(x2,yExit,won?"#20c997":"#ff5364");
-   label((won?"GANADA ":"PERDIDA ")+exitPrice.toPrecision(7),Math.min(w-right-135,x2+5),yExit-5,won?"#43e0b0":"#ff7180");
+   const resultText=won?"GANADA":"PERDIDA";
+   label(resultText+" · "+exitPrice.toPrecision(7),Math.min(w-right-145,x2+5),Math.max(top+12,yExit-19),won?"#43e0b0":"#ff7180");
   }
  });
  tradeLevels.forEach(a=>{let y=yOf(a.value);ctx.strokeStyle=a.color;ctx.setLineDash([4,3]);ctx.beginPath();ctx.moveTo(left,y);ctx.lineTo(w-right,y);ctx.stroke();ctx.setLineDash([]);ctx.fillStyle=a.color;ctx.textAlign="left";ctx.fillText(a.label,w-right+5,y-4);});
