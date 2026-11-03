@@ -74,13 +74,13 @@ function renderMarketChart(){
 
  // SMC overlays: pivots, liquidity, BOS/CHoCH, OB/FVG and projected zone.
 
- const tag=(txt,x,y,color)=>{if(!txt)return;ctx.font="bold 7px Arial";ctx.textAlign="left";let tw=ctx.measureText(txt).width,tx=Math.max(left,Math.min(w-right-tw-8,x)),ty=Math.max(top+10,Math.min(h-bottom,y));ctx.fillStyle="rgba(8,13,22,.9)";ctx.fillRect(tx,ty-8,tw+6,11);ctx.fillStyle=color;ctx.fillText(txt,tx+3,ty);};
+ const tag=(txt,x,y,color)=>{if(!txt)return;ctx.font=(color==="#e2a84a"?"bold 6px Arial":"bold 7px Arial");ctx.textAlign="left";let tw=ctx.measureText(txt).width,tx=Math.max(left,Math.min(w-right-tw-8,x)),ty=Math.max(top+10,Math.min(h-bottom,y));ctx.fillStyle="rgba(8,13,22,.9)";ctx.fillRect(tx,ty-8,tw+6,11);ctx.fillStyle=color;ctx.fillText(txt,tx+3,ty);};
  const visibleAnnotations=(structureOverlay.items||[]).filter(a=>Number.isFinite(a.price)&&a.time>=visibleStart&&a.time<=visibleEnd);
  const recent=(type,n,side)=>visibleAnnotations.filter(a=>a.type===type&&(!side||a.side===side)).sort((a,b)=>a.time-b.time);
  const annotations=[
   ...recent("pivot",2,"").filter(a=>a.label!=="PIVOTE ALTO"),...recent("liquidity",2,""),
-  ...recent("bos",2),...recent("choch",2),...recent("sweep",2),
-  ...["BUY","SELL"].flatMap(side=>recent("ob",2,side))
+  ...recent("bos",2).filter(a=>a.side!=="BULL"),...recent("choch",2),...recent("sweep",2),
+  ...["BUY","SELL"].flatMap(side=>{const a=recent("ob",30,side),groups=new Map();a.forEach(v=>{if(!groups.has(v.time))groups.set(v.time,[]);groups.get(v.time).push(v);});const latest=[...groups.values()].filter(g=>g.length>=2).at(-1);return latest||[];})
  ];
  const xAt=time=>{const ix=data.findIndex(v=>v.time>=time);return left+(Math.max(0,ix)+.5)*step;};
  const zoneGroups=new Map();
@@ -98,7 +98,7 @@ function renderMarketChart(){
    tag(a.label==="PIVOTE ALTO"?"PH":"PL",x+4,y-5,"#d9e2ef");return;
   }
   ctx.strokeStyle=color;ctx.lineWidth=a.type==="liquidity"?1.5:1.2;ctx.setLineDash(a.type==="liquidity"?[7,4]:[3,3]);ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(a.type==="liquidity"?w-right:Math.min(w-right,x+Math.max(24,step*12)),y);ctx.stroke();ctx.setLineDash([]);
-  tag(a.label,x+3,y-3,color);
+  tag(a.type==="liquidity"?(a.label.includes("BSL")?"BSL":"SSL"):a.label,x+3,y-3,color);
  });
  const p=structureOverlay.projection;if(p&&Number.isFinite(p.low)&&Number.isFinite(p.high)){const col=p.direction==="COMPRAR"?"#20c997":"#ff5364",level=p.direction==="COMPRAR"?p.low:p.high,y=yOf(level);ctx.strokeStyle=col;ctx.globalAlpha=.7;ctx.setLineDash([3,5]);ctx.beginPath();ctx.moveTo(left,y);ctx.lineTo(w-right,y);ctx.stroke();ctx.setLineDash([]);ctx.globalAlpha=1;}
  // Historical trade zones and exact price labels.
