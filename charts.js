@@ -5,7 +5,7 @@ function createMarketChart(containerId = "chart-area") {
   if (!container) return false;
   container.innerHTML = "";
   chartCanvas = document.createElement("canvas");
-  chartCanvas.style.cssText = "display:block;width:100%;height:100%;touch-action:pan-y;";
+  chartCanvas.style.cssText = "position:absolute;inset:0;display:block;width:100%;height:100%;min-width:1px;min-height:1px;touch-action:pan-y;";
   chartCanvas.setAttribute("aria-label", "Gráfico de velas japonesas M1");
   container.appendChild(chartCanvas);
   chartContext = chartCanvas.getContext("2d");
@@ -19,7 +19,7 @@ function createMarketChart(containerId = "chart-area") {
 }
 function resizeMarketChart() {
   if (!chartCanvas || !chartContext) return;
-  const rect = chartCanvas.getBoundingClientRect(), dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const host = chartCanvas.parentElement;\n  if (!host) return;\n  const rect = host.getBoundingClientRect(), dpr = Math.min(window.devicePixelRatio || 1, 2);
   chartCanvas.width = Math.max(1, Math.floor(rect.width * dpr));
   chartCanvas.height = Math.max(1, Math.floor(rect.height * dpr));
   chartContext.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -43,7 +43,7 @@ function clearTradeLevels() { tradeLevels = []; drawMarketChart(); }
 function getActiveChartSymbol() { return chartSymbol; }
 function drawMarketChart() {
   if (!chartCanvas || !chartContext) return;
-  const ctx = chartContext, w = chartCanvas.clientWidth, h = chartCanvas.clientHeight;
+  const ctx = chartContext, w = chartCanvas.parentElement ? chartCanvas.parentElement.clientWidth : 0, h = chartCanvas.parentElement ? chartCanvas.parentElement.clientHeight : 0;
   if (!w || !h) return;
   ctx.clearRect(0,0,w,h); ctx.fillStyle = "#111b2a"; ctx.fillRect(0,0,w,h);
   const left=10, right=66, top=16, bottom=24, plotW=w-left-right, plotH=h-top-bottom;
@@ -61,6 +61,6 @@ function drawMarketChart() {
   ctx.fillStyle="#8495aa";ctx.textAlign="left";ctx.fillText("M1",left,h-7);
   ctx.textAlign="right";ctx.fillText(new Date(candleData[candleData.length-1].time*1000).toLocaleTimeString("es-PA",{hour:"2-digit",minute:"2-digit"}),w-right,h-7);
 }
-window.addEventListener("resize", resizeMarketChart);
+window.addEventListener("resize", resizeMarketChart);\nwindow.addEventListener("error", event => { const el=document.getElementById("chart-message"); if(el) el.textContent="Error del gráfico: "+(event.message || "revisa la carga"); });
 if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", createMarketChart);
 else createMarketChart();
