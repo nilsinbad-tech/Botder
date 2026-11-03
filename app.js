@@ -75,9 +75,8 @@ function buildSignal(candles,i,rsis){
  const minBars=55;
  if(i<minBars||rsis[i]==null)return null;
  const c=candles[i],r=rsis[i],closes=candles.slice(0,i+1).map(x=>x.close);
- const e9=emaAt(closes,9),e20=emaAt(closes,20),e50=emaAt(closes,50);
- const p9=emaAt(closes,9,i-1),p20=emaAt(closes,20,i-1),p50=emaAt(closes,50,i-1);
- if([e9,e20,e50,p9,p20,p50].some(x=>x==null))return null;
+ const e20=emaAt(closes,20),p20=emaAt(closes,20,i-1);
+ if(e20==null||p20==null)return null;
  const buy=r<=rsiConfig.low&&candles[i-1].close<=p20&&c.close>e20;
  const sell=r>=rsiConfig.high&&candles[i-1].close>=p20&&c.close<e20;
  if(!buy&&!sell)return null;
