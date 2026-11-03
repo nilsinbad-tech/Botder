@@ -157,6 +157,8 @@ h1 span {
 #chart-area {
   width: 100%;
   height: 340px;
+  min-height: 340px;
+  position: relative;
   overflow: hidden;
 }
 
