@@ -20,7 +20,7 @@ function createMarketChart(containerId="chart-area"){
   if(activePointers.size>=2){
    const p=[...activePointers.values()],dist=Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y);
    if(pinchStart>0)viewCount=Math.max(15,Math.min(500,Math.round(pinchCount*pinchStart/Math.max(1,dist))));
-   viewEnd=candleData.length;drawMarketChart();return;
+   drawMarketChart();return;
   }
   if(dragX===null)return;
   const step=(chartCanvas.parentElement.clientWidth-76)/Math.max(1,viewCount);
