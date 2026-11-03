@@ -20,7 +20,8 @@ function renderHistory(){const a=document.getElementById("history");if(!a)return
 function fmt(v){return Number(v).toPrecision(7).replace(/0+$/,"").replace(/\.$/,"");}
 function emaAt(v,p,end=v.length-1){if(end+1<p)return null;let x=v.slice(0,p).reduce((a,b)=>a+b,0)/p,k=2/(p+1);for(let i=p;i<=end;i++)x=v[i]*k+x*(1-k);return x;}
 function rsiSeries(values,period=14){const out=Array(values.length).fill(null);if(values.length<=period)return out;let gain=0,loss=0;for(let i=1;i<=period;i++){const d=values[i]-values[i-1];gain+=Math.max(0,d);loss+=Math.max(0,-d);}let ag=gain/period,al=loss/period;out[period]=al===0?100:100-100/(1+ag/al);for(let i=period+1;i<values.length;i++){const d=values[i]-values[i-1];ag=(ag*(period-1)+Math.max(0,d))/period;al=(al*(period-1)+Math.max(0,-d))/period;out[i]=al===0?100:100-100/(1+ag/al);}return out;}
-const rsiConfig={timeframe:60,period:14,low:40,mid:50,high:60};
+const rsiConfig={timeframe:60,period:14,low:55,mid:50,high:60};
+const signalZones={buyMin:55,buyMax:60,sellMin:40,sellMax:45};
 function aggregateRsiCandles(candles,seconds){
  if(seconds<=60)return candles.map((c,i)=>({...c,_sourceIndex:i}));
  const buckets=new Map();
@@ -44,7 +45,7 @@ function applyRsiSettings(){
  const tf=document.getElementById("rsi-timeframe"),per=document.getElementById("rsi-period"),lo=document.getElementById("rsi-low"),mi=document.getElementById("rsi-mid"),hi=document.getElementById("rsi-high");
  if(tf)rsiConfig.timeframe=Number(tf.value)||300;
  if(per)rsiConfig.period=Math.max(2,Math.min(200,Number(per.value)||14));
- if(lo)rsiConfig.low=Math.max(1,Math.min(98,Number(lo.value)||40));
+ if(lo)rsiConfig.low=Math.max(1,Math.min(98,Number(lo.value)||55));
  if(mi)rsiConfig.mid=Math.max(rsiConfig.low+1,Math.min(99,Number(mi.value)||50));
  if(hi)rsiConfig.high=Math.max(rsiConfig.mid+1,Math.min(100,Number(hi.value)||60));
  lastSignalKey="";
@@ -71,15 +72,26 @@ function strategyTrend(closes,i){
  return{bull:closes[i]>=ema,bear:closes[i]<=ema};
 }
 function buildSignal(candles,i,rsis){
- if(i<Math.max(60,...strategyConfig.emaPeriods)+2||rsis[i]==null||rsis[i-1]==null)return null;
- const c=candles[i],r=rsis[i],prev=rsis[i-1],closes=candles.slice(0,i+1).map(x=>x.close),trend=strategyTrend(closes,i);
- const buy=r<=rsiConfig.low&&r>prev&&trend.bull;
- const sell=r>=rsiConfig.high&&r<prev&&trend.bear;
+ const periods=[9,20,50],minBars=55;
+ if(i<minBars||rsis[i]==null)return null;
+ const c=candles[i],r=rsis[i],closes=candles.slice(0,i+1).map(x=>x.close);
+ const e9=emaAt(closes,9),e20=emaAt(closes,20),e50=emaAt(closes,50);
+ const p9=emaAt(closes,9,i-1),p20=emaAt(closes,20,i-1),p50=emaAt(closes,50,i-1);
+ if([e9,e20,e50,p9,p20,p50].some(x=>x==null))return null;
+ const crossedUp=p9<=p20&&e9>e20,crossedDown=p9>=p20&&e9<e20;
+ const buy=r>=55&&r<=60&&crossedUp&&e20>e50;
+ const sell=r>=40&&r<=45&&crossedDown&&e20<e50;
  if(!buy&&!sell)return null;
- const direction=buy?"COMPRAR":"VENDER",entry=c.close,recent=candles.slice(Math.max(0,i-14),i+1),atr=recent.reduce((sum,x)=>sum+x.high-x.low,0)/recent.length,buffer=atr*strategyConfig.slBufferAtr;
- const sl=buy?Math.min(...recent.map(x=>x.low))-buffer:Math.max(...recent.map(x=>x.high))+buffer,risk=Math.abs(entry-sl);if(!Number.isFinite(risk)||risk<=0)return null;
- const tp1=buy?entry+risk*strategyConfig.tp1R:entry-risk*strategyConfig.tp1R,tp2=buy?entry+risk*strategyConfig.tp2R:entry-risk*strategyConfig.tp2R;
- return{direction,entry,sl,tp1,tp2,rsi:r,time:c.time,index:i,mode:"RSI + EMA",emaPeriods:strategyConfig.emaPeriods.slice(),tp1Close:strategyConfig.tp1Close,protectAfterTp1:strategyConfig.protectAfterTp1};
+ const direction=buy?"COMPRAR":"VENDER",entry=c.close;
+ const recent=candles.slice(Math.max(0,i-20),i+1),atr=recent.reduce((sum,x)=>sum+x.high-x.low,0)/recent.length,buffer=atr*strategyConfig.slBufferAtr;
+ const swings=swingPoints(candles,i),riskStop=buy?Math.min(...recent.map(x=>x.low))-buffer:Math.max(...recent.map(x=>x.high))+buffer;
+ const risk=Math.abs(entry-riskStop);if(!Number.isFinite(risk)||risk<=0)return null;
+ const structural=(buy?swings.highs:swings.lows).filter(p=>buy?p.v>entry:p.v<entry).sort((a,b)=>buy?a.v-b.v:b.v-a.v);
+ const valid=structural.filter(p=>Math.abs(p.v-entry)>=risk*strategyConfig.tp1R);
+ if(valid.length<2)return null;
+ const tp1=valid[0].v,tp2=valid.find(p=>Math.abs(p.v-entry)>=Math.max(risk*strategyConfig.tp2R,Math.abs(tp1-entry)*1.25))?.v;
+ if(!Number.isFinite(tp2))return null;
+ return{direction,entry,sl:riskStop,tp1,tp2,rsi:r,time:c.time,index:i,mode:"RSI 55–60 / 40–45 + cruce EMA 9/20 + EMA 20/50",emaPeriods:periods,tp1Close:strategyConfig.tp1Close,protectAfterTp1:strategyConfig.protectAfterTp1};
 }
 function runBacktest(symbol,market,candles){
  if(!Array.isArray(candles)||candles.length<65)return;
@@ -102,7 +114,7 @@ function runBacktest(symbol,market,candles){
  const closed=backtestTrades.filter(t=>t.result!=="ABIERTA"),wins=closed.filter(t=>t.result==="GANADA").length,losses=closed.filter(t=>t.result==="PERDIDA").length,rate=closed.length?(wins/closed.length*100).toFixed(1):"0.0";
  setText("chart-message","Backtest M1 · RSI "+(rsiConfig.timeframe/60)+"m ("+rsiConfig.period+") · "+closed.length+" cerradas · "+rate+"% ganadas · "+losses+" pérdidas.");
 }
-function drawRsiPanel(series,candles){const host=document.getElementById("rsi-area");if(!host)return;host.innerHTML="";const cv=document.createElement("canvas");cv.style.cssText="width:100%;height:100%;display:block";host.appendChild(cv);const dpr=Math.min(devicePixelRatio||1,2),w=host.clientWidth,h=host.clientHeight;cv.width=w*dpr;cv.height=h*dpr;const x=cv.getContext("2d");x.scale(dpr,dpr);const left=24,right=8,top=10,bottom=18,ph=h-top-bottom,pw=w-left-right;for(const level of [rsiConfig.low,rsiConfig.mid,rsiConfig.high]){const y=top+(100-level)/100*ph;x.strokeStyle=level===50?"#8495aa":"#43546b";x.setLineDash([4,3]);x.beginPath();x.moveTo(left,y);x.lineTo(w-right,y);x.stroke();x.setLineDash([]);x.fillStyle="#a8b5c6";x.font="9px Arial";x.fillText(String(level),2,y+3);}const start=Math.max(0,series.length-200);x.beginPath();let begun=false;for(let i=start;i<series.length;i++){if(series[i]==null)continue;const px=left+(i-start)/Math.max(1,series.length-start-1)*pw,py=top+(100-series[i])/100*ph;if(!begun){x.moveTo(px,py);begun=true;}else x.lineTo(px,py);}x.strokeStyle="#48a8ff";x.lineWidth=1.7;x.stroke();setText("rsi-current","RSI: "+(series.at(-1)==null?"--":series.at(-1).toFixed(1)));}
+function drawRsiPanel(series,candles){const host=document.getElementById("rsi-area");if(!host)return;host.innerHTML="";const cv=document.createElement("canvas");cv.style.cssText="width:100%;height:100%;display:block";host.appendChild(cv);const dpr=Math.min(devicePixelRatio||1,2),w=host.clientWidth,h=host.clientHeight;cv.width=w*dpr;cv.height=h*dpr;const x=cv.getContext("2d");x.scale(dpr,dpr);const left=24,right=8,top=10,bottom=18,ph=h-top-bottom,pw=w-left-right;for(const level of [rsiConfig.low,rsiConfig.mid,rsiConfig.high]){const y=top+(100-level)/100*ph;x.strokeStyle=level===50?"#8495aa":"#43546b";x.setLineDash([4,3]);x.beginPath();x.moveTo(left,y);x.lineTo(w-right,y);x.stroke();x.setLineDash([]);x.fillStyle="#a8b5c6";x.font="9px Arial";x.fillText(String(level),2,y+3);}const start=Math.max(0,series.length-1000);x.beginPath();let begun=false;for(let i=start;i<series.length;i++){if(series[i]==null)continue;const px=left+(i-start)/Math.max(1,series.length-start-1)*pw,py=top+(100-series[i])/100*ph;if(!begun){x.moveTo(px,py);begun=true;}else x.lineTo(px,py);}x.strokeStyle="#48a8ff";x.lineWidth=1.7;x.stroke();setText("rsi-current","RSI: "+(series.at(-1)==null?"--":series.at(-1).toFixed(1)));}
 function analyzeCandles(symbol,market,candles){
  if(!candles||candles.length<Math.max(60,...strategyConfig.emaPeriods)+3)return;
  const ordered=candles.slice().sort((a,b)=>a.time-b.time),closedIndex=ordered.length-2;
