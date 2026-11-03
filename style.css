@@ -341,3 +341,4 @@ button:active {
 
 .chart-controls{display:flex;align-items:center;gap:7px;flex-wrap:wrap;justify-content:flex-end}.chart-controls label{font-size:9px}.chart-controls select{background:#172438;color:#e8eef7;border:1px solid #43546b;border-radius:6px;padding:8px 7px;font-size:11px;max-width:130px;}
 @media(max-width:480px){.chart-panel>.section-heading{align-items:flex-start;flex-wrap:wrap}.chart-controls{justify-content:flex-start;width:100%}.chart-controls select{flex:1;min-width:105px}}
+\n/* Clean signal card hierarchy */\n.signal-card{padding:12px 13px;border-left:3px solid var(--blue)}.signal-card h3{margin:6px 0 9px;font-size:16px;letter-spacing:.4px}.signal-card .levels{gap:6px;margin:10px 0}.signal-card .level{padding:8px 9px;background:#0b1420;border:1px solid rgba(132,149,170,.10)}.signal-card .level span{font-size:8px;letter-spacing:.5px}.signal-card .level strong{font-size:12px;font-variant-numeric:tabular-nums}.signal-card .action-row{margin-top:9px}\n
