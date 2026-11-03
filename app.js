@@ -72,16 +72,16 @@ function structureAt(d,i,x){
  const piv=pivotsAt(d,i-2),hi=lastPivot(piv.highs),lo=lastPivot(piv.lows),priorHi=piv.highs.length>1?piv.highs.at(-2):null,priorLo=piv.lows.length>1?piv.lows.at(-2):null;
  const z=getZones(d,i,atr),ann=[];
  const mark=(type,price,label,side,time=c.time)=>{if(Number.isFinite(price))ann.push({type,price,label,side,time});};
- piv.highs.slice(-8).forEach(p=>mark("pivot",p.price,"PH","",d[p.i].time));
- piv.lows.slice(-8).forEach(p=>mark("pivot",p.price,"PL","",d[p.i].time));
- if(hi)mark("liquidity",hi.price,"BSL","");
- if(lo)mark("liquidity",lo.price,"SSL","");
+ piv.highs.slice(-8).forEach(p=>mark("pivot",p.price,"PIVOTE ALTO","",d[p.i].time));
+ piv.lows.slice(-8).forEach(p=>mark("pivot",p.price,"PIVOTE BAJO","",d[p.i].time));
+ if(hi)mark("liquidity",hi.price,"LIQUIDEZ BSL","",d[hi.i].time);
+ if(lo)mark("liquidity",lo.price,"LIQUIDEZ SSL","",d[lo.i].time);
  z.ob.slice(-4).forEach(v=>{mark("ob",v.low,"OB "+v.side,v.side,d[v.i].time);mark("ob",v.high,"",v.side,d[v.i].time);});
  z.fvg.slice(-4).forEach(v=>{mark("fvg",v.low,"FVG "+v.side,v.side,d[v.i].time);mark("fvg",v.high,"",v.side,d[v.i].time);});
  let bos=null;
  if(hi&&c.close>hi.price&&prev.close<=hi.price)bos="BULL";
  if(lo&&c.close<lo.price&&prev.close>=lo.price)bos="BEAR";
- if(bos)mark("bos",bos==="BULL"?hi.price:lo.price,"BOS "+bos,bos);
+ if(bos)mark("bos",bos==="BULL"?hi.price:lo.price,"BOS "+bos,bos,d[bos==="BULL"?hi.i:lo.i].time);
  // Buscar barridos recientes: el sweep puede ocurrir antes de la ruptura, no tiene que ser en la misma vela.
  let sweepBuy=null,sweepSell=null;
  for(let k=Math.max(65,i-12);k<i;k++){
@@ -95,8 +95,8 @@ function structureAt(d,i,x){
  // CHoCH se confirma cuando, después del barrido, el precio rompe estructura en sentido contrario al movimiento que barrió.
  const chochBuy=sweptLow&&bos==="BULL"&&priorLo&&lo&&lo.price<priorLo.price;
  const chochSell=sweptHigh&&bos==="BEAR"&&priorHi&&hi&&hi.price>priorHi.price;
- if(chochBuy)mark("choch",hi.price,"CHoCH BULL","BULL");
- if(chochSell)mark("choch",lo.price,"CHoCH BEAR","BEAR");
+ if(chochBuy)mark("choch",hi.price,"CHoCH ALCISTA","BULL",d[hi.i].time);
+ if(chochSell)mark("choch",lo.price,"CHoCH BAJISTA","BEAR",d[lo.i].time);
  const crossRecent=(side,sweepIndex)=>{
   const from=Math.max(65,sweepIndex??i-8,i-8);
   for(let k=from;k<=i;k++){
