@@ -77,8 +77,8 @@ function buildSignal(candles,i,rsis){
  const prior=candles.slice(Math.max(0,i-strategyConfig.crtLookback),i);if(prior.length<strategyConfig.crtLookback)return null;
  const rangeHigh=Math.max(...prior.map(x=>x.high)),rangeLow=Math.min(...prior.map(x=>x.low));
  const candleRange=Math.max(c.high-c.low,1e-12),body=Math.abs(c.close-c.open);
- const buy=c.low<rangeLow&&c.close>rangeLow&&c.close>c.open&&body/candleRange>=.35&&trend.bull&&r>prev;
- const sell=c.high>rangeHigh&&c.close<rangeHigh&&c.close<c.open&&body/candleRange>=.35&&trend.bear&&r<prev;
+ const buy=c.low<rangeLow&&c.close>rangeLow&&c.close>c.open&&body/candleRange>=.35&&trend.bull&&r<=rsiConfig.low&&r>prev;
+ const sell=c.high>rangeHigh&&c.close<rangeHigh&&c.close<c.open&&body/candleRange>=.35&&trend.bear&&r>=rsiConfig.high&&r<prev;
  if(!buy&&!sell)return null;
  const direction=buy?"COMPRAR":"VENDER",entry=c.close,recent=candles.slice(Math.max(0,i-14),i+1),atr=recent.reduce((sum,x)=>sum+x.high-x.low,0)/recent.length,buffer=atr*strategyConfig.slBufferAtr;
  const sl=buy?Math.min(c.low,rangeLow)-buffer:Math.max(c.high,rangeHigh)+buffer,risk=Math.abs(entry-sl);if(!Number.isFinite(risk)||risk<=0)return null;
