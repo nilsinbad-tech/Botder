@@ -312,7 +312,7 @@ function buildStructuralPlan(m1,displayTf,historyContext=null){
  const lines=[],items=[],activeTf=Number(displayTf)||60,h4s=findDiagonalStructure(h4,14400,"H4");
  const activeSource=activeTf===14400?h4:(activeTf===3600?((getHigherTimeframeHistory(3600)||[]).length?getHigherTimeframeHistory(3600):candlesAtTf(m1,3600)):candlesAtTf(m1,activeTf));
  const active=activeTf===14400?h4s:findDiagonalStructure(activeSource,activeTf,(activeTf>=3600?"H":"M")+activeTf/(activeTf>=3600?3600:60));
- const push=s=>{for(const [n,l] of [s.line1,s.line2].entries())lines.push({...l,side:s.side,primary:n===0,label:n===0?s.tf+" · "+(s.side==="BUY"?"COMPRA":"VENTA"):"",touches:n===0?s.touches:[],projectPrice1:n===0?s.projectPrice1:s.projectPrice2,projectPrice2:n===0?s.projectPrice1:s.projectPrice2,projectTime:s.projectTime});};
+ const push=s=>{for(const [n,l] of [s.line1,s.line2].entries())lines.push({...l,side:s.side,primary:n===0,label:n===0?s.tf+" · "+(s.side==="BUY"?"COMPRA":"VENTA"):"",touches:l.touches||[],projectPrice1:n===0?s.projectPrice1:s.projectPrice2,projectPrice2:n===0?s.projectPrice1:s.projectPrice2,projectTime:s.projectTime});};
  if(active)push(active);
  const candidate=active,dir=candidate?.side,last=m1.at(-1),buy=detectOrderBlocks(activeSource,"BUY"),sell=detectOrderBlocks(activeSource,"SELL");
  const targetSeconds=activeTf>=300&&activeTf<=900?1800:3600,targetTf=targetSeconds===1800?"M30":"H1",confirmationTf=activeTf>60&&activeTf<1800?"M30":"H4",confirmationBias=confirmationTf==="M30"?bias30:bias4;
