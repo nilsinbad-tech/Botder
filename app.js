@@ -132,6 +132,9 @@ function analyzeCandles(symbol,market,candles){
   }
  }
  const unique=[...new Map(structureItems.map(v=>[v.type+"|"+v.time+"|"+v.price+"|"+v.label,v])).values()];
+ const obGroups=new Map();unique.filter(v=>v.type==="ob").forEach(v=>{const key=v.time+"|"+v.side;if(!obGroups.has(key))obGroups.set(key,[]);obGroups.get(key).push(v);});
+ const newestOb=[...obGroups.entries()].sort((a,b)=>Number(b[0].split("|")[0])-Number(a[0].split("|")[0]))[0];
+ if(newestOb)newestOb[1].forEach(v=>v.active=true);
  lastProjection=structureProjection;renderProjectionCard(zoneOutlook);
  const trendBuy=x.e9[i]>x.e20[i],trendSell=x.e9[i]<x.e20[i],tradePlan=trendBuy?zoneOutlook?.buy:trendSell?zoneOutlook?.sell:null;
  if(typeof drawTradeLevels==="function"){if(r.signal)drawTradeLevels(r.signal);else if(tradePlan)drawTradeLevels({entry:tradePlan.entry,sl:tradePlan.sl,tp1:tradePlan.tp1,tp2:tradePlan.tp2,time:d[i].time,direction:tradePlan.direction});else if(typeof clearTradeLevels==="function")clearTradeLevels();}
