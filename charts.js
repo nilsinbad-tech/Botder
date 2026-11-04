@@ -146,7 +146,25 @@ function renderMarketChart(){
  const xAt=time=>{let ix=candleData.findIndex(v=>v.time>=time);if(ix<0)ix=candleData.length-1;return left+(ix-start+.5)*step;};
  const zoneGroups=new Map();
  annotations.filter(a=>a.type==="ob"||a.type==="fvg").forEach(a=>{const key=[a.type,a.time,a.side].join("|");if(!zoneGroups.has(key))zoneGroups.set(key,[]);zoneGroups.get(key).push(a);});
- zoneGroups.forEach((items,key)=>{if(items.length<2)return;const [type,,side]=key.split("|"),vals=items.map(v=>v.price),topY=yOf(Math.max(...vals)),x=xAt(items[0].time),color=type==="ob"?(side==="BUY"?"#20c997":"#ff5364"):(side==="BUY"?"#48a8ff":"#bd8cff");const bottomY=yOf(Math.min(...vals)),active=type==="ob"&&items.some(v=>v.active),zoneWidth=Math.max(5,Math.min(w-right-left,step*3)),zoneX=Math.max(left,Math.min(w-right-zoneWidth,x-step*2));ctx.fillStyle=color+(type==="ob"?(active?"48":"20"):"12");ctx.fillRect(zoneX,topY,zoneWidth,Math.max(2,bottomY-topY));if(type==="ob"){ctx.strokeStyle=active?"#ffd166":color;ctx.lineWidth=active?3:1;ctx.strokeRect(zoneX,topY,zoneWidth,Math.max(2,bottomY-topY));if(active){ctx.shadowColor="#ffd166";ctx.shadowBlur=8;ctx.strokeRect(zoneX,topY,zoneWidth,Math.max(2,bottomY-topY));ctx.shadowBlur=0;}tag(active?(side==="BUY"?"★ OB COMPRA":"★ OB VENTA"):(side==="BUY"?"OB ALCISTA":"OB BAJISTA"),zoneX+3,Math.max(top+9,topY-3),active?"#ffd166":color);if(active&&tradeLevels.length){const vals=tradeLevels.reduce((o,v)=>(o[v.label]=v.value,o),{}),lines=["E "+(Number.isFinite(vals.ENTRADA)?Number(vals.ENTRADA).toPrecision(6):"--")+"  SL "+(Number.isFinite(vals.SL)?Number(vals.SL).toPrecision(6):"--"),"TP1 "+(Number.isFinite(vals.TP1)?Number(vals.TP1).toPrecision(6):"--")+"  TP2 "+(Number.isFinite(vals.TP2)?Number(vals.TP2).toPrecision(6):"--")],boxY=Math.min(h-bottom-22,Math.max(top+4,topY+2));ctx.fillStyle="rgba(5,12,22,.88)";ctx.fillRect(zoneX+2,boxY,Math.min(zoneWidth-4,170),20);ctx.font="bold 6px Arial";ctx.textAlign="left";ctx.fillStyle="#e8f0fa";ctx.fillText(lines[0],zoneX+5,boxY+8);ctx.fillStyle="#f5c451";ctx.fillText(lines[1],zoneX+5,boxY+16);}}});
+  zoneGroups.forEach((items,key)=>{
+   if(items.length<2)return;
+   const [type,,side]=key.split("|"),vals=items.map(v=>v.price),rawTop=yOf(Math.max(...vals)),rawBottom=yOf(Math.min(...vals)),x=xAt(items[0].time),color=type==="ob"?(side==="BUY"?"#20c997":"#ff5364"):(side==="BUY"?"#48a8ff":"#bd8cff"),active=type==="ob"&&items.some(v=>v.active);
+   const zoneWidth=active?Math.min(w-right-left,Math.max(190,step*3)):Math.max(5,Math.min(w-right-left,step*3)),zoneX=Math.max(left,Math.min(w-right-zoneWidth,x-step*2));
+   const infoHeight=active&&tradeLevels.length?44:0,zoneHeight=Math.max(2,rawBottom-rawTop,infoHeight),zoneMid=(rawTop+rawBottom)/2,zoneTop=active&&infoHeight?Math.max(top,Math.min(h-bottom-infoHeight,zoneMid-infoHeight/2)):rawTop;
+   ctx.fillStyle=color+(type==="ob"?(active?"48":"20"):"12");ctx.fillRect(zoneX,zoneTop,zoneWidth,zoneHeight);
+   if(type==="ob"){
+    ctx.strokeStyle=active?"#ffd166":color;ctx.lineWidth=active?2:1;ctx.strokeRect(zoneX,zoneTop,zoneWidth,zoneHeight);
+    if(active){ctx.shadowColor="#ffd166";ctx.shadowBlur=7;ctx.strokeRect(zoneX,zoneTop,zoneWidth,zoneHeight);ctx.shadowBlur=0;}
+    tag(active?(side==="BUY"?"★ OB COMPRA":"★ OB VENTA"):(side==="BUY"?"OB ALCISTA":"OB BAJISTA"),zoneX+4,Math.max(top+10,zoneTop+10),active?"#ffd166":color);
+    if(active&&tradeLevels.length){
+     const levels=tradeLevels.reduce((o,v)=>(o[v.label]=v.value,o),{}),fmtLevel=v=>Number.isFinite(v)?v.toPrecision(7):"PENDIENTE";
+     const rows=[["ENTRADA",levels.ENTRADA,"#48a8ff"],["SL",levels.SL,"#ff5364"],["TP1",levels.TP1,"#f5c451"],["TP2",levels.TP2,"#20c997"]];
+     const cellW=(zoneWidth-12)/2,baseY=zoneTop+25;
+     ctx.font="bold 8px Arial";ctx.textAlign="left";
+     rows.forEach((r,i)=>{const col=i%2,row=Math.floor(i/2),tx=zoneX+6+col*cellW,ty=baseY+row*15;ctx.fillStyle=r[2];ctx.fillText(r[0],tx,ty);ctx.fillStyle="#f4f7fb";ctx.fillText(fmtLevel(r[1]),tx+39,ty);});
+    }
+   }
+  });
  annotations.forEach(a=>{
   if(a.type==="ob"||a.type==="fvg")return;
   const x=xAt(a.time),y=yOf(a.price);let color="#aab7c8";
