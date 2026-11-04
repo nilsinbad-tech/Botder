@@ -185,7 +185,19 @@ function renderSignals(){
 
 /* Persistencia y ciclo de vida definitivo de operaciones manuales. */
 function saveStrategyJournal(){try{localStorage.setItem("botder-structure-journal",JSON.stringify(strategyJournal.slice(0,2000)));}catch(e){}}
-function loadStrategyJournal(){try{const saved=JSON.parse(localStorage.getItem("botder-structure-journal")||"[]");if(Array.isArray(saved))strategyJournal=saved.slice(0,2000);}catch(e){}}
+function loadStrategyJournal(){
+ try{const saved=JSON.parse(localStorage.getItem("botder-structure-journal")||"[]");if(Array.isArray(saved))strategyJournal=saved.slice(0,2000);}catch(e){}
+ const legacy=[...(typeof operations!=="undefined"?operations:[]),...(typeof history!=="undefined"?history:[])];
+ legacy.forEach(o=>{
+  if(!o||!o.symbol||!Number.isFinite(Number(o.entry)))return;
+  const raw=Number(o.entryTime||o.time||o.enteredAt||o.finishedAt);if(!raw)return;
+  const entryTime=raw<1000000000000?raw*1000:raw,key=o.structureKey||[o.symbol,entryTime,o.direction].join(":");
+  if(strategyJournal.some(t=>t.symbol===o.symbol&&(t.structureKey===key||Number(t.entryTime)===entryTime)))return;
+  const closed=["GANADA","PERDIDA"].includes(o.result);
+  strategyJournal.push({id:o.id||"LEGACY-"+key,symbol:o.symbol,market:o.market||o.symbol,direction:o.direction,entry:Number(o.entry),sl:Number(o.sl),tp1:Number(o.tp1||o.tp),tp2:Number(o.tp2||o.tp),timeframe:o.timeframe||"",structureKey:key,entryTime,entered:true,enteredAt:Number(o.enteredAt)||entryTime,result:closed?o.result:"ABIERTA",exitPrice:o.exitPrice,exitReason:o.exitReason,exitTime:Number(o.exitTime||o.finishedAt)||null});
+ });
+ strategyJournal=strategyJournal.slice(0,2000);saveStrategyJournal();
+}
 function evaluateStrategyJournal(symbol,candle){
  if(!candle)return;let changed=false;
  strategyJournal.forEach(t=>{
