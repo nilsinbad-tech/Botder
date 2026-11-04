@@ -1,6 +1,6 @@
 let candleData=[],chartSymbol=null,tradeLevels=[],signalMarker=null,chartCanvas=null,chartContext=null,resizeObserver=null,candleStyle="normal";
 let backtestTradeData=[];let structureOverlay={items:[],projection:null};
-let viewEnd=0,viewCount=100,followLive=true,dragX=null,dragEnd=0,activePointers=new Map(),pinchStart=0,pinchCount=100,pinchAnchorIndex=0,pinchAnchorRatio=.5,chartFrame=null,scaleMin=null,scaleMax=null,scaleWindow="",chartGranularity=60;const futureSpace=25;let drawingMode="pan",userDrawings=[],pendingDrawing=null,chartPlot={left:10,right:66,top:16,bottom:25,step:1,start:0};
+let viewEnd=0,viewCount=100,followLive=true,dragX=null,dragEnd=0,activePointers=new Map(),pinchStart=0,pinchCount=100,pinchAnchorIndex=0,pinchAnchorRatio=.5,chartFrame=null,scaleMin=null,scaleMax=null,scaleWindow="",chartGranularity=60;const futureSpace=25;let drawingMode="pan",userDrawings=[],pendingDrawing=null,priceScaleDrag=null,chartPlot={left:10,right:66,top:16,bottom:25,step:1,start:0};
 function createMarketChart(containerId="chart-area"){
  const host=document.getElementById(containerId);if(!host)return false;
  // Evita crear un segundo canvas sobre el primero: app.js y este archivo podían inicializar el mismo gráfico.
@@ -16,6 +16,10 @@ function createMarketChart(containerId="chart-area"){
   try{chartCanvas.setPointerCapture(e.pointerId);}catch(_){}
   if(activePointers.size===1&&candleData.length===0){dragX=null;return;}
   if(activePointers.size===1){
+   const rect=chartCanvas.getBoundingClientRect();
+   if(e.clientX-rect.left>=rect.width-66&&Number.isFinite(scaleMin)&&Number.isFinite(scaleMax)){
+    priceScaleDrag={y:e.clientY,min:scaleMin,max:scaleMax};dragX=null;chartCanvas.style.cursor="ns-resize";return;
+   }
    if(drawingMode==="line"||drawingMode==="zone"){const p=chartPoint(e);if(p){if(drawingMode==="line")userDrawings.push({type:"line",price:p.price});else pendingDrawing={type:"zone",x1:p.index,x2:p.index,p1:p.price,p2:p.price};}drawMarketChart();return;}
    followLive=false;
    dragX=e.clientX;
@@ -39,6 +43,7 @@ function createMarketChart(containerId="chart-area"){
   if(pendingDrawing){const p=chartPoint(e);if(p){pendingDrawing.x2=p.index;pendingDrawing.p2=p.price;drawMarketChart();}return;}
   const previous=activePointers.get(e.pointerId);
   activePointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
+  if(priceScaleDrag){const height=Math.max(1,chartCanvas.parentElement.clientHeight-41),factor=Math.exp((e.clientY-priceScaleDrag.y)/height*2.2),mid=(priceScaleDrag.min+priceScaleDrag.max)/2,half=(priceScaleDrag.max-priceScaleDrag.min)*factor/2;scaleMin=mid-half;scaleMax=mid+half;scaleWindow="manual-price-scale";drawMarketChart();return;}
   if(activePointers.size>=2){
    const p=[...activePointers.values()],dist=Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y);
    if(pinchStart>0){
@@ -57,6 +62,7 @@ function createMarketChart(containerId="chart-area"){
  const endDrag=e=>{
   if(pendingDrawing){if(Math.abs(pendingDrawing.x2-pendingDrawing.x1)>1&&Math.abs(pendingDrawing.p2-pendingDrawing.p1)>0)userDrawings.push(pendingDrawing);pendingDrawing=null;drawMarketChart();}
   activePointers.delete(e.pointerId);
+  if(priceScaleDrag){priceScaleDrag=null;chartCanvas.style.cursor="grab";}
   if(activePointers.size<2)pinchStart=0;
   if(activePointers.size===1){
    const p=[...activePointers.values()][0];dragX=p.x;dragEnd=viewEnd;
