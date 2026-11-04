@@ -78,7 +78,7 @@ function connectDeriv() {
         showApiDiagnostic("Respuesta de historial recibida sin datos de velas. Tipo: " + data.msg_type + ".");
       }
     }
-    if (data.msg_type === "candles" && responseSymbol(data) === selectedSymbol && ![12,13,14,15,16].includes(data.req_id)) {
+    if (data.msg_type === "candles" && responseSymbol(data) === selectedSymbol && ![12,13,14,15,16,17,18,19].includes(data.req_id)) {
       candleBuffer = (data.candles || []).map(c => ({ time: Number(c.epoch), open: Number(c.open), high: Number(c.high), low: Number(c.low), close: Number(c.close) }));
       if (typeof updateCandles === "function") updateCandles(candleBuffer);
       if (typeof analyzeCandles === "function") analyzeCandles(selectedSymbol, selectedMarketName(), candleBuffer);
@@ -195,7 +195,7 @@ function loadMarketHistory(symbol, granularity = selectedGranularity) {
     showChartMessage("Construyendo velas de 30 segundos desde ticks de Deriv...");
   } else {
     sendDeriv({ticks_history:symbol,count:1440,end:"latest",style:"candles",granularity:60,req_id:12});sendDeriv({ticks_history:symbol,count:2016,end:"latest",style:"candles",granularity:300,req_id:18});sendDeriv({ticks_history:symbol,count:5000,end:"latest",style:"candles",granularity:600,req_id:17});sendDeriv({ticks_history:symbol,count:1344,end:"latest",style:"candles",granularity:900,req_id:19});sendDeriv({ticks_history:symbol,count:1440,end:"latest",style:"candles",granularity:1800,req_id:16});sendDeriv({ticks_history:symbol,count:1440,end:"latest",style:"candles",granularity:3600,req_id:13});sendDeriv({ticks_history:symbol,count:1080,end:"latest",style:"candles",granularity:14400,req_id:14});sendDeriv({ticks_history:symbol,count:180,end:"latest",style:"candles",granularity:86400,req_id:15});
-    // El historial M1 de 5000 velas se carga en una sola respuesta; los ticks actualizan la vela viva sin reemplazarlo por un bloque corto.
+    // Cada temporalidad estructural recibe su propio histórico; M1 se limita a 24 horas.
     showChartMessage("Cargando historial · " + (selectedGranularity/60) + " min...");
   }
 }
