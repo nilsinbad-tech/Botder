@@ -266,8 +266,8 @@ function findDiagonalStructure(source,seconds,tf){
    const aligned=pts.filter(q=>Math.abs(q.price-(p1.price+slope*(q.i-p1.i)))<=tol).sort((a,b)=>a.i-b.i);
    const touches=[];
    for(const q of aligned){const prev=touches.at(-1);if(!prev||q.i-prev.i>=5)touches.push(q);else if(Math.abs(q.price-(p1.price+slope*(q.i-p1.i)))<Math.abs(prev.price-(p1.price+slope*(prev.i-p1.i))))touches[touches.length-1]=q;}
-   if(touches.length<3)continue;
-   const sequence=touches.slice(-3),first=sequence[0],last=sequence[2],gap=Math.max(5,Math.min(40,last.i-sequence[1].i));
+   if(touches.length<2)continue;
+   const sequence=touches.slice(-3),first=sequence[0],last=sequence.at(-1),previous=sequence.at(-2),gap=Math.max(5,Math.min(40,last.i-previous.i));
    // Una línea estructural queda invalidada si una vela cierra/penetra más allá del margen; no se cuentan contactos posteriores a la ruptura.
    let broken=false;
    for(let k=p1.i+1;k<d.length;k++){
@@ -278,7 +278,7 @@ function findDiagonalStructure(source,seconds,tf){
    // Los tres toques deben pertenecer a una misma secuencia reciente, no a máximos/minimos aislados de sesiones distintas.
    if(d.length-1-last.i>Math.max(45,gap*3))continue;
    const score=300-(d.length-1-last.i)*2-(last.i-first.i)*.02;
-   if(!best||score>best.score)best={side,p1,p2,slope,touches:sequence,score,gap,third:last};
+   if(!best||score>best.score)best={side,p1,p2,slope,touches:sequence,score,gap,third:sequence.length===3?last:null};
   }
   return best;
  };
@@ -296,7 +296,7 @@ function findDiagonalStructure(source,seconds,tf){
   if(dist<=tol*1.6&&(!oppositeTouches.length||q.i-oppositeTouches.at(-1).i>=5))oppositeTouches.push(q);
  }
  const upperSequence=oppositeTouches.slice(-3);
- const firstCandle=d[v.touches[0].i],last=v.touches[2],projectedIndex=last.i+v.gap;
+ const firstCandle=d[v.touches[0].i],last=v.touches.at(-1),projectedIndex=last.i+v.gap;
  const line1={time1:d[v.p1.i].time,time2:d[v.p2.i].time,price1:v.p1.price,price2:v.p2.price,touches:v.touches.map((t,i)=>({time:d[t.i].time,price:t.price,n:i+1}))};
  const line2={time1:d[v.p1.i].time,time2:d[v.p2.i].time,price1:v.p1.price+offset,price2:v.p2.price+offset,touches:upperSequence.map((t,i)=>({time:d[t.i].time,price:t.price,n:i+1}))};
  return{side:v.side,tf,seconds,d,first:v.touches[0],second:v.touches[1],third:v.third,firstStop:v.side==="BUY"?firstCandle.low:firstCandle.high,touches:v.touches.map((t,i)=>({...t,n:i+1,time:d[t.i].time})),line1,line2,projectTime:d.at(-1).time+(projectedIndex-(d.length-1))*seconds,projectPrice1:baseAt(projectedIndex),projectPrice2:baseAt(projectedIndex)+offset,tolerance:tol,expectedIndex:projectedIndex,gap:v.gap,zigzagSettings:"5/3/3"};
