@@ -112,7 +112,7 @@ function toHeikinAshi(candles){
   return {...c,open:haOpen,high:haHigh,low:haLow,close:haClose};
  });
 }
-function drawTradeLevels(signal,mark=true){if(!signal)return;tradeLevels=[{value:Number(signal.entry),label:"ENTRADA",color:"#d9f99d"},{value:Number(signal.sl),label:"SL",color:"#ff6579"},{value:Number(signal.tp1),label:"TP1",color:"#39e6a0"},{value:Number(signal.tp2),label:"TP2",color:"#39e6a0"}].filter(x=>Number.isFinite(x.value));tradeLevels.direction=String(signal.direction||"COMPRAR").toUpperCase();tradeLevels.time=Number(signal.time)||candleData.at(-1)?.time||0;drawMarketChart();}
+function drawTradeLevels(signal,mark=true){if(!signal)return;tradeLevels=[];signalMarker={time:Number(signal.time)||candleData.at(-1)?.time||0,direction:String(signal.direction||"COMPRAR").toUpperCase()};drawMarketChart();}
 function clearTradeLevels(){tradeLevels=[];signalMarker=null;drawMarketChart();}
 function getActiveChartSymbol(){return chartSymbol;}
 function drawMarketChart(){if(chartFrame!==null)return;chartFrame=requestAnimationFrame(()=>{chartFrame=null;renderMarketChart();});}
@@ -183,30 +183,7 @@ function renderMarketChart(){
  levelGroups.forEach(v=>{const rawY=yOf(v.value),outside=rawY<top||rawY>h-bottom,y=Math.max(top+2,Math.min(h-bottom-2,rawY));ctx.save();ctx.strokeStyle=v.color;ctx.lineWidth=.8*lineScale;ctx.setLineDash(v.labels.includes("SL")?[5,4]:[3,3]);ctx.beginPath();ctx.moveTo(left,y);ctx.lineTo(w-right,y);ctx.stroke();ctx.setLineDash([]);const txt=(outside?(rawY<top?"↑ ":"↓ "):"")+v.labels.join(" / ")+" "+Number(v.value).toPrecision(7);ctx.font="bold 4.5px Arial";const tw=ctx.measureText(txt).width;ctx.fillStyle="rgba(7,16,28,.96)";ctx.fillRect(left+3,Math.max(top,y-12),tw+9,13);ctx.fillStyle=v.color;ctx.textAlign="left";ctx.fillText(txt,left+7,Math.max(top+9,Math.min(h-bottom-3,y-3)));ctx.restore();});
  // Línea y etiqueta persistentes del último tick. Si se navega por el histórico y el precio queda fuera de escala, se fija un indicador en el borde visible.
  if(Number.isFinite(liveChartPrice)){const outside=liveChartPrice>max||liveChartPrice<min,py=Math.max(top+2,Math.min(h-bottom-2,yOf(liveChartPrice))),priceText=liveChartPrice.toFixed( Math.max(2,Math.min(8,Math.max(0,(String(liveChartPrice).split(".")[1]||"").length))) );ctx.save();ctx.strokeStyle="#ffd166";ctx.lineWidth=.6;ctx.setLineDash(outside?[2,3]:[4,3]);ctx.beginPath();ctx.moveTo(left,py);ctx.lineTo(w-right,py);ctx.stroke();ctx.setLineDash([]);ctx.fillStyle="#ffd166";ctx.fillRect(w-right+1,py-12,right-2,24);ctx.fillStyle="#081321";ctx.font="bold 5px Arial";ctx.textAlign="left";ctx.fillText((outside?(liveChartPrice>max?"↑ ":"↓ "):"")+priceText,w-right+4,py+4);ctx.fillStyle="#ffd166";ctx.font="bold 4.5px Arial";ctx.textAlign="left";ctx.fillText("PRECIO ACTUAL",left+5,Math.max(top+12,Math.min(h-bottom-5,py-7)));ctx.beginPath();ctx.fillStyle="#ffd166";ctx.arc(w-right-3,py,3,0,Math.PI*2);ctx.fill();ctx.restore();}
- // TradingView Long/Short Position overlay: reward to TP2, risk to SL, with distinct TP1/TP2 labels.
- if(tradeLevels.length>=3){
-  const byLabel=Object.fromEntries(tradeLevels.map(v=>[v.label,v.value]));
-  const entry=byLabel.ENTRADA,sl=byLabel.SL,tp1=byLabel.TP1,tp2=Number.isFinite(byLabel.TP2)?byLabel.TP2:tp1;
-  const dir=tradeLevels.direction||"COMPRAR",target=Number.isFinite(tp2)?tp2:tp1;
-  if(Number.isFinite(entry)&&Number.isFinite(sl)&&Number.isFinite(target)){
-   const buy=dir==="COMPRAR"||dir==="BUY",yE=yOf(entry),yT=yOf(target),yS=yOf(sl);
-   const anchor=Math.max(left,Math.min(w-right-8,left+(Math.max(0,timeIndex(tradeLevels.time)-start)+.5)*step));
-   const x2=Math.min(w-right,Math.max(anchor+Math.max(70,step*9),w-right-8));
-   ctx.save();
-   ctx.fillStyle="rgba(35,207,112,.20)";
-   ctx.fillRect(anchor,Math.min(yE,yT),x2-anchor,Math.max(2,Math.abs(yE-yT)));
-   ctx.fillStyle="rgba(255,83,99,.20)";
-   ctx.fillRect(anchor,Math.min(yE,yS),x2-anchor,Math.max(2,Math.abs(yE-yS)));
-   ctx.strokeStyle="#d9f99d";ctx.lineWidth=.5;ctx.beginPath();ctx.moveTo(anchor,yE);ctx.lineTo(x2,yE);ctx.stroke();
-   const label=(txt,y,bg,fg)=>{ctx.font="bold 4.5px Arial";const width=ctx.measureText(txt).width+12,xx=Math.max(left,Math.min(w-right-width,anchor+4));const yy=Math.max(top,Math.min(h-bottom-18,y-10));ctx.fillStyle=bg;ctx.fillRect(xx,yy,width,18);ctx.fillStyle=fg;ctx.textAlign="left";ctx.fillText(txt,xx+6,yy+12);};
-   const guide=(value,name,color,bg,fg)=>{if(!Number.isFinite(value))return;const y=yOf(value);ctx.strokeStyle=color;ctx.lineWidth=.6;ctx.setLineDash([7,5]);ctx.beginPath();ctx.moveTo(anchor,y);ctx.lineTo(w-right,y);ctx.stroke();ctx.setLineDash([]);label(name+" "+value.toPrecision(7),y,bg,fg);};
-   guide(tp1,"TP1","#61b7ff","#174d73","#eaf7ff");
-   if(Number.isFinite(tp2)&&tp2!==tp1)guide(tp2,"TP2","#39e6a0","#155c43","#e8fff1");
-   guide(sl,"SL","#ff6579","#b83e50","#fff");
-   label("ENTRADA "+entry.toPrecision(7),yE,"#155c43","#e8fff1");
-   ctx.restore();
-  }
- }
+ // Entrada resaltada con marcador puntual, sin rectángulos de riesgo/recompensa.
  // Canales y puntos de la estructura guardados en cada operación del backtest.
  visibleTrades.forEach(t=>{
   (t.structureLines||[]).forEach(line=>{
@@ -222,22 +199,16 @@ function renderMarketChart(){
    ctx.restore();
   });
  });
- // Historical trade zones and exact price labels.
- visibleTrades.forEach(t=>{
-  const entryTime=Number(t.entryTime)/1000,exitTime=Number(t.exitTime||Date.now())/1000;
-  const idx=data.findIndex(v=>v.time>=entryTime),endIdx=data.findIndex(v=>v.time>=exitTime);
-  const ix=idx<0?data.length-1:idx,ex=endIdx<0?data.length-1:endIdx;
-  const x1=left+step*(ix+.5),x2=left+step*(Math.max(ix,ex)+.5);
-  const yEntry=yOf(t.entry),exitPrice=Number(t.price),yExit=Number.isFinite(exitPrice)?yOf(exitPrice):yEntry;
-  ctx.lineWidth=.455;ctx.setLineDash([4,3]);
-  ctx.strokeStyle="#61b7ff";ctx.beginPath();ctx.moveTo(x1,yEntry);ctx.lineTo(x2,yEntry);ctx.stroke();
-  ctx.setLineDash([]);
-  const dot=(x,y,color)=>{ctx.fillStyle=color;ctx.beginPath();ctx.arc(x,y,4,0,Math.PI*2);ctx.fill();ctx.strokeStyle="#101827";ctx.lineWidth=.6;ctx.stroke();};
-  const label=(txt,x,y,color)=>{ctx.font="bold 4.5px Arial";ctx.textAlign="left";const tw=ctx.measureText(txt).width;ctx.fillStyle="rgba(0,0,0,.94)";ctx.fillRect(x,y-9,tw+6,12);ctx.strokeStyle=color;ctx.lineWidth=.45;ctx.strokeRect(x,y-9,tw+6,12);ctx.fillStyle="#f1f5f9";ctx.fillText(txt,x+3,y);};
-  label(t.direction==="COMPRAR"?"COMPRA":"VENTA",Math.min(w-right-55,x1+5),yEntry-5,"#70bdff");
-  if(t.exitTime&&Number.isFinite(exitPrice))dot(x2,yExit,t.result==="GANADA"?"#39e6a0":t.result==="PERDIDA"?"#ff6579":"#8fa3b9");
+ // Historial: marcas pequeñas en la vela exacta de entrada y salida.
+ visibleTrades.filter(t=>!t.symbol||!chartSymbol||t.symbol===chartSymbol).forEach(t=>{
+  const entryTime=Number(t.entryTime)/1000,exitTime=Number(t.exitTime||0)/1000;if(!Number.isFinite(entryTime))return;
+  const findX=time=>{let best=-1,delta=Infinity;for(let k=0;k<data.length;k++){const d=Math.abs(data[k].time-time);if(d<delta){delta=d;best=k;}}return delta<=chartGranularity*1.5?best:-1;};
+  const ix=findX(entryTime);
+  if(ix>=0){const c=data[ix],x=left+step*(ix+.5),y=yOf(t.direction==="COMPRAR"?c.low:c.high),color=t.result==="ABIERTA"?"#ffd166":t.result==="GANADA"?"#39e6a0":t.result==="PERDIDA"?"#ff6579":"#8fa3b9";
+   ctx.save();ctx.fillStyle=color;ctx.strokeStyle="#081321";ctx.lineWidth=1;ctx.beginPath();ctx.arc(x,y,3.2,0,Math.PI*2);ctx.fill();ctx.stroke();ctx.font="bold 4.5px Arial";ctx.textAlign="center";ctx.fillStyle=color;ctx.fillText(t.result==="ABIERTA"?"ACTIVA":t.direction==="COMPRAR"?"C":"V",x,Math.max(top+9,Math.min(h-bottom-8,y+(t.direction==="COMPRAR"?12:-7))));ctx.restore();}
+  if(exitTime>0&&Number.isFinite(Number(t.exitPrice))){const ex=findX(exitTime);if(ex>=0){const x=left+step*(ex+.5),y=yOf(Number(t.exitPrice)),color=t.result==="GANADA"?"#39e6a0":"#ff6579";ctx.save();ctx.fillStyle=color;ctx.fillRect(x-2,y-2,4,4);ctx.font="bold 4px Arial";ctx.textAlign="center";ctx.fillText(t.exitReason||"CIERRE",x,Math.max(top+8,Math.min(h-bottom-5,y-5)));ctx.restore();}}
  });
- const drawUserShape=d=>{const y1=yOf(d.p1??d.price),y2=yOf(d.p2??d.price);if(d.type==="line"){ctx.strokeStyle="#f4c45e";ctx.lineWidth=.55;ctx.setLineDash([6,4]);ctx.beginPath();ctx.moveTo(left,y1);ctx.lineTo(w-right,y1);ctx.stroke();ctx.setLineDash([]);tag("NIVEL",left+5,y1-5,"#f4c45e");}else{const x1=left+(Math.min(d.x1,d.x2)-start+.5)*step,x2=left+(Math.max(d.x1,d.x2)-start+.5)*step,yt=Math.min(y1,y2),yb=Math.max(y1,y2);ctx.fillStyle="rgba(72,168,255,.13)";ctx.fillRect(x1,yt,Math.max(3,x2-x1),Math.max(3,yb-yt));ctx.strokeStyle="#61b7ff";ctx.lineWidth=.455;ctx.strokeRect(x1,yt,Math.max(3,x2-x1),Math.max(3,yb-yt));}};userDrawings.forEach(drawUserShape);if(pendingDrawing)drawUserShape(pendingDrawing);  if(signalMarker){const si=data.findIndex(v=>v.time===signalMarker.time);if(si>=0){const candle=data[si],sx=left+step*(si+.5),sy=yOf(signalMarker.direction==="COMPRAR"?candle.low:candle.high);ctx.fillStyle=signalMarker.direction==="COMPRAR"?"#39e6a0":"#ff6579";ctx.beginPath();if(signalMarker.direction==="COMPRAR"){ctx.moveTo(sx,sy+10);ctx.lineTo(sx-6,sy+20);ctx.lineTo(sx+6,sy+20);}else{ctx.moveTo(sx,sy-10);ctx.lineTo(sx-6,sy-20);ctx.lineTo(sx+6,sy-20);}ctx.closePath();ctx.fill();ctx.font="bold 4.5px Arial";ctx.textAlign="center";ctx.fillText(signalMarker.direction,sx,signalMarker.direction==="COMPRAR"?sy+31:sy-24);}}
+const drawUserShape=d=>{const y1=yOf(d.p1??d.price),y2=yOf(d.p2??d.price);if(d.type==="line"){ctx.strokeStyle="#f4c45e";ctx.lineWidth=.55;ctx.setLineDash([6,4]);ctx.beginPath();ctx.moveTo(left,y1);ctx.lineTo(w-right,y1);ctx.stroke();ctx.setLineDash([]);tag("NIVEL",left+5,y1-5,"#f4c45e");}else{const x1=left+(Math.min(d.x1,d.x2)-start+.5)*step,x2=left+(Math.max(d.x1,d.x2)-start+.5)*step,yt=Math.min(y1,y2),yb=Math.max(y1,y2);ctx.fillStyle="rgba(72,168,255,.13)";ctx.fillRect(x1,yt,Math.max(3,x2-x1),Math.max(3,yb-yt));ctx.strokeStyle="#61b7ff";ctx.lineWidth=.455;ctx.strokeRect(x1,yt,Math.max(3,x2-x1),Math.max(3,yb-yt));}};userDrawings.forEach(drawUserShape);if(pendingDrawing)drawUserShape(pendingDrawing);  if(signalMarker){const si=data.findIndex(v=>v.time===signalMarker.time);if(si>=0){const candle=data[si],sx=left+step*(si+.5),sy=yOf(signalMarker.direction==="COMPRAR"?candle.low:candle.high);ctx.fillStyle=signalMarker.direction==="COMPRAR"?"#39e6a0":"#ff6579";ctx.beginPath();if(signalMarker.direction==="COMPRAR"){ctx.moveTo(sx,sy+10);ctx.lineTo(sx-6,sy+20);ctx.lineTo(sx+6,sy+20);}else{ctx.moveTo(sx,sy-10);ctx.lineTo(sx-6,sy-20);ctx.lineTo(sx+6,sy-20);}ctx.closePath();ctx.fill();ctx.font="bold 4.5px Arial";ctx.textAlign="center";ctx.fillText(signalMarker.direction,sx,signalMarker.direction==="COMPRAR"?sy+31:sy-24);}}
  ctx.fillStyle="#8fa3b9";ctx.textAlign="left";const tfLabel=chartGranularity===30?"30s":chartGranularity===3600?"H1":chartGranularity===14400?"H4":"M"+(chartGranularity/60);ctx.fillText((candleStyle==="heikin"?"HEIKIN ASHI":"VELAS NORMALES")+" · "+tfLabel+" · "+data.length+" velas",left,h-7);ctx.textAlign="right";ctx.fillText(new Date(data[data.length-1].time*1000).toLocaleTimeString("es-PA",{hour:"2-digit",minute:"2-digit"}),w-right,h-7);{const remain=chartGranularity-(Math.floor(Date.now()/1000)%chartGranularity);const mm=String(Math.floor(remain/60)).padStart(2,"0"),ss=String(remain%60).padStart(2,"0");ctx.textAlign="left";ctx.font="bold 5px Arial";ctx.fillStyle="#ffd166";ctx.fillText("CIERRE "+tfLabel+" "+mm+":"+ss,left+4,top+13);}
 }
 function setCandleStyle(style){candleStyle=style==="normal"?"normal":"heikin";drawMarketChart();}
