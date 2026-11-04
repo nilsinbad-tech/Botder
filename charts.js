@@ -1,6 +1,6 @@
 let candleData=[],chartSymbol=null,tradeLevels=[],signalMarker=null,chartCanvas=null,chartContext=null,resizeObserver=null,candleStyle="normal";
 let liveVisualPrice=null,liveFromPrice=null,liveToPrice=null,liveAnimationStart=0,liveAnimationFrame=null;
-let backtestTradeData=[];let structureOverlay={items:[],projection:null};window.botderObVisibility={60:true,300:true,600:true,900:true,1800:true,3600:true,14400:true};let liveChartPrice=null;
+let backtestTradeData=[];let structureOverlay={items:[],projection:null};window.botderObVisibility={60:true,120:true,300:true,600:true,900:true,1800:true,3600:true,14400:true};let liveChartPrice=null;
 let viewEnd=0,viewCount=180,followLive=true,dragX=null,dragEnd=0,activePointers=new Map(),pinchStart=0,pinchCount=100,pinchAnchorIndex=0,pinchAnchorRatio=.5,chartFrame=null,scaleMin=null,scaleMax=null,scaleWindow="",chartGranularity=60;let lastPanDelta=0,lastPanAt=0,panMomentumFrame=null;const futureSpace=40;let drawingMode="pan",userDrawings=[],pendingDrawing=null,priceScaleDrag=null,verticalPanDrag=null,chartPlot={left:10,right:66,top:16,bottom:25,step:1,start:0};
 function createMarketChart(containerId="chart-area"){
  const host=document.getElementById(containerId);if(!host)return false;
