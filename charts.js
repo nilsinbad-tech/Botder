@@ -96,7 +96,7 @@ function renderMarketChart(){
  const min=scaleMin,max=scaleMax;
  const yOf=v=>top+(max-v)/(max-min)*ph;
  for(let i=0;i<=4;i++){let v=max-(max-min)*i/4,y=top+ph*i/4;ctx.fillStyle="#8495aa";ctx.textAlign="left";ctx.fillText(v.toFixed(4),w-right+5,y+3);}
- const step=pw/Math.max(viewCount,data.length),bw=Math.max(2,Math.min(10,step*.65));
+ const step=pw/data.length,bw=Math.max(2,Math.min(10,step*.65));
  data.forEach((c,i)=>{let x=left+step*(i+.5),color=c.close>=c.open?"#20c997":"#ff5364";ctx.strokeStyle=color;ctx.fillStyle=color;ctx.beginPath();ctx.moveTo(x,yOf(c.high));ctx.lineTo(x,yOf(c.low));ctx.stroke();let y1=yOf(Math.max(c.open,c.close)),y2=yOf(Math.min(c.open,c.close));ctx.fillRect(x-bw/2,y1,bw,Math.max(1,y2-y1));});
  // EMA overlays are visible; Bollinger stays internal and is never drawn.
  [9,20,50].forEach((period,n)=>{if(raw.length<period)return;let alpha=2/(period+1),v=raw.slice(0,period).reduce((s,c)=>s+c.close,0)/period,series=Array(raw.length).fill(null);series[period-1]=v;for(let k=period;k<raw.length;k++){v=raw[k].close*alpha+v*(1-alpha);series[k]=v;}ctx.beginPath();let begun=false;for(let k=start;k<end;k++){if(series[k]==null)continue;let x=left+step*(k-start+.5),y=yOf(series[k]);if(!begun){ctx.moveTo(x,y);begun=true;}else ctx.lineTo(x,y);}ctx.strokeStyle=["#f5bd4f","#48a8ff","#bd8cff"][n];ctx.lineWidth=period===50?1.8:1.3;ctx.stroke();});
@@ -169,6 +169,8 @@ function renderMarketChart(){
  ctx.fillStyle="#8495aa";ctx.textAlign="left";ctx.fillText((candleStyle==="heikin"?"HEIKIN ASHI":"VELAS NORMALES")+" · "+(chartGranularity===30?"30s":"M"+(chartGranularity/60))+" · "+data.length+" velas",left,h-7);ctx.textAlign="right";ctx.fillText(new Date(data[data.length-1].time*1000).toLocaleTimeString("es-PA",{hour:"2-digit",minute:"2-digit"}),w-right,h-7);{const remain=chartGranularity-(Math.floor(Date.now()/1000)%chartGranularity);const mm=String(Math.floor(remain/60)).padStart(2,"0"),ss=String(remain%60).padStart(2,"0");ctx.textAlign="left";ctx.font="bold 11px Arial";ctx.fillStyle="#f5c451";ctx.fillText("CIERRE "+(chartGranularity===30?"30s":"M"+(chartGranularity/60))+" "+mm+":"+ss,left+4,top+13);}
 }
 function setCandleStyle(style){candleStyle=style==="normal"?"normal":"heikin";drawMarketChart();}
+function recenterChart(){if(!candleData.length)return;viewCount=Math.min(100,candleData.length);viewEnd=candleData.length;dragX=null;scaleMin=null;scaleMax=null;scaleWindow="";drawMarketChart();}
+window.recenterChart=recenterChart;
 window.addEventListener("resize",resizeMarketChart);
 setInterval(()=>{if(candleData.length)drawMarketChart();},1000);
 if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",createMarketChart);else createMarketChart();
