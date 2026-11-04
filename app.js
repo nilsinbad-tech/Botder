@@ -274,21 +274,22 @@ function buildStructuralPlan(m1,displayTf,historyContext=null){
  // En COMPRA la línea primaria es el soporte inferior; en VENTA es la resistencia superior.
  const expectedPrice=candidate?(dir==="BUY"?candidate.projectPrice1:candidate.projectPrice1):NaN,zoneCenter=Number(expectedPrice),zoneLow=zoneCenter-(candidate?.tolerance||0),zoneHigh=zoneCenter+(candidate?.tolerance||0),targets=getTargets(dir,zoneCenter),tp1=targets[0],tp2=targets[1],sl=candidate?.firstStop;
  const validLevels=!!candidate&&Number.isFinite(sl)&&!!tp1&&!!tp2&&(dir==="BUY"?sl<zoneCenter&&tp1.price>zoneCenter&&tp2.price>tp1.price:sl>zoneCenter&&tp1.price<zoneCenter&&tp2.price<tp1.price);
- // La vela de rechazo debe tocar la línea de entrada; la vela siguiente, ya cerrada, confirma a favor.
+ // La entrada se confirma con dos velas cerradas consecutivas: rechazo tocando la línea y vela siguiente a favor.
  const entryCandles=candidate?.d||[],entryEnd=entryCandles.length-1;
- const rejectionFor=(c,side)=>{if(!c)return false;const body=Math.abs(c.close-c.open),range=Math.max(1e-12,c.high-c.low),lower=Math.min(c.open,c.close)-c.low,upper=c.high-Math.max(c.open,c.close),doji=isDoji(c);return side==="BUY"?(doji||c.close<c.open)&& (doji?lower>=range*.18:lower>=Math.max(body*.2,range*.12)):(doji||c.close>c.open)&&(doji?upper>=range*.18:upper>=Math.max(body*.2,range*.12));};
- let rejection=null,confirmation=null;
- if(candidate?.third&&entryEnd>=1){
-  const firstK=Math.max(candidate.third.i,entryEnd-6);
-  for(let k=entryEnd-1;k>=firstK;k--){
-   const c=entryCandles[k],next=entryCandles[k+1];if(!c||!next)continue;
-   const lineSlope=(candidate.line1.price2-candidate.line1.price1)/Math.max(1,candidate.line1.time2-candidate.line1.time1),linePrice=candidate.line1.price1+lineSlope*(c.time-candidate.line1.time1);
-   const touched=c.low<=linePrice+candidate.tolerance&&c.high>=linePrice-candidate.tolerance;
-   const favorable=dir==="BUY"?next.close>next.open:next.close<next.open;
-   if(touched&&rejectionFor(c,dir)&&favorable){rejection={...c,index:k};confirmation={...next,index:k+1};break;}
-  }
- }
- const confirmed=!!candidate?.third&&!!rejection&&!!confirmation&&validLevels;
+ const rejectionFor=(c,side)=>{if(!c)return false;const body=Math.abs(c.close-c.open),range=Math.max(1e-12,c.high-c.low),lower=Math.min(c.open,c.close)-c.low,upper=c.high-Math.max(c.open,c.close),doji=isDoji(c);return side==="BUY"?(doji||c.close<c.open)&&(doji?lower>=range*.18:lower>=Math.max(body*.2,range*.12)):(doji||c.close>c.open)&&(doji?upper>=range*.18:upper>=Math.max(body*.2,range*.12));};
+ const rejectionCandle=entryCandles[entryEnd-1],confirmationCandle=entryCandles[entryEnd];
+ const lineSlope=candidate?(candidate.line1.price2-candidate.line1.price1)/Math.max(1,candidate.line1.time2-candidate.line1.time1):0;
+ const rejectionLinePrice=candidate?candidate.line1.price1+lineSlope*(rejectionCandle?.time-candidate.line1.time1):NaN;
+ const touched=!!candidate&&!!rejectionCandle&&rejectionCandle.low<=rejectionLinePrice+candidate.tolerance&&rejectionCandle.high>=rejectionLinePrice-candidate.tolerance;
+ const priorTouches=(candidate?.touches||[]).filter(t=>t.i<entryEnd-1).slice(-2);
+ const enoughSeparation=priorTouches.length===2&&entryEnd-1-priorTouches[1].i>=5;
+ const thirdTouch=!!candidate&&touched&&enoughSeparation?{...rejectionCandle,i:entryEnd-1,price:dir==="BUY"?rejectionCandle.low:rejectionCandle.high,time:rejectionCandle.time,n:3}:null;
+ const rejection=thirdTouch&&rejectionFor(rejectionCandle,dir)?{...rejectionCandle,index:entryEnd-1}:null;
+ const favorable=dir==="BUY"?confirmationCandle?.close>confirmationCandle?.open:confirmationCandle?.close<confirmationCandle?.open;
+ const confirmation=rejection&&favorable?{...confirmationCandle,index:entryEnd}:null;
+ const validLevels=!!candidate&&Number.isFinite(sl)&&!!tp1&&!!tp2&&(dir==="BUY"?sl<zoneCenter&&tp1.price>zoneCenter&&tp2.price>tp1.price:sl>zoneCenter&&tp1.price<zoneCenter&&tp2.price<tp1.price);
+ const confirmed=!!thirdTouch&&!!rejection&&!!confirmation&&validLevels;
+ if(thirdTouch&&lines[0])lines[0].touches=[...priorTouches.map((t,i)=>({time:candidate.d[t.i].time,price:t.price,n:i+1})),{time:thirdTouch.time,price:thirdTouch.price,n:3}];
  const h4Obs=[...detectOrderBlocks(h4,"BUY"),...detectOrderBlocks(h4,"SELL")].sort((x,y)=>x.time-y.time),m30Obs=[...detectOrderBlocks(m30,"BUY"),...detectOrderBlocks(m30,"SELL")].sort((x,y)=>x.time-y.time);
  const h4Latest=h4Obs.at(-1)||null,m30Latest=m30Obs.at(-1)||null;
  const h4Class=!bias4?"SIN SESGO CLARO":dir?(bias4===dir?"ZONA H4 A FAVOR":"ZONA H4 EN CONTRA"):"ZONA H4 "+(bias4==="BUY"?"COMPRA":"VENTA");
