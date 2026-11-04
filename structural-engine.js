@@ -73,13 +73,16 @@ function runStructuralBacktest(symbol,market,candles,displayTf){
    const sig=plan.signal,c=plan.candidate,keyTrade=[sec,c.side,c.line1.time1,c.line1.time2,c.line1.price1,c.line1.price2].join(":");
    if(seen.has(keyTrade))continue;seen.add(keyTrade);
    let result="ABIERTA",price=sig.entry,exitTime=null,exitReason="SIN CIERRE";
+   let activated=false,actualEntryTime=0;result="ESPERANDO ENTRADA";exitReason="ZONA SIN TOCAR";
    for(let j=i+1;j<d.length;j++){
-    const bar=d[j],stop=sig.direction==="COMPRAR"?bar.low<=sig.sl:bar.high>=sig.sl,one=sig.direction==="COMPRAR"?bar.high>=sig.tp1:bar.low<=sig.tp1,two=sig.direction==="COMPRAR"?bar.high>=sig.tp2:bar.low<=sig.tp2;
+    const bar=d[j],tol=Number(sig.entryTolerance)||Number(c.tolerance)||0;
+    if(!activated){const touch=bar.low<=sig.entry+tol&&bar.high>=sig.entry-tol;if(!touch)continue;activated=true;actualEntryTime=bar.time*1000;result="ABIERTA";exitReason="ENTRADA ACTIVADA";}
+    const stop=sig.direction==="COMPRAR"?bar.low<=sig.sl:bar.high>=sig.sl,one=sig.direction==="COMPRAR"?bar.high>=sig.tp1:bar.low<=sig.tp1,two=sig.direction==="COMPRAR"?bar.high>=sig.tp2:bar.low<=sig.tp2;
     if(stop){result="PERDIDA";price=sig.sl;exitTime=bar.time*1000;exitReason="SL";break;}
     if(two){result="GANADA";price=sig.tp2;exitTime=bar.time*1000;exitReason="TP2";break;}
     if(one){result="GANADA";price=sig.tp1;exitTime=bar.time*1000;exitReason="TP1";break;}
    }
-   trades.push({...sig,id:"BT-"+symbol+"-"+sec+"-"+sig.time,symbol,market,timeframeSeconds:sec,timeframe:label,price,exitPrice:exitTime?price:null,entryTime:sig.time*1000,exitTime,result,exitReason,structureKey:keyTrade,structureLines:[c.line1,c.line2].filter(Boolean)});
+   trades.push({...sig,id:"BT-"+symbol+"-"+sec+"-"+sig.time,symbol,market,timeframeSeconds:sec,timeframe:label,price,exitPrice:exitTime?price:null,entryTime:actualEntryTime,zoneTime:sig.touchTime*1000,exitTime,result,exitReason,structureKey:keyTrade,structureLines:[c.line1,c.line2].filter(Boolean)});
   }
   if(i<d.length){
    const pct=Math.min(99,Math.round((i-from)/Math.max(1,d.length-from)*100));
