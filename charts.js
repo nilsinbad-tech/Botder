@@ -22,6 +22,7 @@ function createMarketChart(containerId="chart-area"){
    }
    if(drawingMode==="line"||drawingMode==="zone"){const p=chartPoint(e);if(p){if(drawingMode==="line")userDrawings.push({type:"line",price:p.price});else pendingDrawing={type:"zone",x1:p.index,x2:p.index,p1:p.price,p2:p.price};}drawMarketChart();return;}
    followLive=false;
+   lastPanDelta=0;
    verticalPanDrag={y:e.clientY,min:scaleMin,max:scaleMax};
    dragX=e.clientX;
    dragEnd=Math.max(Math.min(viewCount,candleData.length),Math.min(candleData.length+viewCount-1,viewEnd||candleData.length+futureSpace));
@@ -87,7 +88,7 @@ function chartPoint(e){if(!chartCanvas)return null;const r=chartCanvas.getBoundi
 function resizeMarketChart(){if(!chartCanvas||!chartContext)return;const host=chartCanvas.parentElement;if(!host)return;const r=host.getBoundingClientRect(),dpr=Math.min(devicePixelRatio||1,2);chartCanvas.width=Math.max(1,Math.floor(r.width*dpr));chartCanvas.height=Math.max(1,Math.floor(r.height*dpr));chartContext.setTransform(dpr,0,0,dpr,0,0);drawMarketChart();}
 function setChartSymbol(s){chartSymbol=s;candleData=[];tradeLevels=[];signalMarker=null;followLive=true;viewEnd=0;viewCount=100;userDrawings=[];pendingDrawing=null;scaleMin=null;scaleMax=null;scaleWindow="";drawMarketChart();}
 function setChartGranularity(seconds){chartGranularity=Number(seconds)||60;scaleMin=null;scaleMax=null;scaleWindow="";drawMarketChart();}
-function updateCandles(c){if(!Array.isArray(c))return;const oldLength=candleData.length,wasFollowing=followLive,distanceFromEnd=Math.max(0,oldLength-viewEnd);candleData=c.filter(x=>[x.time,x.open,x.high,x.low,x.close].every(Number.isFinite)).sort((a,b)=>a.time-b.time).slice();viewEnd=wasFollowing||viewEnd<=0?candleData.length+futureSpace:Math.max(Math.min(viewCount,candleData.length),Math.min(candleData.length+viewCount-1,viewEnd));scaleMin=null;scaleMax=null;scaleWindow="";drawMarketChart();}
+function updateCandles(c){if(!Array.isArray(c))return;const oldLength=candleData.length,wasFollowing=followLive,distanceFromEnd=Math.max(0,oldLength-viewEnd);candleData=c.filter(x=>[x.time,x.open,x.high,x.low,x.close].every(Number.isFinite)).sort((a,b)=>a.time-b.time).slice();viewEnd=wasFollowing||viewEnd<=0?candleData.length+futureSpace:Math.max(Math.min(viewCount,candleData.length),Math.min(candleData.length+viewCount-1,viewEnd));drawMarketChart();}
 function addCandle(c){if(!c||![c.time,c.open,c.high,c.low,c.close].every(Number.isFinite))return;const oldLength=candleData.length,last=candleData[oldLength-1];if(last&&last.time===c.time)candleData[oldLength-1]=c;else candleData.push(c);if(followLive)viewEnd=candleData.length+futureSpace;drawMarketChart();}
 function setChartBacktestTrades(trades){backtestTradeData=Array.isArray(trades)?trades.slice():[];drawMarketChart();}
 function setStructureOverlay(data){const hiddenTypes=new Set(["choch","sweep"]);structureOverlay={...(data||{}),items:Array.isArray(data?.items)?data.items.filter(a=>{const type=String(a.type||"").toLowerCase(),side=String(a.side||"").toUpperCase(),label=String(a.label||"").toUpperCase();return !hiddenTypes.has(type)&&!(type==="bos"&&(side==="BEAR"||label.includes("BEAR")));}):[],projection:data?.projection||null};drawMarketChart();}
