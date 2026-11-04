@@ -77,45 +77,31 @@ function activeLiquidityPools(d,end,pivots){
 function reject(c,buy){let body=Math.abs(c.close-c.open),lw=Math.min(c.open,c.close)-c.low,uw=c.high-Math.max(c.open,c.close);return buy?c.close>c.open&&lw>=Math.max(body*.35,(c.high-c.low)*.2):c.close<c.open&&uw>=Math.max(body*.35,(c.high-c.low)*.2);}
 function getZones(d,i){let ob=[],fvg=[];for(let k=Math.max(2,i-35);k<=i;k++){let c=d[k],future=d.slice(k+1,Math.min(i+1,k+5));if(k<i&&c.close<c.open&&future.some(x=>x.close>c.high))ob.push({side:"BUY",low:c.low,high:Math.max(c.open,c.close),i:k});if(k<i&&c.close>c.open&&future.some(x=>x.close<c.low))ob.push({side:"SELL",low:Math.min(c.open,c.close),high:c.high,i:k});if(d[k].low>d[k-2].high)fvg.push({side:"BUY",low:d[k-2].high,high:d[k].low,i:k});if(d[k].high<d[k-2].low)fvg.push({side:"SELL",low:d[k].high,high:d[k-2].low,i:k});}return{ob,fvg};}
 function makeIndicators(d){let close=d.map(x=>x.close);return{e9:emaSeries(close,9),e20:emaSeries(close,20),e50:emaSeries(close,50),rsi:rsiSeries(close,14)};}
+let obAnalysisSeconds=300,liquidityAnalysisSeconds=300;
+function aggregateCandlesM1(d,end,seconds){const out=[],map=[];for(let i=0;i<=end;i++){const c=d[i],bucket=Math.floor(c.time/seconds)*seconds,last=out[out.length-1];if(last&&last.time===bucket){last.high=Math.max(last.high,c.high);last.low=Math.min(last.low,c.low);last.close=c.close;map[map.length-1]=i;}else{out.push({time:bucket,open:c.open,high:c.high,low:c.low,close:c.close});map.push(i);}}return{candles:out,lastIndex:out.length-1,map};}
+function readMultiTfSettings(){const ob=document.getElementById("ob-timeframe"),liq=document.getElementById("liquidity-timeframe");if(ob)obAnalysisSeconds=Number(ob.value)||300;if(liq)liquidityAnalysisSeconds=Number(liq.value)||300;try{localStorage.setItem("botder-ob-tf",String(obAnalysisSeconds));localStorage.setItem("botder-liq-tf",String(liquidityAnalysisSeconds));}catch(e){}if(typeof selectedMarket!=="undefined"&&selectedMarket&&Array.isArray(m1Candles)&&m1Candles.length)analyzeCandles(selectedMarket.symbol,selectedMarket.name,m1Candles);}
+document.addEventListener("DOMContentLoaded",()=>{try{obAnalysisSeconds=Number(localStorage.getItem("botder-ob-tf"))||300;liquidityAnalysisSeconds=Number(localStorage.getItem("botder-liq-tf"))||300;}catch(e){}const ob=document.getElementById("ob-timeframe"),liq=document.getElementById("liquidity-timeframe");if(ob){ob.value=String(obAnalysisSeconds);ob.addEventListener("change",readMultiTfSettings);}if(liq){liq.value=String(liquidityAnalysisSeconds);liq.addEventListener("change",readMultiTfSettings);}});
 function structureAt(d,i,x){
- const c=d[i],prev=d[i-1];
- if(!c||!prev||x.rsi[i]==null)return{annotations:[],signal:null,projection:null};
- const piv=pivotsAt(d,i-2),hi=lastPivot(piv.highs),lo=lastPivot(piv.lows),priorHi=piv.highs.length>1?piv.highs.at(-2):null,priorLo=piv.lows.length>1?piv.lows.at(-2):null;
- const z=getZones(d,i),ann=[];
+ const c=d[i],prev=d[i-1];if(!c||!prev||x.rsi[i]==null)return{annotations:[],signal:null,projection:null};
+ const od=aggregateCandlesM1(d,i-1,obAnalysisSeconds),ld=aggregateCandlesM1(d,i-1,liquidityAnalysisSeconds),oi=od.lastIndex,li=ld.lastIndex;
+ const op=pivotsAt(od.candles,oi-2),lp=pivotsAt(ld.candles,li-2),z=getZones(od.candles,oi),pools=activeLiquidityPools(ld.candles,li-2,lp),piv=pivotsAt(d,i-2),ann=[];
  const mark=(type,price,label,side,time=c.time)=>{if(Number.isFinite(price))ann.push({type,price,label,side,time});};
- piv.highs.slice(-8).forEach(p=>mark("pivot",p.price,"PIVOTE ALTO","",d[p.i].time));
- piv.lows.slice(-8).forEach(p=>mark("pivot",p.price,"PIVOTE BAJO","",d[p.i].time));
- const pools=activeLiquidityPools(d,i-2,piv);
- pools.bslLevels.forEach((p,n)=>mark("liquidity",p.price,"LIQUIDEZ BSL "+(n+1),"",d[p.i].time));
- pools.sslLevels.forEach((p,n)=>mark("liquidity",p.price,"LIQUIDEZ SSL "+(n+1),"",d[p.i].time));
- ["BUY","SELL"].forEach(side=>{const v=z.ob.filter(v=>v.side===side).at(-1);if(v){mark("ob",v.low,"OB "+side,v.side,d[v.i].time);mark("ob",v.high,"",v.side,d[v.i].time);}});
- z.fvg.slice(-4).forEach(v=>{mark("fvg",v.low,"FVG "+v.side,v.side,d[v.i].time);mark("fvg",v.high,"",v.side,d[v.i].time);});
- // Estrategia: OB válido + cruce EMA 9/20 en la vela M1 actual.
+ piv.highs.slice(-8).forEach(p=>mark("pivot",p.price,"PIVOTE ALTO","",d[p.i].time));piv.lows.slice(-8).forEach(p=>mark("pivot",p.price,"PIVOTE BAJO","",d[p.i].time));
+ op.highs.slice(-6).forEach(p=>mark("pivot",p.price,"PIVOTE OB ALTO","",od.candles[p.i].time));op.lows.slice(-6).forEach(p=>mark("pivot",p.price,"PIVOTE OB BAJO","",od.candles[p.i].time));
+ pools.bslLevels.forEach((p,n)=>mark("liquidity",p.price,"LIQUIDEZ BSL "+(n+1),"",ld.candles[p.i].time));pools.sslLevels.forEach((p,n)=>mark("liquidity",p.price,"LIQUIDEZ SSL "+(n+1),"",ld.candles[p.i].time));
+ ["BUY","SELL"].forEach(side=>{const v=z.ob.filter(v=>v.side===side).at(-1);if(v){mark("ob",v.low,"OB "+side,v.side,od.candles[v.i].time);mark("ob",v.high,"",v.side,od.candles[v.i].time);}});
  const crossBuy=x.e9[i]>x.e20[i]&&x.e9[i-1]<=x.e20[i-1],crossSell=x.e9[i]<x.e20[i]&&x.e9[i-1]>=x.e20[i-1];
- const obBuy=z.ob.filter(v=>v.side==="BUY"&&c.low<=v.high&&c.close>=v.low).at(-1),obSell=z.ob.filter(v=>v.side==="SELL"&&c.high>=v.low&&c.close<=v.high).at(-1);
- const buy=!!obBuy&&crossBuy,sell=!!obSell&&crossSell;let signal=null;
- if(buy||sell){const isBuy=buy,direction=isBuy?"COMPRAR":"VENDER",entry=c.close;
-  const targets=(isBuy?pools.bslLevels:pools.sslLevels).filter(p=>isBuy?p.price>entry:p.price<entry).sort((a,b)=>isBuy?a.price-b.price:b.price-a.price);
-  const stop=(isBuy?pools.sslLevels:pools.bslLevels).filter(p=>isBuy?p.price<entry:p.price>entry).sort((a,b)=>isBuy?b.price-a.price:a.price-b.price)[0];
-  const sl=stop?.price,tp1=targets[0]?.price,tp2=targets[1]?.price;
-  if(Number.isFinite(sl)&&Number.isFinite(tp1)&&Number.isFinite(tp2)&&((isBuy&&sl<entry&&tp1>entry&&tp2>tp1)||(!isBuy&&sl>entry&&tp1<entry&&tp2<tp1)))signal={direction,entry,sl,tp1,tp2,rsi:x.rsi[i],time:c.time,index:i,mode:"OB "+(isBuy?"ALCISTA":"BAJISTA")+" + cruce EMA 9/20 · TP1/TP2 liquidez · SL liquidez estructural",emaPeriods:[9,20]};
- }
+ const obBuy=z.ob.filter(v=>v.side==="BUY"&&c.low<=v.high&&c.close>=v.low).at(-1),obSell=z.ob.filter(v=>v.side==="SELL"&&c.high>=v.low&&c.close<=v.high).at(-1),buy=!!obBuy&&crossBuy,sell=!!obSell&&crossSell;let signal=null;
+ if(buy||sell){const isBuy=buy,direction=isBuy?"COMPRAR":"VENDER",entry=c.close,targets=(isBuy?pools.bslLevels:pools.sslLevels).filter(p=>isBuy?p.price>entry:p.price<entry).sort((a,b)=>isBuy?a.price-b.price:b.price-a.price),stop=(isBuy?pools.sslLevels:pools.bslLevels).filter(p=>isBuy?p.price<entry:p.price>entry).sort((a,b)=>isBuy?b.price-a.price:a.price-b.price)[0],sl=stop?.price,tp1=targets[0]?.price,tp2=targets[1]?.price;
+ if(Number.isFinite(sl)&&Number.isFinite(tp1)&&Number.isFinite(tp2)&&((isBuy&&sl<entry&&tp1>entry&&tp2>tp1)||(!isBuy&&sl>entry&&tp1<entry&&tp2<tp1)))signal={direction,entry,sl,tp1,tp2,rsi:x.rsi[i],time:c.time,index:i,mode:"OB M"+(obAnalysisSeconds/60)+" + EMA 9/20 M1 · liquidez M"+(liquidityAnalysisSeconds/60),emaPeriods:[9,20]};}
  let projection=null,bias=crossBuy?"BUY":crossSell?"SELL":x.e9[i]>x.e20[i]?"BUY":x.e9[i]<x.e20[i]?"SELL":null;
- if(bias){const isBuy=bias==="BUY",ob=(isBuy?z.ob.filter(v=>v.side==="BUY"):z.ob.filter(v=>v.side==="SELL")).at(-1);
-  const targets=(isBuy?pools.bslLevels:pools.sslLevels).filter(p=>isBuy?p.price>c.close:p.price<c.close).sort((a,b)=>isBuy?a.price-b.price:b.price-a.price);
-  const stop=(isBuy?pools.sslLevels:pools.bslLevels).filter(p=>isBuy?p.price<c.close:p.price>c.close).sort((a,b)=>isBuy?b.price-a.price:a.price-b.price)[0];
-  if(ob&&stop&&targets.length>=2){const low=Math.min(ob.low,ob.high),high=Math.max(ob.low,ob.high);projection={direction:isBuy?"COMPRAR":"VENDER",low,high,sl:stop.price,tp1:targets[0].price,tp2:targets[1].price,stage:c.close>=low&&c.close<=high?"PRECIO EN ZONA":"EN PREPARACIÓN",reason:"OB + EMA 9/20. TP1 y TP2 en las dos próximas zonas de liquidez; SL en la liquidez estructural anterior."};}
- }
+ if(bias){const isBuy=bias,ob=(isBuy?z.ob.filter(v=>v.side==="BUY"):z.ob.filter(v=>v.side==="SELL")).at(-1),targets=(isBuy?pools.bslLevels:pools.sslLevels).filter(p=>isBuy?p.price>c.close:p.price<c.close).sort((a,b)=>isBuy?a.price-b.price:b.price-a.price),stop=(isBuy?pools.sslLevels:pools.bslLevels).filter(p=>isBuy?p.price<c.close:p.price>c.close).sort((a,b)=>isBuy?b.price-a.price:a.price-b.price)[0];if(ob&&stop&&targets.length>=2){const low=Math.min(ob.low,ob.high),high=Math.max(ob.low,ob.high);projection={direction:isBuy?"COMPRAR":"VENDER",low,high,entry:isBuy?high:low,sl:stop.price,tp1:targets[0].price,tp2:targets[1].price,stage:c.close>=low&&c.close<=high?"PRECIO EN ZONA":"EN PREPARACIÓN",reason:"OB M"+(obAnalysisSeconds/60)+" · liquidez M"+(liquidityAnalysisSeconds/60)+" · entrada M1"};}}
  if(signal){mark("signal",signal.entry,signal.direction,signal.direction==="COMPRAR"?"BUY":"SELL");projection={...signal,low:signal.entry,high:signal.entry,stage:"SEÑAL CONFIRMADA"};}
  return{annotations:ann,signal,projection};
 }
 function buildZoneOutlook(d,i,x){
- if(!d[i])return{buy:null,sell:null};
- const p=pivotsAt(d,i-2),pools=activeLiquidityPools(d,i-2,p),lo=pools.ssl,hi=pools.bsl,z=getZones(d,i);
- const make=side=>{const ob=z.ob.filter(v=>v.side===side).at(-1);if(!ob)return null;const low=Math.min(ob.low,ob.high),high=Math.max(ob.low,ob.high),buy=side==="BUY",entry=buy?high:low;
- const targets=(buy?pools.bslLevels:pools.sslLevels).filter(p=>buy?p.price>entry:p.price<entry).sort((a,b)=>buy?a.price-b.price:b.price-a.price),stop=(buy?pools.sslLevels:pools.bslLevels).filter(p=>buy?p.price<entry:p.price>entry).sort((a,b)=>buy?b.price-a.price:a.price-b.price)[0];
- if(!stop||targets.length<2)return null;return{direction:buy?"COMPRAR":"VENDER",low,high,entry,sl:stop.price,tp1:targets[0].price,tp2:targets[1].price,source:buy?"OB ALCISTA":"OB BAJISTA",reason:"Cruce EMA 9/20 confirma. SL en liquidez de estructura anterior; TP1 y TP2 en las dos siguientes zonas de liquidez."};};
- return{buy:make("BUY"),sell:make("SELL")};
+ if(!d[i])return{buy:null,sell:null};const od=aggregateCandlesM1(d,i-1,obAnalysisSeconds),ld=aggregateCandlesM1(d,i-1,liquidityAnalysisSeconds),oi=od.lastIndex,li=ld.lastIndex,p=pivotsAt(ld.candles,li-2),pools=activeLiquidityPools(ld.candles,li-2,p),z=getZones(od.candles,oi);
+ const make=side=>{const ob=z.ob.filter(v=>v.side===side).at(-1);if(!ob)return null;const low=Math.min(ob.low,ob.high),high=Math.max(ob.low,ob.high),buy=side==="BUY",entry=buy?high:low,targets=(buy?pools.bslLevels:pools.sslLevels).filter(p=>buy?p.price>entry:p.price<entry).sort((a,b)=>buy?a.price-b.price:b.price-a.price),stop=(buy?pools.sslLevels:pools.bslLevels).filter(p=>buy?p.price<entry:p.price>entry).sort((a,b)=>buy?b.price-a.price:a.price-b.price)[0];if(!stop||targets.length<2)return null;return{direction:buy?"COMPRAR":"VENDER",low,high,entry,sl:stop.price,tp1:targets[0].price,tp2:targets[1].price,source:(buy?"OB ALCISTA":"OB BAJISTA")+" M"+(obAnalysisSeconds/60),reason:"OB M"+(obAnalysisSeconds/60)+" · liquidez M"+(liquidityAnalysisSeconds/60)+" · gráfico M1"};};return{buy:make("BUY"),sell:make("SELL")};
 }
 function renderProjectionCard(zones){
  const a=document.getElementById("projection-card"),s=document.getElementById("projection-status");if(!a)return;
