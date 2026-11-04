@@ -2,7 +2,7 @@ const DERIV_CONFIG = { endpoint: "wss://api.derivws.com/trading/v1/options/ws/pu
 let derivSocket = null, availableSymbols = [], selectedSymbol = null;
 let candleBuffer = [], tickSubId = null, candleSubId = null, reconnectTimer = null, symbolsTimer = null, selectedGranularity = 60;
 
-function responseSymbol(data) { const q=data && data.echo_req || {}; return q.ticks_history || q.ticks || q.symbol || null; }
+function responseSymbol(data) { const q=data && data.echo_req || {}; const value=q.ticks_history||q.ticks||q.symbol||data?.tick?.symbol||data?.ohlc?.symbol||null; return Array.isArray(value)?value[0]:value; }
 function sendDeriv(data) {
   if (!derivSocket || derivSocket.readyState !== WebSocket.OPEN) return false;
   derivSocket.send(JSON.stringify(data)); return true;
@@ -59,7 +59,12 @@ function connectDeriv() {
         historical = aggregateTicks(history.times, history.prices, selectedGranularity);
       }
       if (historical.length) {
-        candleBuffer = historical;
+        // Conserva los ticks que hayan llegado mientras se descargaba el historial.
+        const liveByTime=new Map(candleBuffer.map(c=>[c.time,c]));
+        historical=historical.map(c=>{const live=liveByTime.get(c.time);return live?{...c,high:Math.max(c.high,live.high),low:Math.min(c.low,live.low),close:live.close}:c;});
+        const lastHistoryTime=historical.at(-1)?.time??-Infinity;
+        const newerLive=[...liveByTime.values()].filter(c=>c.time>lastHistoryTime).sort((a,b)=>a.time-b.time);
+        candleBuffer=[...historical,...newerLive];
         if (typeof setBacktestHistory === "function") setBacktestHistory(selectedSymbol, selectedMarketName(), historical);
         if (typeof updateCandles === "function") updateCandles(candleBuffer);
         if (typeof analyzeCandles === "function") analyzeCandles(selectedSymbol, selectedMarketName(), candleBuffer);
@@ -85,14 +90,14 @@ function connectDeriv() {
       if (typeof analyzeCandles === "function") analyzeCandles(selectedSymbol, selectedMarketName(), candleBuffer);
     }
     if (data.msg_type === "tick" && responseSymbol(data) === selectedSymbol && data.tick) {
-      const price = Number(data.tick.quote), epoch = Number(data.tick.epoch);
+      const price = Number(data.tick.quote), epoch = Number(data.tick.epoch), tickSymbol = data.tick.symbol || responseSymbol(data);
       const el = document.getElementById("current-price");
       if (el && Number.isFinite(price)) {
         const decimals = (String(data.tick.quote).split(".")[1] || "").length;
         el.textContent = price.toFixed(Math.min(8, decimals));
         el.dataset.updatedAt = String(epoch);
       }
-      if (Number.isFinite(price) && Number.isFinite(epoch) && selectedSymbol) {
+      if (Number.isFinite(price) && Number.isFinite(epoch) && selectedSymbol && (!tickSymbol || tickSymbol === selectedSymbol)) {
         updateOperationPrice(selectedSymbol, price);
         const interval = selectedGranularity, bucket = Math.floor(epoch / interval) * interval;
         let live = candleBuffer[candleBuffer.length - 1], candleClosed = false;
