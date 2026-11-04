@@ -82,3 +82,40 @@ function renderStrategyJournal(){
 }
 
 if(typeof renderStrategyJournal==="function")renderStrategyJournal();
+
+
+function recordStrategyTrade(signal){
+ if(!signal||strategyJournal.some(t=>t.symbol===signal.symbol&&t.structureKey===signal.structureKey))return;
+ strategyJournal.unshift({id:"STR-"+Date.now().toString(36).toUpperCase(),symbol:signal.symbol,market:signal.market,direction:signal.direction,entry:Number(signal.entry),sl:Number(signal.sl),tp1:Number(signal.tp1),tp2:Number(signal.tp2),timeframe:signal.timeframe||"",structureKey:signal.structureKey,touchTime:Number(signal.touchTime||signal.time)*1000,entryTime:Number(signal.time)*1000,entered:false,result:"PENDIENTE"});
+ strategyJournal=strategyJournal.slice(0,2000);saveStrategyJournal();renderStrategyJournal();
+}
+function markEntered(id){
+ const s=signals.find(x=>x.id===id);if(!s||s.status!=="ACTIVE")return;s.status="ENTERED";
+ operations.unshift({...s,enteredAt:Date.now(),currentPrice:Number(s.entry),result:"OPEN"});
+ const j=strategyJournal.find(t=>t.structureKey===s.structureKey);if(j){j.entered=true;j.enteredAt=Date.now();j.result="ABIERTA";saveStrategyJournal();}
+ renderSignals();renderOperations();renderStrategyJournal();
+}
+function markIgnored(id){
+ const s=signals.find(x=>x.id===id);if(!s||s.status!=="ACTIVE")return;s.status="IGNORED";
+ const j=strategyJournal.find(t=>t.structureKey===s.structureKey);if(j){j.entered=false;j.result="NO ENTRÉ";j.exitReason="SEÑAL DESCARTADA";j.exitTime=Date.now();saveStrategyJournal();}
+ history.unshift({...s,result:"NO ENTRÉ",finishedAt:Date.now()});renderSignals();renderHistory();renderStrategyJournal();
+}
+function evaluateStrategyJournal(symbol,candle){
+ if(!candle)return;let changed=false;
+ strategyJournal.forEach(t=>{if(t.symbol!==symbol||t.entered!==true||t.result!=="ABIERTA"||candle.time*1000<=t.entryTime)return;
+  const hit1=t.direction==="COMPRAR"?candle.high>=t.tp1:candle.low<=t.tp1,hit2=t.direction==="COMPRAR"?candle.high>=t.tp2:candle.low<=t.tp2,stop=t.direction==="COMPRAR"?candle.low<=t.sl:candle.high>=t.sl;
+  if(!t.tp1Hit&&stop){t.result="PERDIDA";t.exitPrice=t.sl;t.exitReason="SL";t.exitTime=candle.time*1000;changed=true;return;}
+  if(!t.tp1Hit&&hit1){t.tp1Hit=true;t.tp1Time=candle.time*1000;changed=true;}
+  if(t.tp1Hit&&hit2){t.result="GANADA";t.exitPrice=t.tp2;t.exitReason="TP2";t.exitTime=candle.time*1000;changed=true;}
+  else if(t.tp1Hit&&stop){t.result="GANADA";t.exitPrice=t.sl;t.exitReason="TP1 COBRADO · RESTO EN SL";t.exitTime=candle.time*1000;changed=true;}
+ });
+ if(changed){saveStrategyJournal();renderStrategyJournal();}
+}
+function renderStrategyJournal(){
+ const entered=strategyJournal.filter(t=>t.entered===true),closed=entered.filter(t=>t.result==="GANADA"||t.result==="PERDIDA"),wins=closed.filter(t=>t.result==="GANADA").length;
+ setText("bt-wins",wins);setText("bt-losses",closed.length-wins);setText("bt-rate",closed.length?(wins/closed.length*100).toFixed(1)+"%":"0%");setText("bt-total",entered.length);setText("bt-open",entered.filter(t=>t.result==="ABIERTA").length);
+ const area=document.getElementById("history");if(!area)return;const safe=v=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+ if(typeof setChartBacktestTrades==="function")setChartBacktestTrades([...(backtestTradeData||[]),...strategyJournal.map(t=>({...t,tp1:t.tp1,tp2:t.tp2,price:t.exitPrice,exitTime:t.exitTime||Date.now()}))]);
+ area.innerHTML=strategyJournal.length?strategyJournal.map(t=>{const status=t.result==="PENDIENTE"?"SEÑAL · SIN DECISIÓN":t.result==="NO ENTRÉ"?"NO ENTRÉ":t.result==="ABIERTA"?"EN CURSO":t.result;return '<article class="history-row"><div><strong>'+safe(t.market||t.symbol)+' · '+safe(t.direction)+' · '+safe(t.timeframe)+'</strong><small>'+new Date(t.entryTime).toLocaleString("es-PA",{dateStyle:"short",timeStyle:"short"})+' · T3 '+new Date(t.touchTime||t.entryTime).toLocaleTimeString("es-PA",{hour:"2-digit",minute:"2-digit"})+' · ENTRADA '+fmt(t.entry)+' · SL '+fmt(t.sl)+' · TP1 '+fmt(t.tp1)+' · TP2 '+fmt(t.tp2)+(t.exitPrice!=null?' · SALIDA '+fmt(t.exitPrice):'')+(t.exitReason?' · '+safe(t.exitReason):'')+'</small></div><span class="history-result '+(t.result||"ABIERTA")+'">'+status+'</span></article>';}).join(""):'<div class="empty-state">Aún no hay señales registradas.</div>';
+}
+if(typeof renderStrategyJournal==="function")renderStrategyJournal();
