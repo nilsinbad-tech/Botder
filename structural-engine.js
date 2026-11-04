@@ -41,7 +41,7 @@ function buildStructuralPlan(baseCandles,displayTf,ctx=null){
   const entryTime=confirmation?.time??d[Math.min(d.length-1,idx+3)]?.time??thirdTouch.time,entry=confirmation?.close??d[Math.min(d.length-1,idx+3)]?.close??touchPrice,tp1Price=oppAt(entryTime);tp1={price:tp1Price,kind:"LÍNEA OPUESTA"};tp2=getTp2(dir,tp1Price);const margin=candidate.tolerance*.25;sl=dir==="BUY"?candidate.first.price-margin:candidate.first.price+margin;
   validLevels=!!tp2&&Number.isFinite(entry)&&Number.isFinite(sl)&&(dir==="BUY"?sl<entry&&tp1Price>entry&&tp2.price>tp1Price:sl>entry&&tp1Price<entry&&tp2.price<tp1Price);confirmed=!!rejection&&!!confirmation&&validLevels;
   const low=touchPrice-candidate.tolerance,high=touchPrice+candidate.tolerance;projection={direction:dir==="BUY"?"COMPRAR":"VENDER",zoneLow:low,zoneHigh:high,low,high,entry,sl,tp1:tp1Price,tp2:tp2?.price,projectTime:thirdTouch.time,stage:!rejection?"T3 · ESPERANDO RECHAZO":!three?"ESPERANDO 3 VELAS A FAVOR":!exact?"CONFIRMACIÓN CERRADA":!validLevels?"NIVELES NO VÁLIDOS":confirmed?"SEÑAL CONFIRMADA":"ESPERANDO",timeframe:label,confirmed,reason:"Rechazo en tercer toque + 3 velas cerradas a favor"};
-  if(confirmed)signal={direction:dir==="BUY"?"COMPRAR":"VENDER",entry,sl,tp1:tp1Price,tp2:tp2.price,time:confirmation.time,touchTime:thirdTouch.time,touchIndex:idx,timeframe:label,mode:"CANAL 3 TOQUES + RECHAZO + 3 VELAS"};
+  if(confirmed)signal={direction:dir==="BUY"?"COMPRAR":"VENDER",entry,sl,tp1:tp1Price,tp2:tp2.price,time:confirmation.time+candidate.seconds,touchTime:thirdTouch.time,touchIndex:idx,timeframe:label,mode:"CANAL 3 TOQUES + RECHAZO + 3 VELAS"};
   if(confirmed)items.push({type:"signal",price:thirdTouch.price,label:signal.direction,side:signal.direction,time:thirdTouch.time});
  }
  const h4Obs=[...detectOrderBlocks(h4,"BUY"),...detectOrderBlocks(h4,"SELL")].sort((a,b)=>a.time-b.time),m30Obs=[...detectOrderBlocks(m30,"BUY"),...detectOrderBlocks(m30,"SELL")].sort((a,b)=>a.time-b.time),bias4=h4Obs.at(-1)?.side||null,bias30=m30Obs.at(-1)?.side||null,biasD1=latestObBias(d1);
@@ -106,7 +106,7 @@ function markIgnored(id){
 }
 function evaluateStrategyJournal(symbol,candle){
  if(!candle)return;let changed=false;
- strategyJournal.forEach(t=>{if(t.symbol!==symbol||t.entered!==true||t.result!=="ABIERTA"||candle.time*1000<=t.entryTime)return;
+ strategyJournal.forEach(t=>{if(t.symbol!==symbol||t.entered!==true||t.result!=="ABIERTA"||candle.time*1000<t.entryTime)return;
   const hit1=t.direction==="COMPRAR"?candle.high>=t.tp1:candle.low<=t.tp1,hit2=t.direction==="COMPRAR"?candle.high>=t.tp2:candle.low<=t.tp2,stop=t.direction==="COMPRAR"?candle.low<=t.sl:candle.high>=t.sl;
   if(!t.tp1Hit&&stop){t.result="PERDIDA";t.exitPrice=t.sl;t.exitReason="SL";t.exitTime=candle.time*1000;changed=true;return;}
   if(!t.tp1Hit&&hit1){t.tp1Hit=true;t.tp1Time=candle.time*1000;changed=true;}
