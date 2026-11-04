@@ -191,7 +191,7 @@ function findDiagonalStructure(source,seconds,tf){
   if(Math.sign(slope)!==sign||Math.abs(slope)*Math.min(40,d.length-p2.i)<median*.55)continue;
   const touches=pts.filter(p=>Math.abs(p.price-(p1.price+slope*(p.i-p1.i)))<=tol).sort((x,y)=>x.i-y.i);if(touches.length<2)continue;
   const last=touches.at(-1),prev=touches.at(-2),gap=Math.max(4,Math.min(40,last.i-prev.i)),actualThird=touches[2]||null,expectedIndex=actualThird?actualThird.i:last.i+gap;
-  if(!actualThird&&d.length-1>expectedIndex+5)continue;
+  if(!actualThird&&d.length-1>expectedIndex+5)continue;if(actualThird&&d.length-1>actualThird.i+5&&Math.abs(d.at(-1).close-actualThird.price)>tol*1.5)continue;
   let broken=false;for(let k=last.i+1;k<d.length;k++){const projected=p1.price+slope*(k-p1.i);if(side==="BUY"?d[k].high>projected+tol*1.8:d[k].low<projected-tol*1.8){broken=true;break;}}if(broken)continue;
   const score=touches.length*10-(d.length-1-last.i),candidate={side,p1,p2,slope,touches,score,gap,expectedIndex,third:actualThird};if(!best||score>best.score)best=candidate;
  }return best;};
