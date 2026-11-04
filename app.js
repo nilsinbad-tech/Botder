@@ -252,12 +252,12 @@ function analyzeLiveStructure(symbol,candles){
 }
 /* Registro general de señales confirmadas: independiente de marcar ENTRÉ. */
 let strategyJournal=[];
-function saveStrategyJournal(){try{localStorage.setItem("botder-structure-journal",JSON.stringify(strategyJournal.slice(0,500)));}catch(e){}}
+function saveStrategyJournal(){try{localStorage.setItem("botder-structure-journal",JSON.stringify(strategyJournal.slice(0,2000)));}catch(e){}}
 function loadStrategyJournal(){try{const v=JSON.parse(localStorage.getItem("botder-structure-journal")||"[]");if(Array.isArray(v))strategyJournal=v.slice(0,500);}catch(e){strategyJournal=[];}renderStrategyJournal();}
 function recordStrategyTrade(signal){
  if(!signal||strategyJournal.some(t=>t.symbol===signal.symbol&&t.entryTime===Number(signal.time)*1000&&t.direction===signal.direction))return;
  strategyJournal.unshift({id:"STR-"+Date.now().toString(36).toUpperCase(),symbol:signal.symbol,market:signal.market,direction:signal.direction,entry:Number(signal.entry),sl:Number(signal.sl),tp:Number(signal.tp1),timeframe:signal.timeframe||"",entryTime:Number(signal.time)*1000,result:"ABIERTA"});
- strategyJournal=strategyJournal.slice(0,500);saveStrategyJournal();renderStrategyJournal();
+ strategyJournal=strategyJournal.slice(0,2000);saveStrategyJournal();renderStrategyJournal();
 }
 function evaluateStrategyJournal(symbol,candle){
  if(!candle)return;let changed=false;
@@ -272,6 +272,6 @@ function renderStrategyJournal(){
  setText("bt-wins",wins);setText("bt-losses",losses);setText("bt-rate",closed.length?(wins/closed.length*100).toFixed(1)+"%":"0%");setText("bt-total",strategyJournal.length);setText("bt-open",strategyJournal.filter(t=>t.result==="ABIERTA").length);
  const area=document.getElementById("history");if(!area)return;
  const safe=v=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
- if(typeof setChartBacktestTrades==="function")setChartBacktestTrades(strategyJournal.map(t=>({...t,tp1:t.tp,tp2:t.tp,price:t.exitPrice,exitTime:t.exitTime||Date.now()})));area.innerHTML=strategyJournal.length?strategyJournal.slice(0,100).map(t=>'<article class="history-row"><div><strong>'+safe(t.market||t.symbol)+' · '+safe(t.direction)+'</strong><small>'+new Date(t.entryTime).toLocaleString("es-PA",{dateStyle:"short",timeStyle:"short"})+' · ENTRADA '+fmt(t.entry)+' · SL '+fmt(t.sl)+' · TP '+fmt(t.tp)+'</small></div><span class="history-result '+t.result+'">'+(t.result==="ABIERTA"?"EN CURSO":t.result)+'</span></article>').join(""):'<div class="empty-state">El historial aparecerá cuando se confirmen entradas.</div>';
+ if(typeof setChartBacktestTrades==="function")setChartBacktestTrades(strategyJournal.map(t=>({...t,tp1:t.tp,tp2:t.tp,price:t.exitPrice,exitTime:t.exitTime||Date.now()})));area.innerHTML=strategyJournal.length?strategyJournal.map(t=>'<article class="history-row"><div><strong>'+safe(t.market||t.symbol)+' · '+safe(t.direction)+'</strong><small>'+new Date(t.entryTime).toLocaleString("es-PA",{dateStyle:"short",timeStyle:"short"})+' · ENTRADA '+fmt(t.entry)+' · SL '+fmt(t.sl)+' · TP '+fmt(t.tp)+'</small></div><span class="history-result '+t.result+'">'+(t.result==="ABIERTA"?"EN CURSO":t.result)+'</span></article>').join(""):'<div class="empty-state">El historial aparecerá cuando se confirmen entradas.</div>';
 }
 loadStrategyJournal();
