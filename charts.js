@@ -46,7 +46,7 @@ function createMarketChart(containerId="chart-area"){
   const previous=activePointers.get(e.pointerId);
   activePointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
   if(priceScaleDrag){const height=Math.max(1,chartCanvas.parentElement.clientHeight-41),factor=Math.exp((e.clientY-priceScaleDrag.y)/height*2.2),mid=(priceScaleDrag.min+priceScaleDrag.max)/2,half=(priceScaleDrag.max-priceScaleDrag.min)*factor/2;scaleMin=mid-half;scaleMax=mid+half;scaleWindow="manual-price-scale";drawMarketChart();return;}
-  if(verticalPanDrag&&activePointers.size===1){const plotHeight=Math.max(1,chartCanvas.parentElement.clientHeight-chartPlot.top-chartPlot.bottom),shift=(verticalPanDrag.y-e.clientY)/plotHeight*(verticalPanDrag.max-verticalPanDrag.min);scaleMin=verticalPanDrag.min+shift;scaleMax=verticalPanDrag.max+shift;scaleWindow="manual-pan";drawMarketChart();}
+  if(verticalPanDrag&&activePointers.size===1){const plotHeight=Math.max(1,chartCanvas.parentElement.clientHeight-chartPlot.top-chartPlot.bottom),shift=(e.clientY-verticalPanDrag.y)/plotHeight*(verticalPanDrag.max-verticalPanDrag.min);scaleMin=verticalPanDrag.min+shift;scaleMax=verticalPanDrag.max+shift;scaleWindow="manual-pan";drawMarketChart();}
   if(activePointers.size>=2){
    const p=[...activePointers.values()],dist=Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y);
    if(pinchStart>0){
