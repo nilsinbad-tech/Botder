@@ -1,4 +1,5 @@
 /* BOTDER STRUCTURAL ENGINE v1 · independent timeframe channel model */
+let structuralBacktestValidatedKey="";
 function structurePivots(d,depth=3,deviation=3,backstep=3){
  const found=[];if(!Array.isArray(d)||d.length<depth*2+3)return{highs:[],lows:[],zigzag:[]};
  for(let i=depth;i<d.length-depth;i++){
@@ -58,7 +59,7 @@ function runStructuralBacktest(symbol,market,candles,displayTf){
   for(let j=i+1;j<d.length;j++){const bar=d[j],stop=s.direction==="COMPRAR"?bar.low<=s.sl:bar.high>=s.sl,one=s.direction==="COMPRAR"?bar.high>=s.tp1:bar.low<=s.tp1,two=s.direction==="COMPRAR"?bar.high>=s.tp2:bar.low<=s.tp2;if(stop){result="PERDIDA";price=s.sl;exitTime=bar.time*1000;exitReason="SL";break;}if(two){result="GANADA";price=s.tp2;exitTime=bar.time*1000;exitReason="TP2";break;}if(one){result="GANADA";price=s.tp1;exitTime=bar.time*1000;exitReason="TP1";break;}}
   trades.push({...s,id:"BT-"+symbol+"-"+s.time,symbol,market,price,entryTime:s.time*1000,exitTime,result,exitReason,structureKey:key});
  }
- backtestTrades.splice(0,backtestTrades.length,...trades);setBacktestTrades(trades);backtestSymbol=symbol;backtestReady=true;if(typeof updateDailyPanel==="function")updateDailyPanel();setText("chart-message","BACKTEST "+(sec>=3600?"H"+sec/3600:"M"+sec/60)+" · últimas 70 velas · "+trades.length+" señales.");return trades;
+ backtestTrades.splice(0,backtestTrades.length,...trades);setBacktestTrades(trades);backtestSymbol=symbol;backtestReady=true;structuralBacktestValidatedKey=symbol+":"+sec;if(typeof updateDailyPanel==="function")updateDailyPanel();setText("chart-message","BACKTEST "+(sec>=3600?"H"+sec/3600:"M"+sec/60)+" · últimas 70 velas · "+trades.length+" señales.");return trades;
 }
 function analyzeCandles(symbol,market,candles){
  if(!Array.isArray(candles)||candles.length<100)return;const d=candles.slice().sort((a,b)=>a.time-b.time),i=d.length-2;if(i<65)return;const closed=d[i],tf=Number(document.getElementById("timeframe")?.value)||60,plan=buildStructuralPlan(d.slice(0,i+1),tf);
@@ -69,7 +70,7 @@ function analyzeCandles(symbol,market,candles){
  const active=plan.activeSource?.at(-1),btKey=symbol+":"+tf+":"+(active?.time||closed.time);if(structuralBacktestKey!==btKey&&plan.activeSource?.length>=120){structuralBacktestKey=btKey;runStructuralBacktest(symbol,market,plan.activeSource,tf);}
  if(typeof setStructureOverlay==="function")setStructureOverlay({items:plan.items,lines:plan.lines,projection:plan.projection,activeTf:tf});
  if(plan.projection&&typeof drawTradeLevels==="function")drawTradeLevels({entry:plan.projection.entry,sl:plan.projection.sl,tp1:plan.projection.tp1,tp2:plan.projection.tp2,time:plan.projection.projectTime,direction:plan.projection.direction},false);else if(typeof clearTradeLevels==="function")clearTradeLevels();
- if(plan.signal&&plan.candidate){const c=plan.candidate,key=[tf,c.side,c.line1.time1,c.line1.time2,Number(c.line1.price1).toPrecision(12),Number(c.line1.price2).toPrecision(12)].join(":");if(!usedStructureKeys.has(symbol+":"+key)&&!strategyJournal.some(t=>t.structureKey===symbol+":"+key)){const full={...plan.signal,symbol,market,structureKey:symbol+":"+key};addSignal(full);recordStrategyTrade(full);notifyBot("BOTDER · "+plan.signal.direction,"Tercer toque y tres velas a favor confirmados.");}}
+ if(plan.signal&&plan.candidate&&structuralBacktestValidatedKey===symbol+":"+tf){const c=plan.candidate,key=[tf,c.side,c.line1.time1,c.line1.time2,Number(c.line1.price1).toPrecision(12),Number(c.line1.price2).toPrecision(12)].join(":");if(!usedStructureKeys.has(symbol+":"+key)&&!strategyJournal.some(t=>t.structureKey===symbol+":"+key)){const full={...plan.signal,symbol,market,structureKey:symbol+":"+key};addSignal(full);recordStrategyTrade(full);notifyBot("BOTDER · "+plan.signal.direction,"Tercer toque y tres velas a favor confirmados.");}}
  if(typeof drawRsiPanel==="function")drawRsiPanel(makeIndicators(d).rsi,d);
 }
 function recordStrategyTrade(signal){
