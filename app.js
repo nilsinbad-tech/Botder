@@ -334,7 +334,7 @@ function analyzeCandles(symbol,market,candles){
  setText("trend-h4",side);setText("confirm-m30",confirm);setText("confirm-m1",plan.near.length>=3?"OB 3/3":"OB "+plan.near.length+"/3");
  setText("touch-status",plan.candidate?.third?"3º TOQUE":"BUSCANDO");setText("ob-status",plan.h4Class||"BUSCANDO");setText("channel-status",plan.candidate?(plan.candidate.side==="BUY"?"ALCISTA":"BAJISTA"):"BUSCANDO");
  renderProjection(plan);
- const btKey=symbol+":"+d[i].time+":"+tf+":"+((higherTfBuffers[14400]||[]).length)+":"+((higherTfBuffers[1800]||[]).length);if(structuralBacktestKey!==btKey){structuralBacktestKey=btKey;runStructuralBacktest(symbol,market,d.slice(0,i+1),tf);}
+ const btKey=symbol+":"+d[i].time+":"+tf+":"+((higherTfBuffers[14400]||[]).length)+":"+((higherTfBuffers[1800]||[]).length)+":"+((higherTfBuffers[3600]||[]).length)+":"+((higherTfBuffers[86400]||[]).length);if(structuralBacktestKey!==btKey){structuralBacktestKey=btKey;runStructuralBacktest(symbol,market,d.slice(0,i+1),tf);}
  if(typeof setStructureOverlay==="function")setStructureOverlay({items:plan.items,lines:plan.lines,projection:plan.projection});
  if(plan.projection&&typeof drawTradeLevels==="function")drawTradeLevels({entry:plan.projection.entry,sl:plan.projection.sl,tp1:plan.projection.tp1,tp2:plan.projection.tp2,time:closed.time,direction:plan.projection.direction},false);
  else if(typeof clearTradeLevels==="function")clearTradeLevels();
