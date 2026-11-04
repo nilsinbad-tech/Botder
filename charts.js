@@ -150,19 +150,13 @@ function renderMarketChart(){
    if(items.length<2)return;
    const [type,,side]=key.split("|"),vals=items.map(v=>v.price),rawTop=yOf(Math.max(...vals)),rawBottom=yOf(Math.min(...vals)),x=xAt(items[0].time),color=type==="ob"?(side==="BUY"?"#20c997":"#ff5364"):(side==="BUY"?"#48a8ff":"#bd8cff"),active=type==="ob"&&items.some(v=>v.active);
    const zoneWidth=active?Math.min(w-right-left,Math.max(190,step*3)):Math.max(5,Math.min(w-right-left,step*3)),zoneX=Math.max(left,Math.min(w-right-zoneWidth,x-step*2));
-   const infoHeight=active&&tradeLevels.length?44:0,zoneHeight=Math.max(2,rawBottom-rawTop,infoHeight),zoneMid=(rawTop+rawBottom)/2,zoneTop=active&&infoHeight?Math.max(top,Math.min(h-bottom-infoHeight,zoneMid-infoHeight/2)):rawTop;
+   const zoneHeight=Math.max(2,rawBottom-rawTop),zoneTop=rawTop;
    ctx.fillStyle=color+(type==="ob"?(active?"48":"20"):"12");ctx.fillRect(zoneX,zoneTop,zoneWidth,zoneHeight);
    if(type==="ob"){
     ctx.strokeStyle=active?"#ffd166":color;ctx.lineWidth=active?2:1;ctx.strokeRect(zoneX,zoneTop,zoneWidth,zoneHeight);
     if(active){ctx.shadowColor="#ffd166";ctx.shadowBlur=7;ctx.strokeRect(zoneX,zoneTop,zoneWidth,zoneHeight);ctx.shadowBlur=0;}
     tag(active?(side==="BUY"?"★ OB COMPRA":"★ OB VENTA"):(side==="BUY"?"OB ALCISTA":"OB BAJISTA"),zoneX+4,Math.max(top+10,zoneTop+10),active?"#ffd166":color);
-    if(active&&tradeLevels.length){
-     const levels=tradeLevels.reduce((o,v)=>(o[v.label]=v.value,o),{}),fmtLevel=v=>Number.isFinite(v)?v.toPrecision(7):"PENDIENTE";
-     const rows=[["ENTRADA",levels.ENTRADA,"#48a8ff"],["SL",levels.SL,"#ff5364"],["TP1",levels.TP1,"#f5c451"],["TP2",levels.TP2,"#20c997"]];
-     const cellW=(zoneWidth-12)/2,baseY=zoneTop+25;
-     ctx.font="bold 8px Arial";ctx.textAlign="left";
-     rows.forEach((r,i)=>{const col=i%2,row=Math.floor(i/2),tx=zoneX+6+col*cellW,ty=baseY+row*15;ctx.fillStyle=r[2];ctx.fillText(r[0],tx,ty);ctx.fillStyle="#f4f7fb";ctx.fillText(fmtLevel(r[1]),tx+39,ty);});
-    }
+
    }
   });
  annotations.forEach(a=>{
@@ -188,25 +182,13 @@ function renderMarketChart(){
   const idx=data.findIndex(v=>v.time>=entryTime),endIdx=data.findIndex(v=>v.time>=exitTime);
   const ix=idx<0?data.length-1:idx,ex=endIdx<0?data.length-1:endIdx;
   const x1=left+step*(ix+.5),x2=left+step*(Math.max(ix,ex)+.5);
-  const yEntry=yOf(t.entry),yStop=yOf(t.sl),exitPrice=Number(t.price),yExit=Number.isFinite(exitPrice)?yOf(exitPrice):yOf(t.tp2);
+  const yEntry=yOf(t.entry),exitPrice=Number(t.price),yExit=Number.isFinite(exitPrice)?yOf(exitPrice):yEntry;
   ctx.lineWidth=1.3;ctx.setLineDash([4,3]);
-  ctx.strokeStyle="#ff5364";ctx.beginPath();ctx.moveTo(x1,yStop);ctx.lineTo(x2,yStop);ctx.stroke();
   ctx.strokeStyle="#48a8ff";ctx.beginPath();ctx.moveTo(x1,yEntry);ctx.lineTo(x2,yEntry);ctx.stroke();
   ctx.setLineDash([]);
   const dot=(x,y,color)=>{ctx.fillStyle=color;ctx.beginPath();ctx.arc(x,y,4,0,Math.PI*2);ctx.fill();ctx.strokeStyle="#101827";ctx.lineWidth=1;ctx.stroke();};
-  dot(x1,yStop,"#ff5364");
   const label=(txt,x,y,color)=>{ctx.font="bold 10px Arial";ctx.textAlign="left";const tw=ctx.measureText(txt).width;ctx.fillStyle="rgba(8,13,22,.88)";ctx.fillRect(x,y-10,tw+8,14);ctx.fillStyle=color;ctx.fillText(txt,x+3,y);};
   label(t.direction==="COMPRAR"?"BUY":"SELL",Math.min(w-right-55,x1+5),yEntry-5,"#70bdff");
-  label("SL "+Number(t.sl).toPrecision(7),Math.min(w-right-110,x1+5),yStop-5,"#ff9aa3");
-  const yTp2=yOf(t.tp2);
-  ctx.strokeStyle="rgba(32,201,151,.48)";ctx.setLineDash([3,4]);ctx.beginPath();ctx.moveTo(x1,yTp2);ctx.lineTo(Math.max(x1+12,x2),yTp2);ctx.stroke();ctx.setLineDash([]);
-  label("TP2 "+Number(t.tp2).toPrecision(7),Math.min(w-right-130,x1+5),yTp2-5,"#8de8c8");
-  const tp1=Number(t.tp1);
-  if(Number.isFinite(tp1)){
-   const yTp1=yOf(tp1);
-   ctx.strokeStyle="rgba(32,201,151,.48)";ctx.setLineDash([3,4]);ctx.beginPath();ctx.moveTo(x1,yTp1);ctx.lineTo(Math.max(x1+12,x2),yTp1);ctx.stroke();ctx.setLineDash([]);
-   label("TP1 "+tp1.toPrecision(7),Math.min(w-right-130,x1+5),yTp1-5,"#8de8c8");
-  }
   if(t.exitTime&&Number.isFinite(exitPrice)){
    const won=t.result==="GANADA";dot(x2,yExit,won?"#20c997":"#ff5364");
    const resultText=won?"GANADA":"PERDIDA";
