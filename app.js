@@ -205,7 +205,7 @@ function detectOrderBlocks(source,side){const found=[];for(let i=Math.max(1,sour
 function latestObBias(source){const all=[...detectOrderBlocks(source,"BUY"),...detectOrderBlocks(source,"SELL")].sort((a,b)=>a.time-b.time).slice(-5);if(all.length<2)return null;const buys=all.filter(x=>x.side==="BUY").length,sells=all.length-buys;if(buys>=3&&buys-sells>=2)return"BUY";if(sells>=3&&sells-buys>=2)return"SELL";return null;}
 function buildStructuralPlan(m1,displayTf){
  const h1=getHigherTimeframeHistory(3600).length?getHigherTimeframeHistory(3600):candlesAtTf(m1,3600),h4=getHigherTimeframeHistory(14400).length?getHigherTimeframeHistory(14400):candlesAtTf(m1,14400),d1=getHigherTimeframeHistory(86400)||[];
- const biasD1=latestObBias(d1),bias1=latestObBias(h1),bias4=latestObBias(h4),auxSeconds=Math.max(60,Number(obAnalysisSeconds)||300),auxBias=latestObBias(candlesAtTf(m1,auxSeconds)),trend=bias1&&bias4&&bias1===bias4?bias1:null;
+ const biasD1=latestObBias(d1),bias1=latestObBias(h1),bias4=latestObBias(h4),trend=bias1&&bias4&&bias1===bias4?bias1:null;
  const lines=[],items=[],activeTf=[300,600,900].includes(Number(displayTf))?Number(displayTf):0,h4s=findDiagonalStructure(h4,14400,"H4");let active=null;
  const push=s=>{for(const [n,l] of [s.line1,s.line2].entries())lines.push({...l,side:s.side,primary:n===0,label:n===0?s.tf+" · "+(s.side==="BUY"?"COMPRA":"VENTA"):"",touches:n===0?s.touches:[],projectPrice1:n===0?s.projectPrice1:s.projectPrice2,projectPrice2:n===0?s.projectPrice1:s.projectPrice2,projectTime:s.projectTime});};
  if(h4s)push(h4s);if(activeTf){active=findDiagonalStructure(candlesAtTf(m1,activeTf),activeTf,"M"+activeTf/60);if(active)push(active);}
