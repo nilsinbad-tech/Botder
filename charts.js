@@ -68,7 +68,7 @@ function setChartGranularity(seconds){chartGranularity=Number(seconds)||60;scale
 function updateCandles(c){if(!Array.isArray(c))return;const oldLength=candleData.length,wasFollowing=followLive,distanceFromEnd=Math.max(0,oldLength-viewEnd);candleData=c.filter(x=>[x.time,x.open,x.high,x.low,x.close].every(Number.isFinite)).sort((a,b)=>a.time-b.time).slice();viewEnd=wasFollowing?candleData.length:Math.max(Math.min(viewCount,candleData.length),Math.min(candleData.length,viewEnd));scaleMin=null;scaleMax=null;scaleWindow="";drawMarketChart();}
 function addCandle(c){if(!c||![c.time,c.open,c.high,c.low,c.close].every(Number.isFinite))return;const last=candleData[candleData.length-1];if(last&&last.time===c.time)candleData[candleData.length-1]=c;else{candleData.push(c);}if(followLive)viewEnd=candleData.length;else viewEnd=Math.min(viewEnd,candleData.length);drawMarketChart();}
 function setChartBacktestTrades(trades){backtestTradeData=Array.isArray(trades)?trades.slice():[];drawMarketChart();}
-function setStructureOverlay(data){structureOverlay=data||{items:[],projection:null};drawMarketChart();}
+function setStructureOverlay(data){const hiddenTypes=new Set(["choch","pivot","sweep"]);structureOverlay={...(data||{}),items:Array.isArray(data?.items)?data.items.filter(a=>!hiddenTypes.has(String(a.type||"").toLowerCase())):[],projection:data?.projection||null};drawMarketChart();}
 function toHeikinAshi(candles){
  let previousOpen=null,previousClose=null;
  return candles.map(c=>{
@@ -105,7 +105,7 @@ function renderMarketChart(){
  // SMC overlays: pivots, liquidity, BOS/CHoCH, OB/FVG and projected zone.
 
  const tag=(txt,x,y,color)=>{if(!txt)return;ctx.font=(color==="#e2a84a"?"bold 6px Arial":"bold 7px Arial");ctx.textAlign="left";let tw=ctx.measureText(txt).width,tx=Math.max(left,Math.min(w-right-tw-8,x)),ty=Math.max(top+10,Math.min(h-bottom,y));ctx.fillStyle="rgba(8,13,22,.9)";ctx.fillRect(tx,ty-8,tw+6,11);ctx.fillStyle=color;ctx.fillText(txt,tx+3,ty);};
- const allAnnotations=(structureOverlay.items||[]).filter(a=>Number.isFinite(a.price)&&a.time<=visibleEnd);const visibleAnnotations=allAnnotations.filter(a=>a.time>=visibleStart);
+ const allAnnotations=(structureOverlay.items||[]).filter(a=>!["choch","pivot","sweep"].includes(String(a.type||"").toLowerCase())&&Number.isFinite(a.price)&&a.time<=visibleEnd);const visibleAnnotations=allAnnotations.filter(a=>a.time>=visibleStart);
  const recent=(type,n,side)=>visibleAnnotations.filter(a=>a.type===type&&(!side||a.side===side)).sort((a,b)=>a.time-b.time);
  const annotations=[
   ...(()=>{const pools=visibleAnnotations.filter(a=>a.type==="liquidity").sort((a,b)=>b.time-a.time);const chosen=[];for(const side of ["BSL","SSL"]){const candidates=pools.filter(a=>String(a.label).includes(side));if(!candidates.length)continue;const newest=candidates[0],sameLevel=candidates.filter(a=>Math.abs(a.price-newest.price)<=Math.abs(newest.price)*0.0005);chosen.push(sameLevel[0]||newest);}return chosen;})(),
