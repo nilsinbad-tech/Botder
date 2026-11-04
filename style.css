@@ -63,7 +63,7 @@ button{cursor:pointer}
 .chart-message{padding:5px 2px 1px;color:#758ba2;font-size:9px}
 .opportunity-card,.signals-section,.stats-card{padding:15px}
 .section-topline h2{margin:4px 0 0;font-size:17px;letter-spacing:-.25px}
-.status-pill,.count-pill,.history-live{flex:none;padding:7px 10px;border:1px solid var(--line);border-radius:30px;background:var(--surface2);color:#b9c9d9;font-size:8px;font-weight:900;letter-spacing:.7px}
+.status-pill{max-width:58%;white-space:normal;text-align:center;line-height:1.3}.status-pill,.count-pill,.history-live{flex:none;padding:7px 10px;border:1px solid var(--line);border-radius:30px;background:var(--surface2);color:#b9c9d9;font-size:8px;font-weight:900;letter-spacing:.7px}
 .count-pill{min-width:29px;text-align:center;color:var(--green);border-color:rgba(57,230,160,.24);background:var(--green-bg)}
 .history-live{color:var(--green);border-color:rgba(57,230,160,.2);background:var(--green-bg)}
 .projection-empty,.empty-state{padding:17px 12px;border:1px dashed #334b64;border-radius:10px;color:var(--muted);font-size:11px;text-align:center;background:rgba(21,36,56,.42)}
