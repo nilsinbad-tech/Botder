@@ -135,7 +135,7 @@ function renderMarketChart(){
  const xAt=time=>{let ix=candleData.findIndex(v=>v.time>=time);if(ix<0)ix=candleData.length-1;return left+(ix-start+.5)*step;};
  const zoneGroups=new Map();
  annotations.filter(a=>a.type==="ob"||a.type==="fvg").forEach(a=>{const key=[a.type,a.time,a.side].join("|");if(!zoneGroups.has(key))zoneGroups.set(key,[]);zoneGroups.get(key).push(a);});
- zoneGroups.forEach((items,key)=>{if(items.length<2)return;const [type,,side]=key.split("|"),vals=items.map(v=>v.price),topY=yOf(Math.max(...vals)),x=xAt(items[0].time),color=type==="ob"?(side==="BUY"?"#20c997":"#ff5364"):(side==="BUY"?"#48a8ff":"#bd8cff");if(type==="ob"){tag(side==="BUY"?"OB ALCISTA":"OB BAJISTA",x+4,Math.max(top+12,topY-5),color);return;}const bottomY=yOf(Math.min(...vals));ctx.fillStyle=color+"12";ctx.fillRect(x,topY,Math.max(18,w-right-x),Math.max(2,bottomY-topY));});
+ zoneGroups.forEach((items,key)=>{if(items.length<2)return;const [type,,side]=key.split("|"),vals=items.map(v=>v.price),topY=yOf(Math.max(...vals)),x=xAt(items[0].time),color=type==="ob"?(side==="BUY"?"#20c997":"#ff5364"):(side==="BUY"?"#48a8ff":"#bd8cff");const bottomY=yOf(Math.min(...vals));ctx.fillStyle=color+(type==="ob"?"20":"12");ctx.fillRect(x,topY,Math.max(18,w-right-x),Math.max(2,bottomY-topY));if(type==="ob"){ctx.strokeStyle=color;ctx.lineWidth=1;ctx.strokeRect(x,topY,Math.max(18,w-right-x),Math.max(2,bottomY-topY));tag(side==="BUY"?"OB ALCISTA":"OB BAJISTA",x+4,Math.max(top+12,topY-5),color);}});
  annotations.forEach(a=>{
   if(a.type==="ob"||a.type==="fvg")return;
   const x=xAt(a.time),y=yOf(a.price);let color="#aab7c8";
