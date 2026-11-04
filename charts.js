@@ -80,7 +80,7 @@ function renderMarketChart(){
  const annotations=[
   ...recent("pivot",2,"").filter(a=>a.label!=="PIVOTE ALTO"),...recent("liquidity",2,""),
   ...recent("bos",2).filter(a=>a.side!=="BULL"),...recent("choch",2),...recent("sweep",2),...visibleAnnotations.filter(a=>a.type==="signal"),
-  ...["BUY","SELL"].flatMap(side=>{const a=allAnnotations.filter(v=>v.type==="ob"&&v.side===side).sort((u,v)=>u.time-v.time),groups=new Map();a.forEach(v=>{if(!groups.has(v.time))groups.set(v.time,[]);groups.get(v.time).push(v);});const valid=[...groups.values()].filter(g=>g.length>=2);return valid.filter(g=>g[0].time<=visibleEnd).slice(-12).flat();})
+  ...["BUY","SELL"].flatMap(side=>{const a=allAnnotations.filter(v=>v.type==="ob"&&v.side===side&&v.time<=visibleEnd).sort((u,v)=>u.time-v.time),groups=new Map();a.forEach(v=>{if(!groups.has(v.time))groups.set(v.time,[]);groups.get(v.time).push(v);});const valid=[...groups.values()].filter(g=>g.length>=2);return valid.slice(-2).flat();})
  ];
  const xAt=time=>{const ix=data.findIndex(v=>v.time>=time);return left+(Math.max(0,ix)+.5)*step;};
  const zoneGroups=new Map();
