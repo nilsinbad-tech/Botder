@@ -147,3 +147,117 @@ button:active{transform:scale(.985)}
  .chart-heading h1{font-size:16px}
 }
 @media(max-width:360px){.timeframe-button{font-size:9px}.stats-card .stat strong{font-size:16px}.stats-card .stat span{font-size:6px}}
+
+
+/* === BOTDER SMART STRUCTURE TRADER · DASHBOARD 2026-11-04 === */
+.app-shell{width:min(100%,1540px);padding:0 22px 22px}
+.topbar{min-height:94px;height:auto;display:grid;grid-template-columns:minmax(190px,1fr) auto minmax(330px,460px);align-items:center;gap:22px;padding:13px 0}
+.brand-mark{width:44px;height:44px;border-radius:13px;font-size:24px}
+.brand strong{font-size:22px}
+.brand small{font-size:9px;letter-spacing:2.4px}
+.topbar-right{justify-content:flex-end}
+.header-performance{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px}
+.header-stat{min-width:0;padding:10px 8px;border:1px solid var(--line);border-radius:10px;background:linear-gradient(145deg,#142438,#0d1928);text-align:center}
+.header-stat strong{display:block;font-size:21px;line-height:1.1;font-weight:950;font-variant-numeric:tabular-nums;color:#f4f8fc}
+.header-stat:nth-child(2) strong{color:var(--green)}
+.header-stat:nth-child(3) strong{color:var(--red)}
+.header-stat:nth-child(4) strong{color:var(--blue)}
+.header-stat span{display:block;margin-top:5px;color:var(--muted);font-size:7px;font-weight:900;letter-spacing:.8px}
+.timeframe-bar{justify-content:flex-start;gap:7px;padding:12px 0 14px}
+.timeframe-button{flex:0 0 62px;max-width:none;min-height:40px;font-size:12px}
+.market-drawer{margin:0 0 14px}
+.main-content{gap:14px}
+.chart-card{padding:15px}
+.chart-heading{padding:2px 3px 13px}
+.chart-heading h1{font-size:21px}
+#chart-area{height:clamp(430px,59vh,700px);min-height:400px;border-radius:11px}
+.chart-configuration{display:none}
+.chart-message{min-height:20px;padding:7px 3px 0}
+.rsi-strip{margin-top:9px;padding:7px 9px 5px;border:1px solid rgba(143,163,185,.13);border-radius:9px;background:#0a1523}
+.rsi-heading{display:flex;align-items:center;justify-content:space-between;color:#a9bdd1;font-size:9px;font-weight:850}
+.rsi-heading strong{color:#70b8ff;letter-spacing:1px}
+#rsi-area{height:86px;width:100%;margin-top:3px}
+.dashboard-bottom{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.05fr) minmax(0,1.2fr);gap:12px;align-items:stretch}
+.dashboard-panel{min-width:0;padding:15px;border:1px solid var(--line);border-radius:14px;background:linear-gradient(155deg,#111f30,#0d1928);box-shadow:var(--shadow)}
+.panel-heading{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:12px}
+.panel-heading h2{margin:4px 0 0;font-size:16px;letter-spacing:-.2px}
+.panel-tag,.open-pill{flex:none;padding:6px 8px;border:1px solid rgba(97,183,255,.2);border-radius:30px;background:rgba(97,183,255,.08);color:#9dcfff;font-size:7px;font-weight:900;letter-spacing:.6px}
+.open-pill{color:var(--muted);border-color:var(--line);background:#142438}
+.open-pill b{color:var(--gold);margin-left:3px}
+.structure-grid{grid-template-columns:1fr;gap:8px;margin-top:0}
+.structure-item{padding:12px 11px;background:#0a1624}
+.structure-item span,.trend-box span,.confirm-row span{font-size:8px;letter-spacing:.9px}
+.structure-item strong{font-size:12px}
+.trend-box{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:15px 12px;border:1px solid rgba(57,230,160,.25);border-radius:10px;background:rgba(57,230,160,.08)}
+.trend-box strong{font-size:16px;color:var(--green);font-weight:950}
+.confirm-row{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:13px 5px;border-bottom:1px solid rgba(143,163,185,.12)}
+.confirm-row strong{font-size:11px;color:#dce9f5}
+.structure-detail{margin-top:10px}
+.stats-card{display:flex;flex-direction:column}
+.stats-card .history-list{max-height:250px;min-height:150px}
+.history-row{padding:11px}
+.history-row strong{font-size:10px}
+.history-result{white-space:nowrap}
+.extra-analysis{border:1px solid var(--line);border-radius:12px;background:var(--surface);overflow:hidden}
+.extra-analysis>summary{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:14px;cursor:pointer;list-style:none;color:#d5e3f0;font-size:9px;font-weight:900;letter-spacing:1px}
+.extra-analysis>summary::-webkit-details-marker{display:none}
+.extra-hint{color:var(--muted);font-size:8px;font-weight:650;letter-spacing:0}
+.extra-content{display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:0 12px 12px}
+.extra-content .opportunity-card,.extra-content .signals-section{min-width:0}
+.manual-operations #operations{padding:0 12px 12px}
+footer{padding:18px 3px 6px}
+@media(max-width:900px){
+ .app-shell{padding-left:13px;padding-right:13px}
+ .topbar{grid-template-columns:1fr auto;gap:10px}
+ .header-performance{grid-column:1/-1;grid-row:2;max-width:100%;width:100%}
+ .topbar-right{grid-column:2;grid-row:1}
+ .dashboard-bottom{grid-template-columns:1fr 1fr}
+ .stats-card{grid-column:1/-1}
+ .stats-card .history-list{max-height:230px}
+}
+@media(max-width:650px){
+ .app-shell{padding:0 9px 14px}
+ .topbar{min-height:0;padding:11px 0 10px;grid-template-columns:minmax(0,1fr) auto;gap:9px}
+ .brand{gap:8px}
+ .brand-mark{width:36px;height:36px;font-size:20px}
+ .brand strong{font-size:18px}
+ .brand small{font-size:7px;letter-spacing:1.5px}
+ .topbar-right{gap:5px}
+ .connection{padding:7px 8px;font-size:8px}
+ .live-indicator{display:none}
+ .header-performance{gap:5px}
+ .header-stat{padding:8px 4px;border-radius:8px}
+ .header-stat strong{font-size:17px}
+ .header-stat span{font-size:6px;letter-spacing:.45px}
+ .timeframe-bar{gap:4px;padding:9px 0 11px}
+ .timeframe-button{flex:1;min-width:0;min-height:37px;padding:0 2px;font-size:10px;border-radius:7px}
+ .market-drawer{margin-bottom:10px}
+ .chart-card{padding:9px}
+ .chart-heading h1{font-size:16px}
+ .price-chip{min-width:108px}
+ #chart-area{height:clamp(390px,55svh,530px);min-height:390px}
+ #rsi-area{height:75px}
+ .dashboard-bottom{grid-template-columns:1fr;gap:9px}
+ .stats-card{grid-column:auto}
+ .dashboard-panel{padding:12px}
+ .structure-grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:5px}
+ .structure-item{padding:9px 7px}
+ .structure-item span{font-size:7px;letter-spacing:.35px}
+ .structure-item strong{font-size:10px}
+ .panel-heading h2{font-size:14px}
+ .trend-box{padding:12px}
+ .trend-box strong{font-size:14px}
+ .confirm-row{padding:11px 4px}
+ .extra-content{grid-template-columns:1fr;padding:0 8px 8px}
+ .extra-analysis>summary{padding:12px}
+ .stats-card .history-list{max-height:240px}
+ footer{font-size:7px}
+}
+@media(max-width:370px){
+ .brand small{letter-spacing:1px}
+ .connection{font-size:7px;padding:6px}
+ .header-stat strong{font-size:15px}
+ .header-stat span{font-size:5px}
+ .structure-grid{grid-template-columns:1fr}
+ #chart-area{height:390px}
+}
