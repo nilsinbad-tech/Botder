@@ -85,17 +85,33 @@ function connectDeriv() {
       if (typeof analyzeCandles === "function") analyzeCandles(selectedSymbol, selectedMarketName(), candleBuffer);
     }
     if (data.msg_type === "tick" && responseSymbol(data) === selectedSymbol && data.tick) {
-      const price = Number(data.tick.quote);
-      const el = document.getElementById("current-price"); if (el && Number.isFinite(price)) el.textContent = price.toFixed(4);
-      if (Number.isFinite(price) && selectedSymbol) {
+      const price = Number(data.tick.quote), epoch = Number(data.tick.epoch);
+      const el = document.getElementById("current-price");
+      if (el && Number.isFinite(price)) {
+        const decimals = (String(data.tick.quote).split(".")[1] || "").length;
+        el.textContent = price.toFixed(Math.min(8, decimals));
+        el.dataset.updatedAt = String(epoch);
+      }
+      if (Number.isFinite(price) && Number.isFinite(epoch) && selectedSymbol) {
         updateOperationPrice(selectedSymbol, price);
-        const interval = selectedGranularity, bucket = Math.floor(Number(data.tick.epoch) / interval) * interval;
-        let live = candleBuffer[candleBuffer.length - 1];
-        if (!live || live.time !== bucket) { live = { time: bucket, open: price, high: price, low: price, close: price }; candleBuffer.push(live); }
-        else { live = { ...live, high: Math.max(live.high, price), low: Math.min(live.low, price), close: price }; candleBuffer[candleBuffer.length - 1] = live; }
+        const interval = selectedGranularity, bucket = Math.floor(epoch / interval) * interval;
+        let live = candleBuffer[candleBuffer.length - 1], candleClosed = false;
+        if (!live || live.time !== bucket) {
+          live = { time: bucket, open: price, high: price, low: price, close: price };
+          candleBuffer.push(live);
+          candleClosed = true;
+        } else {
+          live = { ...live, high: Math.max(live.high, price), low: Math.min(live.low, price), close: price };
+          candleBuffer[candleBuffer.length - 1] = live;
+        }
+        // Actualiza la vela visible con cada tick; el dibujo se agrupa en requestAnimationFrame.
         if (typeof addCandle === "function") addCandle(live);
-        if (typeof analyzeCandles === "function") analyzeCandles(selectedSymbol, selectedMarketName(), candleBuffer);
-        if (typeof updateBacktestTick === "function") updateBacktestTick(Number(data.tick.epoch), price);
+        // Recalcula la estructura/backtest solo cuando comienza una vela nueva (la anterior cerró).
+        if (candleClosed) {
+          if (typeof analyzeCandles === "function" && candleBuffer.length >= 100)
+            analyzeCandles(selectedSymbol, selectedMarketName(), candleBuffer.slice(0, -1));
+          if (typeof updateBacktestTick === "function") updateBacktestTick(epoch, price);
+        }
       }
     }
   };
