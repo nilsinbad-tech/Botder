@@ -202,6 +202,21 @@ function renderMarketChart(){
    ctx.restore();
   }
  }
+ // Canales y puntos de la estructura guardados en cada operación del backtest.
+ visibleTrades.forEach(t=>{
+  (t.structureLines||[]).forEach(line=>{
+   if(![line.time1,line.time2,line.price1,line.price2].every(Number.isFinite))return;
+   const i1=timeIndex(line.time1),i2=timeIndex(line.time2),slope=(line.price2-line.price1)/Math.max(1,i2-i1);
+   const endTime=Number(t.exitTime||visibleEnd)/1000,limit=Math.min(endTime,visibleEnd),endIndex=timeIndex(limit);
+   const fromIndex=Math.max(start,i1),toIndex=Math.min(endIndex,start+viewCount);
+   if(toIndex<fromIndex)return;
+   const x1=left+(fromIndex-start+.5)*step,x2=left+(toIndex-start+.5)*step;
+   const y1=yOf(line.price1+slope*(fromIndex-i1)),y2=yOf(line.price1+slope*(toIndex-i1));
+   ctx.save();ctx.strokeStyle=t.result==="GANADA"?"#39e6a0":t.result==="PERDIDA"?"#ff6579":"#8fa3b9";ctx.globalAlpha=.52;ctx.lineWidth=1;ctx.setLineDash([4,4]);ctx.beginPath();ctx.moveTo(Math.max(left,x1),y1);ctx.lineTo(Math.min(w-right,x2),y2);ctx.stroke();ctx.setLineDash([]);
+   (line.touches||[]).forEach(p=>{const ix=timeIndex(p.time),px=left+(ix-start+.5)*step;if(px<left||px>w-right||p.time>endTime)return;const py=yOf(p.price);ctx.fillStyle=t.result==="GANADA"?"#39e6a0":t.result==="PERDIDA"?"#ff6579":"#8fa3b9";ctx.beginPath();ctx.arc(px,py,2,0,Math.PI*2);ctx.fill();});
+   ctx.restore();
+  });
+ });
  // Historical trade zones and exact price labels.
  visibleTrades.forEach(t=>{
   const entryTime=Number(t.entryTime)/1000,exitTime=Number(t.exitTime||Date.now())/1000;
