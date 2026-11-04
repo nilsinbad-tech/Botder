@@ -264,10 +264,10 @@ function latestObBias(source){const all=[...detectOrderBlocks(source,"BUY"),...d
 function buildStructuralPlan(m1,displayTf){
  const h4=getHigherTimeframeHistory(14400).length?getHigherTimeframeHistory(14400):candlesAtTf(m1,14400),m30=getHigherTimeframeHistory(1800).length?getHigherTimeframeHistory(1800):candlesAtTf(m1,1800),d1=getHigherTimeframeHistory(86400)||[];
  const biasD1=latestObBias(d1),bias4=latestObBias(h4),bias30=latestObBias(m30),trend=bias4;
- const lines=[],items=[],activeTf=[300,600,900].includes(Number(displayTf))?Number(displayTf):0,h4s=findDiagonalStructure(h4,14400,"H4");let active=null;
+ const lines=[],items=[],activeTf=[300,600,900,1800].includes(Number(displayTf))?Number(displayTf):0,h4s=findDiagonalStructure(h4,14400,"H4");let active=null;
  const push=s=>{for(const [n,l] of [s.line1,s.line2].entries())lines.push({...l,side:s.side,primary:n===0,label:n===0?s.tf+" · "+(s.side==="BUY"?"COMPRA":"VENTA"):"",touches:n===0?s.touches:[],projectPrice1:n===0?s.projectPrice1:s.projectPrice2,projectPrice2:n===0?s.projectPrice1:s.projectPrice2,projectTime:s.projectTime});};
  if(h4s)push(h4s);if(activeTf){active=findDiagonalStructure(candlesAtTf(m1,activeTf),activeTf,"M"+activeTf/60);if(active)push(active);}
- const candidate=active||h4s,dir=candidate?.side,last=m1.at(-1),buy=detectOrderBlocks(m1,"BUY"),sell=detectOrderBlocks(m1,"SELL"),targetSeconds=activeTf?1800:3600,targetTf=targetSeconds===1800?"M30":"H1",confirmationTf=activeTf?"M30":"H4",confirmationBias=activeTf?bias30:bias4;
+ const candidate=active||h4s,dir=candidate?.side,last=m1.at(-1),buy=detectOrderBlocks(m1,"BUY"),sell=detectOrderBlocks(m1,"SELL"),targetSeconds=activeTf&&activeTf<1800?1800:3600,targetTf=targetSeconds===1800?"M30":"H1",confirmationTf=activeTf?"M30":"H4",confirmationBias=activeTf?bias30:bias4;
  const targetData=(getHigherTimeframeHistory(targetSeconds)||[]).length?getHigherTimeframeHistory(targetSeconds):candlesAtTf(m1,targetSeconds);
  const getTarget=(side,entry)=>{
   const search=data=>{const end=data.length-2;if(end<6)return null;const piv=pivotsAt(data,end,2),levels=(side==="BUY"?piv.highs:piv.lows).slice().sort((a,b)=>side==="BUY"?a.price-b.price:b.price-a.price);return levels.find(level=>Number.isFinite(level.price)&&(side==="BUY"?level.price>entry:level.price<entry))?{price:levels.find(level=>Number.isFinite(level.price)&&(side==="BUY"?level.price>entry:level.price<entry)).price,time:data[levels.find(level=>Number.isFinite(level.price)&&(side==="BUY"?level.price>entry:level.price<entry)).i]?.time}:null;};
@@ -313,6 +313,9 @@ function analyzeCandles(symbol,market,candles){
  evaluateOpenOperations(symbol,closed);evaluateStrategyJournal(symbol,closed);
  lastProjection=plan.projection;setText("side-analysis-status","● "+plan.status);
  setText("structure-diagnostic","H4 "+(plan.bias4||"—")+" · M30 "+(plan.bias30||"—")+" · OB H4 "+plan.h4Class+" · OB M30 "+plan.m30Class+" · OB M1 "+plan.near.length+"/3 · ZIGZAG 5/3/3");
+ const side=plan.bias4==="BUY"?"COMPRA":plan.bias4==="SELL"?"VENTA":"ESPERANDO",confirm=plan.bias30===plan.bias4&&plan.bias4?"A FAVOR":plan.bias30?"EN CONTRA":"ESPERANDO";
+ setText("trend-h4",side);setText("confirm-m30",confirm);setText("confirm-m1",plan.near.length>=3?"OB 3/3":"OB "+plan.near.length+"/3");
+ setText("touch-status",plan.candidate?.third?"3º TOQUE":"BUSCANDO");setText("ob-status",plan.h4Class||"BUSCANDO");setText("channel-status",plan.candidate?(plan.candidate.side==="BUY"?"ALCISTA":"BAJISTA"):"BUSCANDO");
  renderProjection(plan);
  if(typeof setStructureOverlay==="function")setStructureOverlay({items:plan.items,lines:plan.lines,projection:plan.projection});
  if(plan.projection&&typeof drawTradeLevels==="function")drawTradeLevels({entry:plan.projection.entry,sl:plan.projection.sl,tp1:plan.projection.tp,tp2:plan.projection.tp,time:closed.time,direction:plan.projection.direction},false);
