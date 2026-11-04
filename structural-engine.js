@@ -281,3 +281,59 @@ function markIgnored(id){
  history.unshift({...s,result:"NO ENTRÉ",finishedAt:Date.now()});renderSignals();renderHistory();renderStrategyJournal();
 }
 loadStrategyJournal();
+
+/* FINAL OVERRIDES · señales totalmente automáticas, sin botones de decisión manual. */
+function renderSignals(){
+ const sym=typeof selectedSymbol!=="undefined"?selectedSymbol:null;
+ const active=strategyJournal.filter(t=>(!sym||t.symbol===sym)&&!["GANADA","PERDIDA"].includes(t.result));
+ setText("signal-count",active.length);
+ const safe=v=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+ const price=v=>Number.isFinite(Number(v))?fmt(v):"—";
+ const markup=active.length?active.map(t=>'<article class="signal-card"><div class="muted">'+safe(t.market||t.symbol)+' · '+safe(t.timeframe)+'</div><h3 class="'+(t.direction==="COMPRAR"?"buy":"sell")+'">'+safe(t.direction)+'</h3><div class="levels"><div class="level"><span>ENTRADA · ZONA T3</span><strong>'+price(t.entry)+'</strong></div><div class="level"><span>SL · PRIMER TOQUE</span><strong>'+price(t.sl)+'</strong></div><div class="level"><span>TP1 · LÍNEA OPUESTA</span><strong>'+price(t.tp1)+'</strong></div><div class="level"><span>TP2 · PIVOTE</span><strong>'+price(t.tp2)+'</strong></div></div><div class="muted">'+safe(t.result==="ESPERANDO ENTRADA"?"ESPERANDO QUE EL PRECIO TOQUE LA ZONA":t.result==="ABIERTA"?"ENTRADA ACTIVADA · EN SEGUIMIENTO":t.result)+'</div></article>').join(""):'<div class="empty-state">Buscando la próxima entrada estructural.</div>';
+ ["signals-top","signals-sidebar","signals"].forEach(id=>{const area=document.getElementById(id);if(area)area.innerHTML=markup;});
+}
+function recordStrategyTrade(signal){
+ if(!signal||strategyJournal.some(t=>t.symbol===signal.symbol&&t.structureKey===signal.structureKey))return;
+ strategyJournal.unshift({id:"STR-"+Date.now().toString(36).toUpperCase(),symbol:signal.symbol,market:signal.market,direction:signal.direction,entry:Number(signal.entry),sl:Number(signal.sl),tp1:Number(signal.tp1),tp2:Number(signal.tp2),entryTolerance:Number(signal.entryTolerance)||0,timeframe:signal.timeframe||"",timeframeSeconds:Number(document.getElementById("timeframe")?.value)||60,structureKey:signal.structureKey,touchTime:Number(signal.touchTime||signal.time)*1000,signalTime:Number(signal.time)*1000,entryTime:0,result:"ESPERANDO ENTRADA"});
+ strategyJournal=strategyJournal.slice(0,2000);saveStrategyJournal();renderStrategyJournal();renderSignals();
+}
+function evaluateStrategyJournal(symbol,candle){
+ if(!candle)return;let changed=false;
+ strategyJournal.forEach(t=>{
+  if(t.symbol!==symbol||["GANADA","PERDIDA"].includes(t.result))return;
+  if(t.result==="PENDIENTE"||t.result==="NO ENTRÉ"){t.result="ESPERANDO ENTRADA";t.signalTime=Number(t.signalTime||t.entryTime)||Number(t.touchTime)||0;t.entryTime=0;t.entryTolerance=Number(t.entryTolerance)||0;changed=true;}
+  const entry=Number(t.entry),tol=Math.max(0,Number(t.entryTolerance)||0);
+  if(t.result==="ESPERANDO ENTRADA"){
+   if(candle.time*1000<Number(t.signalTime||0))return;
+   if(!(candle.low<=entry+tol&&candle.high>=entry-tol))return;
+   t.result="ABIERTA";t.entryTime=candle.time*1000;t.triggerPrice=entry;changed=true;
+  }
+  if(t.result!=="ABIERTA"||candle.time*1000<Number(t.entryTime||0))return;
+  const stop=t.direction==="COMPRAR"?candle.low<=t.sl:candle.high>=t.sl;
+  const one=t.direction==="COMPRAR"?candle.high>=t.tp1:candle.low<=t.tp1;
+  const two=t.direction==="COMPRAR"?candle.high>=t.tp2:candle.low<=t.tp2;
+  if(stop){t.result="PERDIDA";t.exitPrice=t.sl;t.exitReason="SL";t.exitTime=candle.time*1000;changed=true;return;}
+  if(two||one){t.result="GANADA";t.exitPrice=two?t.tp2:t.tp1;t.exitReason=two?"TP2":"TP1";t.exitTime=candle.time*1000;changed=true;}
+ });
+ if(changed){saveStrategyJournal();renderStrategyJournal();renderSignals();}
+}
+function renderStrategyJournal(){
+ const bt=Array.isArray(backtestTradeData)?backtestTradeData:(Array.isArray(backtestTrades)?backtestTrades:[]);
+ const closed=bt.filter(t=>t.result==="GANADA"||t.result==="PERDIDA"),wins=closed.filter(t=>t.result==="GANADA").length;
+ const manualClosed=strategyJournal.filter(t=>t.result==="GANADA"||t.result==="PERDIDA");
+ const stats=closed.length?closed:manualClosed,total=closed.length?bt.length:strategyJournal.length;
+ const winCount=stats.filter(t=>t.result==="GANADA").length,lossCount=stats.filter(t=>t.result==="PERDIDA").length;
+ setText("bt-total",total);setText("bt-wins",winCount);setText("bt-losses",lossCount);setText("bt-rate",stats.length?(winCount/stats.length*100).toFixed(1)+"%":"0%");
+ setText("bt-open",strategyJournal.filter(t=>t.result==="ABIERTA"||t.result==="ESPERANDO ENTRADA").length+bt.filter(t=>t.result==="ABIERTA").length);
+ const chartRows=[...bt,...strategyJournal.map(t=>({...t,timeframeSeconds:Number(t.timeframeSeconds)||Number(document.getElementById("timeframe")?.value)||60,entryTime:Number(t.entryTime)||0,zoneTime:Number(t.touchTime)||0,exitTime:Number(t.exitTime)||0,entered:t.result!=="ESPERANDO ENTRADA"}))];
+ if(typeof setChartBacktestTrades==="function")setChartBacktestTrades(chartRows);
+ const area=document.getElementById("history");if(!area)return;
+ const rows=[...bt.map(t=>({...t,_source:"BACKTEST"})),...strategyJournal.map(t=>({...t,_source:"SEÑAL AUTOMÁTICA"}))].sort((a,b)=>Number(b.signalTime||b.entryTime||b.touchTime)-Number(a.signalTime||a.entryTime||a.touchTime)).slice(0,300);
+ const safe=v=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+ area.innerHTML=rows.length?rows.map(t=>{const status=t.result==="ABIERTA"?"ENTRADA ACTIVADA":t.result==="ESPERANDO ENTRADA"?"ESPERANDO ZONA":t.result;return '<article class="history-row"><div><strong>'+safe(t.market||t.symbol)+' · '+safe(t.direction)+' · '+safe(t.timeframe||"")+' · '+safe(t._source)+'</strong><small>'+new Date(Number(t.signalTime||t.entryTime||t.touchTime)||Date.now()).toLocaleString("es-PA",{dateStyle:"short",timeStyle:"short"})+' · ENTRADA '+fmt(t.entry)+' · SL '+fmt(t.sl)+' · TP1 '+fmt(t.tp1)+' · TP2 '+fmt(t.tp2)+(t.exitPrice!=null?' · SALIDA '+fmt(t.exitPrice):'')+(t.exitReason?' · '+safe(t.exitReason):'')+'</small></div><span class="history-result '+safe(t.result||"ABIERTA")+'">'+safe(status)+'</span></article>';}).join(""):'<div class="empty-state">Todavía no hay señales automáticas registradas.</div>';
+}
+function markEntered(){return false;}
+function markIgnored(){return false;}
+loadStrategyJournal();
+renderStrategyJournal();
+renderSignals();
