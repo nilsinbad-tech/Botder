@@ -4,75 +4,116 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#080f1b">
-<title>BOTDER · STRUCTURE</title>
-<link rel="stylesheet" href="style.css?v=tradingview-layout-20261104a">
+<title>BOTDER · SMART STRUCTURE TRADER</title>
+<link rel="stylesheet" href="style.css?v=botder-dashboard-20261104b">
 </head>
 <body>
 <div class="app-shell">
-<header class="topbar">
-  <a class="brand" href="#" aria-label="BOTDER inicio"><span class="brand-mark">B</span><span><strong>BOTDER<span class="brand-accent">.</span></strong><small>STRUCTURE</small></span></a>
-  <div class="topbar-right"><span class="live-indicator"><i></i> MERCADO EN VIVO</span><div id="connection" class="connection offline">DESCONECTADO</div></div>
-</header>
-<nav class="timeframe-bar" aria-label="Temporalidades"><button type="button" class="timeframe-button active" data-tf="60">M1</button><button type="button" class="timeframe-button" data-tf="300">M5</button><button type="button" class="timeframe-button" data-tf="600">M10</button><button type="button" class="timeframe-button" data-tf="900">M15</button><button type="button" class="timeframe-button" data-tf="1800">M30</button><button type="button" class="timeframe-button" data-tf="3600">H1</button><button type="button" class="timeframe-button" data-tf="14400">H4</button></nav>
-
-<details class="market-drawer">
-  <summary><span class="summary-icon">⌕</span><span>MERCADOS</span><span id="market-count" class="market-count">0 instrumentos</span></summary>
-  <div class="market-drawer-content"><div id="api-diagnostic" class="api-diagnostic">Conectando con Deriv...</div><div id="markets" class="market-grid"><div class="empty-state">Cargando instrumentos...</div></div></div>
-</details>
-
-<main class="main-content">
-  <section class="chart-card">
-    <div class="chart-heading">
-      <div><div class="eyebrow">ANÁLISIS ESTRUCTURAL</div><h1 id="chart-title">Selecciona un mercado</h1></div>
-      <div class="price-chip"><span>PRECIO ACTUAL</span><strong id="current-price">---</strong></div>
+  <header class="topbar">
+    <a class="brand" href="#" aria-label="BOTDER inicio">
+      <span class="brand-mark">B</span>
+      <span><strong>BOTDER<span class="brand-accent">.</span></strong><small>SMART STRUCTURE TRADER</small></span>
+    </a>
+    <div class="topbar-right">
+      <span class="live-indicator"><i></i> MERCADO EN VIVO</span>
+      <div id="connection" class="connection offline">DESCONECTADO</div>
     </div>
-    <div id="chart-area"></div>
-    <div class="chart-configuration">
-      <div class="chart-controls"><label class="chart-tf-label">TEMPORALIDAD<select id="timeframe"><option value="60" selected>M1</option><option value="300">M5</option><option value="600">M10</option><option value="900">M15</option><option value="1800">M30</option><option value="3600">H1</option><option value="14400">H4</option></select></label></div>
+    <section class="header-performance" aria-label="Rendimiento">
+      <div class="header-stat"><strong id="bt-total">0</strong><span>OPERACIONES</span></div>
+      <div class="header-stat"><strong id="bt-wins">0</strong><span>GANADAS</span></div>
+      <div class="header-stat"><strong id="bt-losses">0</strong><span>PERDIDAS</span></div>
+      <div class="header-stat"><strong id="bt-rate">0%</strong><span>ACIERTOS</span></div>
+    </section>
+  </header>
+
+  <nav class="timeframe-bar" aria-label="Temporalidades">
+    <button type="button" class="timeframe-button active" data-tf="60">M1</button>
+    <button type="button" class="timeframe-button" data-tf="300">M5</button>
+    <button type="button" class="timeframe-button" data-tf="600">M10</button>
+    <button type="button" class="timeframe-button" data-tf="900">M15</button>
+    <button type="button" class="timeframe-button" data-tf="1800">M30</button>
+    <button type="button" class="timeframe-button" data-tf="3600">H1</button>
+    <button type="button" class="timeframe-button" data-tf="14400">H4</button>
+  </nav>
+
+  <details class="market-drawer">
+    <summary><span class="summary-icon">⌕</span><span>MERCADOS</span><span id="market-count" class="market-count">0 instrumentos</span></summary>
+    <div class="market-drawer-content">
+      <div id="api-diagnostic" class="api-diagnostic">Conectando con Deriv...</div>
+      <div id="markets" class="market-grid"><div class="empty-state">Cargando instrumentos...</div></div>
     </div>
+  </details>
 
-    <div id="chart-message" class="chart-message">Selecciona un instrumento para cargar el historial.</div>
-  </section>
+  <main class="main-content">
+    <section class="chart-card">
+      <div class="chart-heading">
+        <div><div class="eyebrow">ANÁLISIS ESTRUCTURAL</div><h1 id="chart-title">Selecciona un mercado</h1></div>
+        <div class="price-chip"><span>PRECIO ACTUAL</span><strong id="current-price">---</strong></div>
+      </div>
+      <div id="chart-area" aria-label="Gráfico de velas"></div>
+      <div class="rsi-strip">
+        <div class="rsi-heading"><strong>RSI</strong><span id="rsi-current">RSI: --</span></div>
+        <div id="rsi-area"></div>
+      </div>
+      <div class="chart-configuration">
+        <div class="chart-controls">
+          <label class="chart-tf-label">TEMPORALIDAD
+            <select id="timeframe">
+              <option value="60" selected>M1</option><option value="300">M5</option><option value="600">M10</option><option value="900">M15</option><option value="1800">M30</option><option value="3600">H1</option><option value="14400">H4</option>
+            </select>
+          </label>
+        </div>
+      </div>
+      <div id="chart-message" class="chart-message">Selecciona un instrumento para cargar el historial.</div>
+    </section>
 
-  <section class="opportunity-card">
-    <div class="section-topline"><div><div class="eyebrow">PROYECCIÓN EN EL GRÁFICO</div><h2>Próxima oportunidad</h2></div><span id="projection-status" class="status-pill">ANALIZANDO</span></div>
-    <div id="projection-card" class="projection-empty">Buscando dos toques válidos para proyectar el tercero...</div>
-  </section>
+    <section class="dashboard-bottom">
+      <section class="dashboard-panel structure-summary">
+        <div class="panel-heading"><div><div class="eyebrow">ESTRUCTURA H4</div><h2>3 toques y zonas</h2></div><span class="panel-tag">ZIGZAG 5/3/3</span></div>
+        <div class="structure-grid">
+          <div class="structure-item"><span>3 TOQUES H4</span><strong id="touch-status">BUSCANDO</strong></div>
+          <div class="structure-item"><span>OB H4</span><strong id="ob-status">BUSCANDO</strong></div>
+          <div class="structure-item"><span>CANAL</span><strong id="channel-status">BUSCANDO</strong></div>
+        </div>
+      </section>
 
-  <section class="signals-section">
-    <div class="section-topline"><div><div class="eyebrow">CONFIRMACIÓN</div><h2>Señales disponibles</h2></div><span id="signal-count" class="count-pill">0</span></div>
-    <div id="signals-top"><div class="empty-state">Todavía no hay señales confirmadas.</div></div>
-  </section>
+      <section class="dashboard-panel confirmation-panel">
+        <div class="panel-heading"><div><div class="eyebrow">DIRECCIÓN Y CONFIRMACIÓN</div><h2>Lectura del mercado</h2></div><span class="panel-tag">H4 + M30 + M1</span></div>
+        <div class="trend-box"><span>TENDENCIA H4</span><strong id="trend-h4">ESPERANDO</strong></div>
+        <div class="confirm-row"><span>CONFIRMACIÓN M30</span><strong id="confirm-m30">ESPERANDO</strong></div>
+        <div class="confirm-row"><span>CONFIRMACIÓN M1</span><strong id="confirm-m1">ESPERANDO</strong></div>
+        <div class="structure-detail"><span id="side-analysis-status">Esperando mercado</span><small id="structure-diagnostic">Esperando estructura H4 / M30</small></div>
+      </section>
 
-  <section class="dashboard-bottom">  <section class="structure-summary">
-    <div class="section-topline"><div><div class="eyebrow">LECTURA DEL MERCADO</div><h2>Estructura y confirmaciones</h2></div><span class="history-live">H4 + M30</span></div>
-    <div class="structure-grid">
-      <div class="structure-item"><span>TENDENCIA H4</span><strong id="trend-h4">ESPERANDO</strong></div>
-      <div class="structure-item"><span>CONFIRMACIÓN M30</span><strong id="confirm-m30">ESPERANDO</strong></div>
-      <div class="structure-item"><span>CONFIRMACIÓN M1</span><strong id="confirm-m1">ESPERANDO</strong></div>
-      <div class="structure-item"><span>3 TOQUES H4</span><strong id="touch-status">BUSCANDO</strong></div>
-      <div class="structure-item"><span>OB H4</span><strong id="ob-status">BUSCANDO</strong></div>
-      <div class="structure-item"><span>CANAL</span><strong id="channel-status">BUSCANDO</strong></div>
-    </div>
-    <div class="structure-detail"><span id="side-analysis-status">Esperando mercado</span><small id="structure-diagnostic">Esperando estructura H4 / M30</small></div>
-  </section>  <section class="stats-card">
-    <div class="section-topline"><div><div class="eyebrow">RENDIMIENTO DE LA ESTRATEGIA</div><h2>Historial</h2></div><span class="history-live">REGISTRO AUTOMÁTICO</span></div>
-    <div class="stats-grid">
-      <div class="stat win"><strong id="bt-wins">0</strong><span>GANADAS</span></div>
-      <div class="stat loss"><strong id="bt-losses">0</strong><span>PERDIDAS</span></div>
-      <div class="stat rate"><strong id="bt-rate">0%</strong><span>ACIERTOS</span></div>
-      <div class="stat total"><strong id="bt-total">0</strong><span>OPERACIONES</span></div>
-    </div>
-    <div class="open-count">EN CURSO <strong id="bt-open">0</strong></div>
-    <div id="history" class="history-list"><div class="empty-state">El historial aparecerá cuando se confirmen entradas.</div></div>
-  </section></section>
+      <section class="dashboard-panel stats-card">
+        <div class="panel-heading"><div><div class="eyebrow">REGISTRO DE OPERACIONES</div><h2>Historial</h2></div><span class="open-pill">ABIERTAS <b id="bt-open">0</b></span></div>
+        <div id="history" class="history-list"><div class="empty-state">El historial aparecerá cuando se confirmen entradas.</div></div>
+      </section>
+    </section>
 
-  <details class="manual-operations"><summary>OPERACIONES MARCADAS COMO ENTRÉ <span id="operation-count">0</span></summary><div id="operations"><div class="empty-state">No hay operaciones manuales abiertas.</div></div></details>
-</main>
-<footer><span>BOTDER STRUCTURE</span><span>ANÁLISIS Y SEÑALES · EJECUCIÓN MANUAL</span></footer>
+    <details class="extra-analysis">
+      <summary><span>OPORTUNIDADES Y SEÑALES</span><span class="extra-hint">Abrir análisis detallado</span></summary>
+      <div class="extra-content">
+        <section class="opportunity-card">
+          <div class="section-topline"><div><div class="eyebrow">PROYECCIÓN EN EL GRÁFICO</div><h2>Próxima oportunidad</h2></div><span id="projection-status" class="status-pill">ANALIZANDO</span></div>
+          <div id="projection-card" class="projection-empty">Buscando zonas de entrada...</div>
+        </section>
+        <section class="signals-section">
+          <div class="section-topline"><div><div class="eyebrow">CONFIRMACIÓN</div><h2>Señales disponibles</h2></div><span id="signal-count" class="count-pill">0</span></div>
+          <div id="signals-top"><div class="empty-state">Todavía no hay señales confirmadas.</div></div>
+        </section>
+      </div>
+    </details>
+
+    <details class="manual-operations">
+      <summary>OPERACIONES MARCADAS COMO ENTRÉ <span id="operation-count">0</span></summary>
+      <div id="operations"><div class="empty-state">No hay operaciones manuales abiertas.</div></div>
+    </details>
+  </main>
+  <footer><span>BOTDER SMART STRUCTURE TRADER</span><span>ANÁLISIS Y SEÑALES · EJECUCIÓN MANUAL</span></footer>
 </div>
-<script src="charts.js?v=tradingview-layout-20261104a"></script>
-<script src="app.js?v=tradingview-layout-20261104a"></script>
-<script src="deriv.js?v=tradingview-layout-20261104a"></script>
+<script src="charts.js?v=botder-dashboard-20261104b"></script>
+<script src="app.js?v=botder-dashboard-20261104b"></script>
+<script src="deriv.js?v=botder-dashboard-20261104b"></script>
 </body>
 </html>
