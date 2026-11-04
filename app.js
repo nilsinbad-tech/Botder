@@ -53,7 +53,7 @@ function applyRsiSettings(){
 document.addEventListener("DOMContentLoaded",()=>{["rsi-timeframe","rsi-period","rsi-low","rsi-mid","rsi-high","ema-periods","crt-lookback","sl-buffer","tp1-r","tp2-r","tp1-close","protect-after-tp1"].forEach(id=>{const e=document.getElementById(id);if(e)e.addEventListener("change",()=>{applyRsiSettings();readStrategySettings();});});});
 
 
-const strategyConfig={emaPeriods:[9,20,50],rsiPeriod:14,adxPeriod:14,atrPeriod:14,bbPeriod:20,bbDeviation:2,adxMin:20,slBufferAtr:.12};
+const strategyConfig={emaPeriods:[9,20,50],rsiPeriod:14};
 
 let analysisGranularity=60,lastProjection=null,lastProjectionNotice="";
 function emaSeries(v,p){const o=Array(v.length).fill(null);if(v.length<p)return o;let e=v.slice(0,p).reduce((a,b)=>a+b,0)/p,k=2/(p+1);o[p-1]=e;for(let i=p;i<v.length;i++){e=v[i]*k+e*(1-k);o[i]=e;}return o;}
@@ -64,13 +64,13 @@ function bollingerSeries(v,p=20,m=2){let o=Array(v.length).fill(null);for(let i=
 function pivotsAt(d,end,depth=2){let highs=[],lows=[];for(let i=Math.max(depth,end-180);i<=end-depth;i++){let h=true,l=true;for(let j=1;j<=depth;j++){if(d[i].high<=d[i-j].high||d[i].high<d[i+j].high)h=false;if(d[i].low>=d[i-j].low||d[i].low>d[i+j].low)l=false;}if(h)highs.push({i,price:d[i].high});if(l)lows.push({i,price:d[i].low});}return{highs,lows};}
 function lastPivot(a){return a.length?a[a.length-1]:null;}
 function reject(c,buy){let body=Math.abs(c.close-c.open),lw=Math.min(c.open,c.close)-c.low,uw=c.high-Math.max(c.open,c.close);return buy?c.close>c.open&&lw>=Math.max(body*.35,(c.high-c.low)*.2):c.close<c.open&&uw>=Math.max(body*.35,(c.high-c.low)*.2);}
-function getZones(d,i,atr){let ob=[],fvg=[];for(let k=Math.max(2,i-35);k<=i;k++){let c=d[k];if(k<i&&c.close<c.open&&d.slice(k+1,Math.min(i+1,k+5)).some(x=>x.close>c.high+atr*.2))ob.push({side:"BUY",low:c.low,high:Math.max(c.open,c.close),i:k});if(k<i&&c.close>c.open&&d.slice(k+1,Math.min(i+1,k+5)).some(x=>x.close<c.low-atr*.2))ob.push({side:"SELL",low:Math.min(c.open,c.close),high:c.high,i:k});if(d[k].low>d[k-2].high)fvg.push({side:"BUY",low:d[k-2].high,high:d[k].low,i:k});if(d[k].high<d[k-2].low)fvg.push({side:"SELL",low:d[k].high,high:d[k-2].low,i:k});}return{ob,fvg};}
-function makeIndicators(d){let close=d.map(x=>x.close);return{e9:emaSeries(close,9),e20:emaSeries(close,20),e50:emaSeries(close,50),rsi:rsiSeries(close,14),atr:atrSeries(d,14),adx:adxSeries(d,14),bb:bollingerSeries(close,20,2)};}
+function getZones(d,i){let ob=[],fvg=[];for(let k=Math.max(2,i-35);k<=i;k++){let c=d[k],future=d.slice(k+1,Math.min(i+1,k+5));if(k<i&&c.close<c.open&&future.some(x=>x.close>c.high))ob.push({side:"BUY",low:c.low,high:Math.max(c.open,c.close),i:k});if(k<i&&c.close>c.open&&future.some(x=>x.close<c.low))ob.push({side:"SELL",low:Math.min(c.open,c.close),high:c.high,i:k});if(d[k].low>d[k-2].high)fvg.push({side:"BUY",low:d[k-2].high,high:d[k].low,i:k});if(d[k].high<d[k-2].low)fvg.push({side:"SELL",low:d[k].high,high:d[k-2].low,i:k});}return{ob,fvg};}
+function makeIndicators(d){let close=d.map(x=>x.close);return{e9:emaSeries(close,9),e20:emaSeries(close,20),e50:emaSeries(close,50),rsi:rsiSeries(close,14)};}
 function structureAt(d,i,x){
- const c=d[i],prev=d[i-1],atr=x.atr[i];
- if(!c||!prev||!atr||x.rsi[i]==null)return{annotations:[],signal:null,projection:null};
+ const c=d[i],prev=d[i-1];
+ if(!c||!prev||x.rsi[i]==null)return{annotations:[],signal:null,projection:null};
  const piv=pivotsAt(d,i-2),hi=lastPivot(piv.highs),lo=lastPivot(piv.lows),priorHi=piv.highs.length>1?piv.highs.at(-2):null,priorLo=piv.lows.length>1?piv.lows.at(-2):null;
- const z=getZones(d,i,atr),ann=[];
+ const z=getZones(d,i),ann=[];
  const mark=(type,price,label,side,time=c.time)=>{if(Number.isFinite(price))ann.push({type,price,label,side,time});};
  piv.highs.slice(-8).forEach(p=>mark("pivot",p.price,"PIVOTE ALTO","",d[p.i].time));
  piv.lows.slice(-8).forEach(p=>mark("pivot",p.price,"PIVOTE BAJO","",d[p.i].time));
@@ -107,15 +107,15 @@ function structureAt(d,i,x){
  };
  const emaBuy=x.e9[i]>x.e20[i]&&x.e20[i]>x.e50[i]&&x.e9[i]>x.e9[i-1]&&x.e20[i]>=x.e20[i-1]&&c.close>x.e50[i]&&crossRecent("BUY",sweepBuy?.index);
  const emaSell=x.e9[i]<x.e20[i]&&x.e20[i]<x.e50[i]&&x.e9[i]<x.e9[i-1]&&x.e20[i]<=x.e20[i-1]&&c.close<x.e50[i]&&crossRecent("SELL",sweepSell?.index);
- const obBuy=z.ob.some(v=>v.side==="BUY"&&c.low<=v.high&&c.close>=v.low),fvgBuy=z.fvg.some(v=>v.side==="BUY"&&c.low<=v.high&&c.close>=v.low);
- const obSell=z.ob.some(v=>v.side==="SELL"&&c.high>=v.low&&c.close<=v.high),fvgSell=z.fvg.some(v=>v.side==="SELL"&&c.high>=v.low&&c.close<=v.high);
+ const obBuy=z.ob.some(v=>v.side==="BUY"&&c.low<=v.high&&c.close>=v.low);
+ const obSell=z.ob.some(v=>v.side==="SELL"&&c.high>=v.low&&c.close<=v.high);
  const bbBuy=d.slice(Math.max(0,i-5),i+1).some((v,j)=>{const b=x.bb[Math.max(0,i-5)+j];return b&&v.low<=b.lower;})&&c.close>x.bb[i].lower;
  const bbSell=d.slice(Math.max(0,i-5),i+1).some((v,j)=>{const b=x.bb[Math.max(0,i-5)+j];return b&&v.high>=b.upper;})&&c.close<x.bb[i].upper;
  const buy=sweptLow&&reject(c,true)&&chochBuy&&emaBuy&&x.rsi[i]>50&&obBuy;
  const sell=sweptHigh&&reject(c,false)&&chochSell&&emaSell&&x.rsi[i]<50&&obSell;
  let signal=null;
  if(buy||sell){
-  const direction=buy?"COMPRAR":"VENDER",entry=c.close,sl=buy?Math.min(c.low,sweepBuy.level)-atr*strategyConfig.slBufferAtr:Math.max(c.high,sweepSell.level)+atr*strategyConfig.slBufferAtr,risk=Math.abs(entry-sl);
+  const direction=buy?"COMPRAR":"VENDER",entry=c.close,sl=buy?Math.min(c.low,sweepBuy.level):Math.max(c.high,sweepSell.level),risk=Math.abs(entry-sl);
   const targets=buy?piv.highs.filter(p=>p.price>entry).map(p=>p.price).sort((a,b)=>a-b):piv.lows.filter(p=>p.price<entry).map(p=>p.price).sort((a,b)=>b-a);
   const structuralTp1=targets.find(v=>Math.abs(v-entry)>=risk*1.2),tp1=structuralTp1||(buy?entry+risk*1.5:entry-risk*1.5);
   const structuralTp2=targets.find(v=>Math.abs(v-entry)>=risk*2&&(buy?v>tp1:v<tp1)),tp2=structuralTp2||(buy?entry+risk*2.5:entry-risk*2.5);
@@ -134,10 +134,10 @@ function structureAt(d,i,x){
  return{annotations:ann,signal,projection};
 }
 function buildZoneOutlook(d,i,x){
- if(!d[i]||!x.atr[i])return{buy:null,sell:null};
- const p=pivotsAt(d,i-2),lo=lastPivot(p.lows),hi=lastPivot(p.highs),z=getZones(d,i,x.atr[i]),atr=x.atr[i];
+ if(!d[i])return{buy:null,sell:null};
+ const p=pivotsAt(d,i-2),lo=lastPivot(p.lows),hi=lastPivot(p.highs),z=getZones(d,i);
  const make=side=>{const ob=z.ob.filter(v=>v.side===side).at(-1);if(!ob)return null;const low=Math.min(ob.low,ob.high),high=Math.max(ob.low,ob.high),buy=side==="BUY",entry=buy?high:low,stopPool=buy?lo:hi,targetPool=buy?hi:lo;
- const sl=stopPool&&((buy&&stopPool.price<entry)||(!buy&&stopPool.price>entry))?stopPool.price+(buy?-1:1)*atr*.08:(buy?low-atr*.15:high+atr*.15),risk=Math.abs(entry-sl);
+ const sl=stopPool&&((buy&&stopPool.price<entry)||(!buy&&stopPool.price>entry))?stopPool.price:(buy?low:high),risk=Math.abs(entry-sl);
  const tp=targetPool&&((buy&&targetPool.price>entry)||(!buy&&targetPool.price<entry))?targetPool.price+(buy?1:-1)*atr*.1:(buy?entry+risk*2:entry-risk*2);
  return{direction:buy?"COMPRAR":"VENDER",low,high,entry,sl,tp,source:buy?"OB ALCISTA":"OB BAJISTA",reason:buy?"Entrada en borde superior. SL en liquidez SSL inferior. TP apenas por encima de liquidez BSL.":"Entrada en borde inferior. SL en liquidez BSL superior. TP apenas por debajo de liquidez SSL."};};
  return{buy:make("BUY"),sell:make("SELL")};
