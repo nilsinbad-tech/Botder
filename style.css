@@ -95,7 +95,7 @@ button{cursor:pointer}
 .stat.win strong{color:var(--green)}.stat.loss strong{color:var(--red)}.stat.rate strong{color:var(--blue)}.stat.total strong{color:var(--text)}
 .open-count{display:flex;align-items:center;justify-content:flex-end;gap:8px;padding:10px 2px;color:var(--muted);font-size:9px;font-weight:850;letter-spacing:.7px}
 .open-count strong{color:var(--gold);font-size:13px}
-.history-list{display:flex;flex-direction:column;gap:6px}
+.history-list{display:flex;flex-direction:column;gap:6px;max-height:520px;overflow-y:auto;overscroll-behavior:contain;padding-right:2px}
 .history-row{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:8px;padding:10px;border:1px solid rgba(143,163,185,.12);border-radius:9px;background:#0d1928}
 .history-row strong{display:block;font-size:10px}.history-row small{display:block;margin-top:4px;color:var(--muted);font-size:8px;line-height:1.5}
 .history-result{font-size:9px;font-weight:950;letter-spacing:.5px}.history-result.GANADA{color:var(--green)}.history-result.PERDIDA{color:var(--red)}.history-result.ABIERTA{color:var(--gold)}
