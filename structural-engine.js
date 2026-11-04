@@ -119,3 +119,8 @@ function renderStrategyJournal(){
  area.innerHTML=strategyJournal.length?strategyJournal.map(t=>{const status=t.result==="PENDIENTE"?"SEÑAL · SIN DECISIÓN":t.result==="NO ENTRÉ"?"NO ENTRÉ":t.result==="ABIERTA"?"EN CURSO":t.result;return '<article class="history-row"><div><strong>'+safe(t.market||t.symbol)+' · '+safe(t.direction)+' · '+safe(t.timeframe)+'</strong><small>'+new Date(t.entryTime).toLocaleString("es-PA",{dateStyle:"short",timeStyle:"short"})+' · T3 '+new Date(t.touchTime||t.entryTime).toLocaleTimeString("es-PA",{hour:"2-digit",minute:"2-digit"})+' · ENTRADA '+fmt(t.entry)+' · SL '+fmt(t.sl)+' · TP1 '+fmt(t.tp1)+' · TP2 '+fmt(t.tp2)+(t.exitPrice!=null?' · SALIDA '+fmt(t.exitPrice):'')+(t.exitReason?' · '+safe(t.exitReason):'')+'</small></div><span class="history-result '+(t.result||"ABIERTA")+'">'+status+'</span></article>';}).join(""):'<div class="empty-state">Aún no hay señales registradas.</div>';
 }
 if(typeof renderStrategyJournal==="function")renderStrategyJournal();
+
+if(typeof operations!=="undefined"&&typeof strategyJournal!=="undefined"){
+ const restored=strategyJournal.filter(t=>t.entered===true&&t.result==="ABIERTA").map(t=>({...t,id:t.id,enteredAt:t.enteredAt||t.entryTime,currentPrice:Number(t.entry),result:"OPEN"}));
+ operations.splice(0,operations.length,...restored);if(typeof renderOperations==="function")renderOperations();
+}
