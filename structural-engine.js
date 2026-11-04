@@ -124,3 +124,12 @@ if(typeof operations!=="undefined"&&typeof strategyJournal!=="undefined"){
  const restored=strategyJournal.filter(t=>t.entered===true&&t.result==="ABIERTA").map(t=>({...t,id:t.id,enteredAt:t.enteredAt||t.entryTime,currentPrice:Number(t.entry),result:"OPEN"}));
  operations.splice(0,operations.length,...restored);if(typeof renderOperations==="function")renderOperations();
 }
+
+function renderProjection(plan){
+ const el=document.getElementById("projection-card"),status=document.getElementById("projection-status");if(!el)return;
+ if(!plan?.projection){el.className="projection-empty";el.textContent=(plan?.status||"BUSCANDO ESTRUCTURA")+" · Esperando un canal válido.";if(status)status.textContent=plan?.status||"ANALIZANDO";return;}
+ const p=plan.projection,buy=p.direction==="COMPRAR",price=v=>Number.isFinite(Number(v))?Number(v).toPrecision(8).replace(/0+$/,"").replace(/\.$/,""):"—";
+ el.className="projection-card"+(buy?"":" projection-sell");
+ el.innerHTML='<div class="projection-stage '+(buy?"":"sell")+'">'+(buy?"COMPRA · CANAL ALCISTA":"VENTA · CANAL BAJISTA")+'</div><div class="projection-meta">'+p.stage+' · TERCER TOQUE '+p.timeframe+' · TP2 '+(p.targetTf||"ESTRUCTURAL")+'</div><div class="projection-levels"><div class="projection-level"><span>ENTRADA</span><strong>'+price(p.entry)+'</strong></div><div class="projection-level"><span>SL · T1 + MARGEN</span><strong>'+price(p.sl)+'</strong></div><div class="projection-level"><span>TP1 · LÍNEA OPUESTA</span><strong>'+price(p.tp1)+'</strong></div><div class="projection-level"><span>TP2 · PIVOTE</span><strong>'+price(p.tp2)+'</strong></div></div><div class="projection-meta">Confirmación: rechazo en T3 y tres velas cerradas consecutivas a favor.<br><b>CONTEXTO H4:</b> '+(plan.recommendation||"SOLO INFORMATIVO")+' · no bloquea la señal.</div>';
+ if(status)status.textContent=p.stage;
+}
