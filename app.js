@@ -106,8 +106,6 @@ function structureAt(d,i,x){
  const emaSell=x.e9[i]<x.e20[i]&&x.e20[i]<x.e50[i]&&x.e9[i]<x.e9[i-1]&&x.e20[i]<=x.e20[i-1]&&c.close<x.e50[i]&&crossRecent("SELL",sweepSell?.index);
  const obBuy=z.ob.some(v=>v.side==="BUY"&&c.low<=v.high&&c.close>=v.low);
  const obSell=z.ob.some(v=>v.side==="SELL"&&c.high>=v.low&&c.close<=v.high);
- const bbBuy=d.slice(Math.max(0,i-5),i+1).some((v,j)=>{const b=x.bb[Math.max(0,i-5)+j];return b&&v.low<=b.lower;})&&c.close>x.bb[i].lower;
- const bbSell=d.slice(Math.max(0,i-5),i+1).some((v,j)=>{const b=x.bb[Math.max(0,i-5)+j];return b&&v.high>=b.upper;})&&c.close<x.bb[i].upper;
  const buy=sweptLow&&reject(c,true)&&chochBuy&&emaBuy&&x.rsi[i]>50&&obBuy;
  const sell=sweptHigh&&reject(c,false)&&chochSell&&emaSell&&x.rsi[i]<50&&obSell;
  let signal=null;
@@ -163,17 +161,14 @@ function analyzeCandles(symbol,market,candles){
  const r=structureAt(d,i,x);
  evaluateOpenOperations(symbol,d[i]);
  if(r.signal){const live=candles.at(-1);if(live&&live.time>d[i].time&&live.close>=r.signal.entry){}}
- // Las zonas y estructura se calculan en M5; las entradas y filtros permanecen en M1.
- const m5=aggregateStructureM5(d),mx=makeIndicators(m5),mi=m5.length-2;
- let structureItems=[],structureProjection=null,zoneOutlook=null;
- if(mi>=65){
-  const last=structureAt(m5,mi,mx);structureProjection=last.projection;zoneOutlook=buildZoneOutlook(m5,mi,mx);
-  for(let k=65;k<=mi;k++){
-   const part=structureAt(m5,k,mx);structureItems.push(...part.annotations);
+ // Toda la estructura, las zonas y las entradas se calculan en M1.
+ let structureItems=[],structureProjection=r.projection,zoneOutlook=null;
+ if(i>=65){
+  zoneOutlook=buildZoneOutlook(d,i,x);
+  for(let k=65;k<=i;k++){
+   const part=structureAt(d,k,x);structureItems.push(...part.annotations);
   }
  }
- // Señal de entrada M1: se añade sin llenar el gráfico de marcas históricas.
- if(r.signal)structureItems.push(...r.annotations.filter(v=>v.type==="signal"));
  const unique=[...new Map(structureItems.map(v=>[v.type+"|"+v.time+"|"+v.price+"|"+v.label,v])).values()];
  lastProjection=structureProjection;renderProjectionCard(zoneOutlook);
  const counts={pivot:unique.filter(a=>a.type==="pivot").length,liquidity:unique.filter(a=>a.type==="liquidity").length,bos:unique.filter(a=>a.type==="bos").length,choch:unique.filter(a=>a.type==="choch").length,ob:unique.filter(a=>a.type==="ob").length/2,fvg:unique.filter(a=>a.type==="fvg").length/2};
@@ -191,7 +186,6 @@ function analyzeCandles(symbol,market,candles){
  if(typeof drawTradeLevels==="function")drawTradeLevels(r.signal);
 }
 function drawRsiPanel(series){let host=document.getElementById("rsi-area");if(!host)return;host.innerHTML="";let cv=document.createElement("canvas");cv.style.cssText="width:100%;height:100%;display:block";host.appendChild(cv);let dpr=Math.min(devicePixelRatio||1,2),w=host.clientWidth,h=host.clientHeight;cv.width=w*dpr;cv.height=h*dpr;let x=cv.getContext("2d");x.scale(dpr,dpr);for(let level of [40,50,60]){let y=10+(100-level)/100*(h-28);x.strokeStyle=level===50?"#8495aa":"#43546b";x.setLineDash([4,3]);x.beginPath();x.moveTo(24,y);x.lineTo(w-8,y);x.stroke();x.setLineDash([]);x.fillStyle="#a8b5c6";x.font="9px Arial";x.fillText(String(level),2,y+3);}x.beginPath();let st=Math.max(0,series.length-200),beg=false;for(let i=st;i<series.length;i++){if(series[i]==null)continue;let px=24+(i-st)/Math.max(1,series.length-st-1)*(w-32),py=10+(100-series[i])/100*(h-28);if(!beg){x.moveTo(px,py);beg=true;}else x.lineTo(px,py);}x.strokeStyle="#48a8ff";x.lineWidth=1.7;x.stroke();setText("rsi-current","RSI: "+(series.at(-1)==null?"--":series.at(-1).toFixed(1)));}
-function drawAdxPanel(data){let host=document.getElementById("adx-area");if(!host||!data)return;host.innerHTML="";let cv=document.createElement("canvas");cv.style.cssText="width:100%;height:100%;display:block";host.appendChild(cv);let dpr=Math.min(devicePixelRatio||1,2),w=host.clientWidth,h=host.clientHeight;cv.width=w*dpr;cv.height=h*dpr;let c=cv.getContext("2d");c.scale(dpr,dpr);let left=28,right=8,top=10,bottom=18,vals=[...data.adx,...data.pdi,...data.mdi].filter(Number.isFinite),max=Math.max(40,...vals);for(let v of [20,40]){let y=top+(max-v)/max*(h-top-bottom);c.strokeStyle="#43546b";c.setLineDash([4,3]);c.beginPath();c.moveTo(left,y);c.lineTo(w-right,y);c.stroke();c.setLineDash([]);c.fillStyle="#a8b5c6";c.font="9px Arial";c.fillText(String(v),3,y+3);}let st=Math.max(0,data.adx.length-200);[[data.adx,"#f5bd4f"],[data.pdi,"#20c997"],[data.mdi,"#ff5364"]].forEach(([arr,col])=>{c.beginPath();let b=false;for(let i=st;i<arr.length;i++){if(arr[i]==null)continue;let px=left+(i-st)/Math.max(1,arr.length-st-1)*(w-left-right),py=top+(max-arr[i])/max*(h-top-bottom);if(!b){c.moveTo(px,py);b=true;}else c.lineTo(px,py);}c.strokeStyle=col;c.lineWidth=1.5;c.stroke();});}
 function optimizeBacktest(){setText("optimizer-result","Validación pendiente: no se optimizan parámetros para forzar un porcentaje de acierto.");}
 function setAnalysisGranularity(){analysisGranularity=60;}
 function setBacktestHistory(symbol,market,candles){if(!candles?.length)return;m1Candles=candles.slice();runBacktest(symbol,market,m1Candles);}
