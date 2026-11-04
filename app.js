@@ -214,7 +214,7 @@ function findDiagonalStructure(source,seconds,tf){
    const p1=pts[ai],p2=pts[bi],dx=p2.i-p1.i;
    if(dx<6)continue;
    const slope=(p2.price-p1.price)/dx;
-   if(Math.sign(slope)!==sign||Math.abs(p2.price-p1.price)<median*.12)continue;
+   if(Math.sign(slope)!==sign||Math.abs(p2.price-p1.price)<median*.35)continue;
    const aligned=pts.filter(q=>Math.abs(q.price-(p1.price+slope*(q.i-p1.i)))<=tol).sort((a,b)=>a.i-b.i);
    const touches=[];
    for(const q of aligned){const prev=touches.at(-1);if(!prev||q.i-prev.i>=5)touches.push(q);else if(Math.abs(q.price-(p1.price+slope*(q.i-p1.i)))<Math.abs(prev.price-(p1.price+slope*(prev.i-p1.i))))touches[touches.length-1]=q;}
@@ -224,7 +224,7 @@ function findDiagonalStructure(source,seconds,tf){
    let broken=false;
    for(let k=p1.i+1;k<d.length;k++){
     const level=p1.price+slope*(k-p1.i),c=d[k];
-    if(side==="BUY"?c.low<level-tol:c.high>level+tol){broken=true;break;}
+    if(side==="BUY"?c.close<level-tol*1.25:c.close>level+tol*1.25){broken=true;break;}
    }
    if(broken)continue;
    // Los tres toques deben pertenecer a una misma secuencia reciente, no a máximos/minimos aislados de sesiones distintas.
