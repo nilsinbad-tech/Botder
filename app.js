@@ -163,45 +163,13 @@ document.addEventListener("DOMContentLoaded",()=>{[9,20,50].forEach(period=>{con
 /* MULTI-TIMEFRAME STRUCTURE ENGINE */
 function candlesAtTf(source,seconds){const out=[];for(const c of source){const time=Math.floor(c.time/seconds)*seconds,last=out[out.length-1];if(last&&last.time===time){last.high=Math.max(last.high,c.high);last.low=Math.min(last.low,c.low);last.close=c.close;}else out.push({time,open:c.open,high:c.high,low:c.low,close:c.close});}return out;}
 // ZigZag 5/3/3: profundidad 5, desviación adaptativa equivalente a 3 fracciones del rango medio y backstep 3.
-function structurePivots(d,depth=5,deviation=3,backstep=3){
- const candidates=[];
- if(!Array.isArray(d)||d.length<depth*2+3)return{highs:[],lows:[]};
- const ranges=d.slice(-Math.min(80,d.length)).map(c=>Math.max(0,c.high-c.low)).sort((a,b)=>a-b);
- const median=ranges[Math.floor(ranges.length/2)]||Math.abs(d.at(-1).close)*1e-7;
- const minMove=Math.max(median*(deviation/10),Math.abs(d.at(-1).close)*1e-8,1e-10);
- for(let i=depth;i<d.length-depth;i++){
-  let hi=true,lo=true;
-  for(let k=1;k<=depth;k++){
-   if(d[i].high<d[i-k].high||d[i].high<=d[i+k].high)hi=false;
-   if(d[i].low>d[i-k].low||d[i].low>=d[i+k].low)lo=false;
-  }
-  if(hi)candidates.push({i,time:d[i].time,price:d[i].high,type:"high"});
-  if(lo)candidates.push({i,time:d[i].time,price:d[i].low,type:"low"});
- }
- candidates.sort((a,b)=>a.i-b.i||(a.type==="high"?-1:1));
- const zig=[];
- for(const p of candidates){
-  const last=zig.at(-1);
-  if(!last){zig.push(p);continue;}
-  if(p.type===last.type){
-   const moreExtreme=p.type==="high"?p.price>last.price:p.price<last.price;
-   if(p.i-last.i<=backstep){if(moreExtreme)zig[zig.length-1]=p;continue;}
-   if(moreExtreme){zig[zig.length-1]=p;continue;}
-   continue;
-  }
-  if(Math.abs(p.price-last.price)<minMove)continue;
-  zig.push(p);
- }
- // Backstep pass: remove a weak pivot when a more extreme same-side pivot occurs within 3 bars.
- for(let i=1;i<zig.length;i++){
-  const p=zig[i],prev=zig[i-1];
-  if(p.type===prev.type&&p.i-prev.i<=backstep){
-   const extreme=p.type==="high"?p.price>prev.price:p.price<prev.price;
-   if(extreme)zig[i-1]=p;
-   zig.splice(i,1);i=Math.max(0,i-2);
-  }
- }
- return{highs:zig.filter(p=>p.type==="high"),lows:zig.filter(p=>p.type==="low"),zigzag:zig,settings:{depth,deviation,backstep,minMove}};
+function structurePivots(d,depth=3,deviation=3,backstep=3){
+ const candidates=[];if(!Array.isArray(d)||d.length<depth*2+3)return{highs:[],lows:[],zigzag:[],settings:{depth,deviation,backstep}};
+ const ranges=d.slice(-Math.min(20,d.length)).map(c=>Math.max(0,c.high-c.low)).sort((a,b)=>a-b),median=ranges[Math.floor(ranges.length/2)]||0,minMove=Math.max(median*(deviation/10),Math.abs(d.at(-1)?.close||0)*1e-8,1e-10);
+ for(let i=depth;i<d.length-depth;i++){let hi=true,lo=true;for(let k=1;k<=depth;k++){if(d[i].high<=d[i-k].high||d[i].high<d[i+k].high)hi=false;if(d[i].low>=d[i-k].low||d[i].low>d[i+k].low)lo=false;}if(hi)candidates.push({i,time:d[i].time,price:d[i].high,type:"high",confirmedAt:i+depth});if(lo)candidates.push({i,time:d[i].time,price:d[i].low,type:"low",confirmedAt:i+depth});}
+ candidates.sort((a,b)=>a.i-b.i||(a.type==="high"?-1:1));const stable=[];
+ for(const p of candidates){const last=stable.at(-1);if(last&&last.type===p.type&&p.i-last.i<=backstep)continue;const opposite=[...stable].reverse().find(q=>q.type!==p.type);if(opposite&&Math.abs(p.price-opposite.price)<minMove)continue;stable.push(p);}
+ return{highs:stable.filter(p=>p.type==="high"),lows:stable.filter(p=>p.type==="low"),zigzag:stable,settings:{depth,deviation,backstep,minMove,confirmedRightBars:depth}};
 }
 function findDiagonalStructure(source,seconds,tf){
  if(!Array.isArray(source)||source.length<22)return null;
