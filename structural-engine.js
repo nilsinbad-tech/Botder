@@ -1,6 +1,6 @@
 /* BOTDER STRUCTURAL ENGINE v1 · independent timeframe channel model */
 let structuralBacktestValidatedKey="",structuralBacktestRunningKey="",structuralBacktestRunId=0;
-function structurePivots(d,depth=3,deviation=3,backstep=3){
+function structurePivots(d,depth=30,deviation=5,backstep=3){
  const found=[];if(!Array.isArray(d)||d.length<depth*2+3)return{highs:[],lows:[],zigzag:[]};
  for(let i=depth;i<d.length-depth;i++){
   let hi=true,lo=true;for(let k=1;k<=depth;k++){if(d[i].high<=d[i-k].high||d[i].high<d[i+k].high)hi=false;if(d[i].low>=d[i-k].low||d[i].low>d[i+k].low)lo=false;}
@@ -26,7 +26,7 @@ function findDiagonalStructure(source,seconds,tf){
  const b=find("BUY",p.lows,p.highs,1),s=find("SELL",p.highs,p.lows,-1),v=[b,s].filter(Boolean).sort((x,y)=>y.score-x.score)[0];if(!v)return null;
  const base=i=>v.p1.price+v.slope*(i-v.p1.i),upper=i=>base(i)+v.offset,first=v.touches[0];
  const line1={time1:d[v.p1.i].time,time2:d[v.p2.i].time,price1:v.p1.price,price2:v.p2.price,touches:v.touches.slice(0,3).map((t,i)=>({time:t.time,price:t.price,n:i+1}))},line2={time1:d[v.p1.i].time,time2:d[v.p2.i].time,price1:v.p1.price+v.offset,price2:v.p2.price+v.offset,touches:v.oppositeTouches.slice(0,3).map(t=>({time:t.time,price:t.price}))};
- return{side:v.side,tf,seconds,d,first,second:v.touches[1],third:v.third,firstStop:first.price,touches:v.touches,line1,line2,projectTime:d.at(-1).time+seconds,projectPrice1:base(d.length),projectPrice2:upper(d.length),tolerance:tol,zigzagSettings:"3/3/3",oppositeTouches:v.oppositeTouches};
+ return{side:v.side,tf,seconds,d,first,second:v.touches[1],third:v.third,firstStop:first.price,touches:v.touches,line1,line2,projectTime:d.at(-1).time+seconds,projectPrice1:base(d.length),projectPrice2:upper(d.length),tolerance:tol,zigzagSettings:"30/5/3",oppositeTouches:v.oppositeTouches};
 }
 function buildStructuralPlan(baseCandles,displayTf,ctx=null){
  const tf=Number(displayTf)||60,baseSeconds=Number(ctx?.baseSeconds)||60,closedAt=(Number(baseCandles.at(-1)?.time)||0)+baseSeconds,closed=(rows,sec)=>(rows||[]).filter(c=>c.time+sec<=closedAt),aggregate=sec=>candlesAtTf(baseCandles,sec).filter(c=>c.time+sec<=closedAt);
