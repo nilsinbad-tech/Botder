@@ -121,7 +121,7 @@ function computeTrade(d,s,i){let t={...s,entryTime:d[i].time*1000,tp1Hit:false};
 function setBacktestTrades(trades){backtestTradeData=Array.isArray(trades)?trades.slice():[];const manual=(strategyJournal||[]).map(t=>({...t,tp1:t.tp,tp2:t.tp,price:t.exitPrice,exitTime:t.exitTime||Date.now()}));if(typeof setChartBacktestTrades==="function")setChartBacktestTrades([...backtestTradeData,...manual]);if(typeof drawMarketChart==="function")drawMarketChart();renderStrategyJournal();}
 function runStructuralBacktest(symbol,market,candles,displayTf){
  if(!Array.isArray(candles)||candles.length<180)return[];
- const d=candles.slice().sort((x,y)=>x.time-y.time),from=Math.max(150,d.length-1000),trades=[];let nextFree=from;
+ const d=candles.slice().sort((x,y)=>x.time-y.time),from=Math.max(150,d.length-2880),trades=[];let nextFree=from;
  const stride=2;
  for(let i=from;i<d.length-4;i+=stride){
   if(i<nextFree)continue;
@@ -138,7 +138,7 @@ function runStructuralBacktest(symbol,market,candles,displayTf){
    if(second){result="GANADA";price=s.tp2;exitTime=bar.time*1000;exitIndex=j;break;}
    if(first){result="GANADA";price=s.tp1;exitTime=bar.time*1000;exitIndex=j;break;}
   }
-  trades.push({id:"BT-"+symbol+"-"+s.time,symbol,market,direction:s.direction,entry:s.entry,sl:s.sl,tp1:s.tp1,tp2:s.tp2,price,entryTime:s.time*1000,exitTime,result,timeframe:s.timeframe,exitReason:result==="GANADA"?(price===s.tp2?"TP2":"TP1"):"SL"});
+  trades.push({id:"BT-"+symbol+"-"+s.time,symbol,market,direction:s.direction,entry:s.entry,sl:s.sl,tp1:s.tp1,tp2:s.tp2,price,entryTime:s.time*1000,exitTime,result,timeframe:s.timeframe,structureLines:(plan.lines||[]).map(line=>({...line,touches:(line.touches||[]).map(t=>({...t}))})),exitReason:result==="GANADA"?(price===s.tp2?"TP2":"TP1"):"SL"});
   nextFree=exitIndex>i?exitIndex:i+1;
  }
  backtestTrades.splice(0,backtestTrades.length,...trades);setBacktestTrades(trades);backtestSymbol=symbol;backtestReady=true;
@@ -388,6 +388,6 @@ function renderStrategyJournal(){
  setText("bt-wins",wins);setText("bt-losses",losses);setText("bt-rate",closed.length?(wins/closed.length*100).toFixed(1)+"%":"0%");setText("bt-total",strategyJournal.length+backtestTradeData.length);setText("bt-open",allResults.filter(t=>t.result==="ABIERTA").length);
  const area=document.getElementById("history");if(!area)return;
  const safe=v=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
- if(typeof setChartBacktestTrades==="function")setChartBacktestTrades(strategyJournal.map(t=>({...t,tp1:t.tp1||t.tp,tp2:t.tp2||t.tp,price:t.exitPrice,exitTime:t.exitTime||Date.now()})));area.innerHTML=strategyJournal.length?strategyJournal.map(t=>'<article class="history-row"><div><strong>'+safe(t.market||t.symbol)+' · '+safe(t.direction)+'</strong><small>'+new Date(t.entryTime).toLocaleString("es-PA",{dateStyle:"short",timeStyle:"short"})+' · ENTRADA '+fmt(t.entry)+' · SL '+fmt(t.sl)+' · TP1 '+fmt(t.tp1||t.tp)+' · TP2 '+fmt(t.tp2||t.tp)+'</small></div><span class="history-result '+t.result+'">'+(t.result==="ABIERTA"?"EN CURSO":t.result)+'</span></article>').join(""):'<div class="empty-state">Aún no hay entradas confirmadas. Aquí aparecerán las señales registradas y su resultado al alcanzar TP o SL.</div>';
+ if(typeof setChartBacktestTrades==="function")setChartBacktestTrades([...backtestTradeData,...strategyJournal.map(t=>({...t,tp1:t.tp1||t.tp,tp2:t.tp2||t.tp,price:t.exitPrice,exitTime:t.exitTime||Date.now()}))]);area.innerHTML=strategyJournal.length?strategyJournal.map(t=>'<article class="history-row"><div><strong>'+safe(t.market||t.symbol)+' · '+safe(t.direction)+'</strong><small>'+new Date(t.entryTime).toLocaleString("es-PA",{dateStyle:"short",timeStyle:"short"})+' · ENTRADA '+fmt(t.entry)+' · SL '+fmt(t.sl)+' · TP1 '+fmt(t.tp1||t.tp)+' · TP2 '+fmt(t.tp2||t.tp)+'</small></div><span class="history-result '+t.result+'">'+(t.result==="ABIERTA"?"EN CURSO":t.result)+'</span></article>').join(""):'<div class="empty-state">Aún no hay entradas confirmadas. Aquí aparecerán las señales registradas y su resultado al alcanzar TP o SL.</div>';
 }
 loadStrategyJournal();
