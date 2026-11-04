@@ -178,19 +178,27 @@ function renderMarketChart(){
  levelGroups.forEach(v=>{const rawY=yOf(v.value),outside=rawY<top||rawY>h-bottom,y=Math.max(top+2,Math.min(h-bottom-2,rawY));ctx.save();ctx.strokeStyle=v.color;ctx.lineWidth=1.35;ctx.setLineDash(v.labels.includes("SL")?[5,4]:[3,3]);ctx.beginPath();ctx.moveTo(left,y);ctx.lineTo(w-right,y);ctx.stroke();ctx.setLineDash([]);const txt=(outside?(rawY<top?"↑ ":"↓ "):"")+v.labels.join(" / ")+" "+Number(v.value).toPrecision(7);ctx.font="bold 8px Arial";const tw=ctx.measureText(txt).width;ctx.fillStyle="rgba(7,16,28,.96)";ctx.fillRect(left+3,Math.max(top,y-12),tw+9,13);ctx.fillStyle=v.color;ctx.textAlign="left";ctx.fillText(txt,left+7,Math.max(top+9,Math.min(h-bottom-3,y-3)));ctx.restore();});
  // Línea y etiqueta persistentes del último tick. Si se navega por el histórico y el precio queda fuera de escala, se fija un indicador en el borde visible.
  if(Number.isFinite(liveChartPrice)){const outside=liveChartPrice>max||liveChartPrice<min,py=Math.max(top+2,Math.min(h-bottom-2,yOf(liveChartPrice))),priceText=liveChartPrice.toFixed( Math.max(2,Math.min(8,Math.max(0,(String(liveChartPrice).split(".")[1]||"").length))) );ctx.save();ctx.strokeStyle="#ffd166";ctx.lineWidth=1;ctx.setLineDash(outside?[2,3]:[4,3]);ctx.beginPath();ctx.moveTo(left,py);ctx.lineTo(w-right,py);ctx.stroke();ctx.setLineDash([]);ctx.fillStyle="#ffd166";ctx.fillRect(w-right+1,py-12,right-2,24);ctx.fillStyle="#081321";ctx.font="bold 10px Arial";ctx.textAlign="left";ctx.fillText((outside?(liveChartPrice>max?"↑ ":"↓ "):"")+priceText,w-right+4,py+4);ctx.fillStyle="#ffd166";ctx.font="bold 9px Arial";ctx.textAlign="left";ctx.fillText("PRECIO ACTUAL",left+5,Math.max(top+12,Math.min(h-bottom-5,py-7)));ctx.beginPath();ctx.fillStyle="#ffd166";ctx.arc(w-right-3,py,3,0,Math.PI*2);ctx.fill();ctx.restore();}
- // TradingView Long/Short Position overlay: green reward area, red risk area, entry band and target/stop guides.
+ // TradingView Long/Short Position overlay: reward to TP2, risk to SL, with distinct TP1/TP2 labels.
  if(tradeLevels.length>=3){
-  const byLabel=Object.fromEntries(tradeLevels.map(v=>[v.label,v.value])),entry=byLabel.ENTRADA,sl=byLabel.SL,tp=byLabel.TP2??byLabel.TP1??byLabel.TP1,dir=tradeLevels.direction||"COMPRAR";
-  if(Number.isFinite(entry)&&Number.isFinite(sl)&&Number.isFinite(tp)){
-   const buy=dir==="COMPRAR"||dir==="BUY",yE=yOf(entry),yT=yOf(tp),yS=yOf(sl),anchor=Math.max(left,Math.min(w-right-8,left+(Math.max(0,timeIndex(tradeLevels.time)-start)+.5)*step)),x2=Math.min(w-right,Math.max(anchor+Math.max(70,step*9),w-right-8));
-   ctx.save();ctx.fillStyle=buy?"rgba(35,207,112,.22)":"rgba(255,101,121,.20)";ctx.fillRect(anchor,Math.min(yE,yT),x2-anchor,Math.max(2,Math.abs(yE-yT)));
-   ctx.fillStyle=buy?"rgba(255,83,99,.22)":"rgba(35,207,112,.20)";ctx.fillRect(anchor,Math.min(yE,yS),x2-anchor,Math.max(2,Math.abs(yE-yS)));
+  const byLabel=Object.fromEntries(tradeLevels.map(v=>[v.label,v.value]));
+  const entry=byLabel.ENTRADA,sl=byLabel.SL,tp1=byLabel.TP1,tp2=Number.isFinite(byLabel.TP2)?byLabel.TP2:tp1;
+  const dir=tradeLevels.direction||"COMPRAR",target=Number.isFinite(tp2)?tp2:tp1;
+  if(Number.isFinite(entry)&&Number.isFinite(sl)&&Number.isFinite(target)){
+   const buy=dir==="COMPRAR"||dir==="BUY",yE=yOf(entry),yT=yOf(target),yS=yOf(sl);
+   const anchor=Math.max(left,Math.min(w-right-8,left+(Math.max(0,timeIndex(tradeLevels.time)-start)+.5)*step));
+   const x2=Math.min(w-right,Math.max(anchor+Math.max(70,step*9),w-right-8));
+   ctx.save();
+   ctx.fillStyle="rgba(35,207,112,.20)";
+   ctx.fillRect(anchor,Math.min(yE,yT),x2-anchor,Math.max(2,Math.abs(yE-yT)));
+   ctx.fillStyle="rgba(255,83,99,.20)";
+   ctx.fillRect(anchor,Math.min(yE,yS),x2-anchor,Math.max(2,Math.abs(yE-yS)));
    ctx.strokeStyle="#d9f99d";ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(anchor,yE);ctx.lineTo(x2,yE);ctx.stroke();
-   ctx.strokeStyle="#39e6a0";ctx.setLineDash([7,5]);ctx.beginPath();ctx.moveTo(anchor,yT);ctx.lineTo(w-right,yT);ctx.stroke();
-   ctx.strokeStyle="#ff6579";ctx.beginPath();ctx.moveTo(anchor,yS);ctx.lineTo(w-right,yS);ctx.stroke();ctx.setLineDash([]);
-   const label=(txt,y,bg,fg)=>{ctx.font="bold 9px Arial";const width=ctx.measureText(txt).width+12,xx=Math.max(left,Math.min(w-right-width,anchor+4));ctx.fillStyle=bg;ctx.fillRect(xx,Math.max(top,Math.min(h-bottom-18,y-10)),width,18);ctx.fillStyle=fg;ctx.textAlign="left";ctx.fillText(txt,xx+6,Math.max(top+12,Math.min(h-bottom-5,y+2)));};
-   label("ENTRADA "+entry.toPrecision(7),yE,"#155c43","#e8fff1");label("TP1 "+tp.toPrecision(7),yT,"#20c968","#04170d");label("SL "+sl.toPrecision(7),yS,"#b83e50","#fff");
-   if(Number.isFinite(byLabel.TP2)&&byLabel.TP2!==byLabel.TP1)label("TP2 "+byLabel.TP2.toPrecision(7),yOf(byLabel.TP2),"#20c968","#04170d");
+   const label=(txt,y,bg,fg)=>{ctx.font="bold 9px Arial";const width=ctx.measureText(txt).width+12,xx=Math.max(left,Math.min(w-right-width,anchor+4));const yy=Math.max(top,Math.min(h-bottom-18,y-10));ctx.fillStyle=bg;ctx.fillRect(xx,yy,width,18);ctx.fillStyle=fg;ctx.textAlign="left";ctx.fillText(txt,xx+6,yy+12);};
+   const guide=(value,name,color,bg,fg)=>{if(!Number.isFinite(value))return;const y=yOf(value);ctx.strokeStyle=color;ctx.lineWidth=1;ctx.setLineDash([7,5]);ctx.beginPath();ctx.moveTo(anchor,y);ctx.lineTo(w-right,y);ctx.stroke();ctx.setLineDash([]);label(name+" "+value.toPrecision(7),y,bg,fg);};
+   guide(tp1,"TP1","#61b7ff","#174d73","#eaf7ff");
+   if(Number.isFinite(tp2)&&tp2!==tp1)guide(tp2,"TP2","#39e6a0","#155c43","#e8fff1");
+   guide(sl,"SL","#ff6579","#b83e50","#fff");
+   label("ENTRADA "+entry.toPrecision(7),yE,"#155c43","#e8fff1");
    ctx.restore();
   }
  }
