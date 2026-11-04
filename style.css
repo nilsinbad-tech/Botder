@@ -530,3 +530,14 @@ footer{padding:16px 6px;font-size:9px}
 
 /* BOTDER: herramientas compactas arriba a la derecha y anotaciones discretas */
 #chart-area{position:relative}.chart-legend{font-size:8px}.chart-legend span{padding:2px 4px}
+
+/* Full-width chart with every setting grouped underneath. */
+.trading-workspace{display:flex!important;flex-direction:column!important;gap:10px!important;}
+.chart-panel{order:0!important;width:100%!important;max-width:100%!important;}
+.bot-sidebar{order:1!important;width:100%!important;display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr));margin:0!important;}
+.chart-configuration{display:flex;flex-direction:column;gap:9px;margin-top:12px;padding:10px;background:#0b1726;border:1px solid #20344a;border-radius:9px;}
+.chart-configuration .chart-controls{justify-content:flex-start;width:100%;}
+.chart-configuration .chart-toolbar{padding:7px 2px;}
+.chart-configuration .chart-toolbar .toolbar-note{margin-left:auto;}
+.chart-configuration>div[style*='position: relative']{display:flex;flex-wrap:wrap;gap:5px;}
+@media(max-width:560px){.bot-sidebar{grid-template-columns:1fr!important;}.chart-configuration{padding:8px;}.chart-configuration .chart-toolbar{gap:8px;}.chart-configuration .chart-toolbar .toolbar-note{width:100%;margin-left:0;}}
