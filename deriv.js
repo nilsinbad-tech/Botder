@@ -3,7 +3,7 @@ let derivSocket = null, availableSymbols = [], selectedSymbol = null;
 let candleBuffer = [], higherTfBuffers={300:[],600:[],900:[],1800:[],3600:[],14400:[],86400:[]}, tickSubId = null, candleSubId = null, reconnectTimer = null, symbolsTimer = null, selectedGranularity = 60, lastTickAt = 0, lastTickResubscribeAt = 0;
 
 function getHigherTimeframeHistory(seconds){const raw=higherTfBuffers[Number(seconds)]||[];if(!raw.length||!candleBuffer.length)return raw;const live=aggregateForDisplay(candleBuffer,Number(seconds)).at(-1);if(!live)return raw;const merged=raw.filter(c=>c.time!==live.time);merged.push(live);return merged.sort((a,b)=>a.time-b.time);}
-function getDisplayCandles(seconds){const base=aggregateForDisplay(candleBuffer,seconds);if(seconds<3600)return base;const history=getHigherTimeframeHistory(seconds);if(!history.length)return base;const live=base.at(-1);if(!live)return history.slice();const out=history.filter(c=>c.time!==live.time);out.push(live);return out.sort((a,b)=>a.time-b.time);}
+function getDisplayCandles(seconds){if(Number(seconds)===60)return candleBuffer.slice();const direct=getHigherTimeframeHistory(Number(seconds));if(direct.length)return direct;return aggregateForDisplay(candleBuffer,Number(seconds));}
 function responseSymbol(data) { const q=data && data.echo_req || {}; const value=q.ticks_history||q.ticks||q.symbol||data?.tick?.symbol||data?.ohlc?.symbol||null; return Array.isArray(value)?value[0]:value; }
 function sendDeriv(data) {
   if (!derivSocket || derivSocket.readyState !== WebSocket.OPEN) return false;
@@ -51,7 +51,7 @@ function connectDeriv() {
       showApiDiagnostic("Deriv respondió: " + received.length + " símbolos. Buscando índices Volatility...");
       renderMarkets(received);
     }
-    if([13,14,15,16,17].includes(data.req_id)&&selectedSymbol&&responseSymbol(data)===selectedSymbol&&(data.msg_type==="history"||data.msg_type==="candles")){const seconds=({13:3600,14:14400,15:86400,16:1800,17:600})[data.req_id],rows=data.candles||data.history?.candles||[],parsed=rows.map(c=>({time:Number(c.epoch??c.open_time),open:Number(c.open),high:Number(c.high),low:Number(c.low),close:Number(c.close)})).filter(c=>[c.time,c.open,c.high,c.low,c.close].every(Number.isFinite));if(parsed.length){higherTfBuffers[seconds]=parsed.sort((a,b)=>a.time-b.time);if(selectedGranularity===seconds&&typeof updateCandles==="function")updateCandles(getDisplayCandles(seconds));if(typeof analyzeCandles==="function"&&candleBuffer.length>=100)analyzeCandles(selectedSymbol,selectedMarketName(),candleBuffer);showApiDiagnostic("Historial HTF cargado · "+(seconds===600?"M10":seconds===1800?"M30":seconds===3600?"H1":seconds===14400?"H4":"D1")+" · "+parsed.length+" velas.");}}
+    if([13,14,15,16,17,18,19].includes(data.req_id)&&selectedSymbol&&responseSymbol(data)===selectedSymbol&&(data.msg_type==="history"||data.msg_type==="candles")){const seconds=({13:3600,14:14400,15:86400,16:1800,17:600,18:300,19:900})[data.req_id],rows=data.candles||data.history?.candles||[],parsed=rows.map(c=>({time:Number(c.epoch??c.open_time),open:Number(c.open),high:Number(c.high),low:Number(c.low),close:Number(c.close)})).filter(c=>[c.time,c.open,c.high,c.low,c.close].every(Number.isFinite));if(parsed.length){higherTfBuffers[seconds]=parsed.sort((a,b)=>a.time-b.time);if(selectedGranularity===seconds&&typeof updateCandles==="function")updateCandles(getDisplayCandles(seconds));if(typeof analyzeCandles==="function"&&candleBuffer.length>=100)analyzeCandles(selectedSymbol,selectedMarketName(),candleBuffer);showApiDiagnostic("Historial HTF cargado · "+(seconds===300?"M5":seconds===600?"M10":seconds===900?"M15":seconds===1800?"M30":seconds===3600?"H1":seconds===14400?"H4":"D1")+" · "+parsed.length+" velas.");}}
     if (data.req_id === 12 && selectedSymbol && responseSymbol(data)===selectedSymbol && (data.msg_type === "history" || data.msg_type === "candles")) {
       const history = data.history || {};
       let historical = [];
@@ -194,7 +194,7 @@ function loadMarketHistory(symbol, granularity = selectedGranularity) {
     sendDeriv({ ticks_history: symbol, count: 5000, end: "latest", style: "ticks", req_id: 12 });
     showChartMessage("Construyendo velas de 30 segundos desde ticks de Deriv...");
   } else {
-    sendDeriv({ticks_history:symbol,count:5000,end:"latest",style:"candles",granularity:60,req_id:12});sendDeriv({ticks_history:symbol,count:5000,end:"latest",style:"candles",granularity:600,req_id:17});sendDeriv({ticks_history:symbol,count:5000,end:"latest",style:"candles",granularity:1800,req_id:16});sendDeriv({ticks_history:symbol,count:5000,end:"latest",style:"candles",granularity:3600,req_id:13});sendDeriv({ticks_history:symbol,count:5000,end:"latest",style:"candles",granularity:14400,req_id:14});sendDeriv({ticks_history:symbol,count:1000,end:"latest",style:"candles",granularity:86400,req_id:15});
+    sendDeriv({ticks_history:symbol,count:1440,end:"latest",style:"candles",granularity:60,req_id:12});sendDeriv({ticks_history:symbol,count:2016,end:"latest",style:"candles",granularity:300,req_id:18});sendDeriv({ticks_history:symbol,count:5000,end:"latest",style:"candles",granularity:600,req_id:17});sendDeriv({ticks_history:symbol,count:1344,end:"latest",style:"candles",granularity:900,req_id:19});sendDeriv({ticks_history:symbol,count:1440,end:"latest",style:"candles",granularity:1800,req_id:16});sendDeriv({ticks_history:symbol,count:1440,end:"latest",style:"candles",granularity:3600,req_id:13});sendDeriv({ticks_history:symbol,count:1080,end:"latest",style:"candles",granularity:14400,req_id:14});sendDeriv({ticks_history:symbol,count:180,end:"latest",style:"candles",granularity:86400,req_id:15});
     // El historial M1 de 5000 velas se carga en una sola respuesta; los ticks actualizan la vela viva sin reemplazarlo por un bloque corto.
     showChartMessage("Cargando historial · " + (selectedGranularity/60) + " min...");
   }
@@ -202,7 +202,7 @@ function loadMarketHistory(symbol, granularity = selectedGranularity) {
 function openMarket(symbol) {
   if (!symbol || !sendDeriv({ forget_all: "ticks" })) { /* socket may still be connecting */ }
   if (!derivSocket || derivSocket.readyState !== WebSocket.OPEN) return;
-  selectedSymbol = symbol; candleBuffer = []; higherTfBuffers={600:[],1800:[],3600:[],14400:[],86400:[]}; tickSubId = null; candleSubId = null; lastTickAt = 0; lastTickResubscribeAt = 0;
+  selectedSymbol = symbol; candleBuffer = []; higherTfBuffers={300:[],600:[],900:[],1800:[],3600:[],14400:[],86400:[]}; tickSubId = null; candleSubId = null; lastTickAt = 0; lastTickResubscribeAt = 0;
   sendDeriv({ forget_all: "candles" });
   sendDeriv({ forget_all: "ticks" });
   if (typeof setChartSymbol === "function") setChartSymbol(symbol);
