@@ -56,7 +56,7 @@ function runStructuralBacktest(symbol,market,candles,displayTf){
  if(!Array.isArray(candles)||candles.length<120)return[];
  const sec=Number(displayTf)||60,key=symbol+":"+sec;
  if(structuralBacktestRunningKey===key||structuralBacktestValidatedKey===key)return[];
- const runId=++structuralBacktestRunId;structuralBacktestRunningKey=key;
+ const runId=++structuralBacktestRunId;structuralBacktestRunningKey=key;backtestTrades.splice(0,backtestTrades.length);if(typeof setBacktestTrades==="function")setBacktestTrades([]);else if(typeof setChartBacktestTrades==="function")setChartBacktestTrades([]);
  const d=candles.slice().sort((a,b)=>a.time-b.time),from=90,trades=[],seen=new Set(),historyByTf={};
  [600,1800,3600,14400,86400].forEach(t=>historyByTf[t]=((higherTfBuffers&&higherTfBuffers[t])||[]).slice());
  const before=(t,cutoff)=>((historyByTf[t]||[]).filter(c=>c.time+t<=cutoff));
@@ -225,7 +225,7 @@ function renderStrategyJournal(){
 }
 function recordStrategyTrade(signal){
  if(!signal||strategyJournal.some(t=>t.symbol===signal.symbol&&t.structureKey===signal.structureKey))return;
- strategyJournal.unshift({id:"STR-"+Date.now().toString(36).toUpperCase(),symbol:signal.symbol,market:signal.market,direction:signal.direction,entry:Number(signal.entry),sl:Number(signal.sl),tp1:Number(signal.tp1),tp2:Number(signal.tp2),timeframe:signal.timeframe||"",structureKey:signal.structureKey,entryTime:Number(signal.time)*1000,touchTime:Number(signal.touchTime||signal.time)*1000,entered:false,result:"PENDIENTE"});
+ strategyJournal.unshift({id:"STR-"+Date.now().toString(36).toUpperCase(),symbol:signal.symbol,market:signal.market,direction:signal.direction,entry:Number(signal.entry),sl:Number(signal.sl),tp1:Number(signal.tp1),tp2:Number(signal.tp2),timeframe:signal.timeframe||"",timeframeSeconds:Number(document.getElementById("timeframe")?.value)||60,structureKey:signal.structureKey,entryTime:Number(signal.time)*1000,touchTime:Number(signal.touchTime||signal.time)*1000,entered:false,result:"PENDIENTE"});
  strategyJournal=strategyJournal.slice(0,2000);saveStrategyJournal();renderStrategyJournal();
 }
 function markEntered(id){
