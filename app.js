@@ -333,7 +333,7 @@ function analyzeCandles(symbol,market,candles){
  setText("trend-h4",side);setText("confirm-m30",confirm);setText("confirm-m1",plan.near.length>=3?"OB 3/3":"OB "+plan.near.length+"/3");
  setText("touch-status",plan.candidate?.third?"3º TOQUE":"BUSCANDO");setText("ob-status",plan.h4Class||"BUSCANDO");setText("channel-status",plan.candidate?(plan.candidate.side==="BUY"?"ALCISTA":"BAJISTA"):"BUSCANDO");
  renderProjection(plan);
- const btKey=symbol+":"+d[i].time+":"+tf;if(structuralBacktestKey!==btKey){structuralBacktestKey=btKey;runStructuralBacktest(symbol,market,d.slice(0,i+1),tf);}
+ const btKey=symbol+":"+d[i].time+":"+tf+":"+((higherTfBuffers[14400]||[]).length)+":"+((higherTfBuffers[1800]||[]).length);if(structuralBacktestKey!==btKey){structuralBacktestKey=btKey;runStructuralBacktest(symbol,market,d.slice(0,i+1),tf);}
  if(typeof setStructureOverlay==="function")setStructureOverlay({items:plan.items,lines:plan.lines,projection:plan.projection});
  if(plan.projection&&typeof drawTradeLevels==="function")drawTradeLevels({entry:plan.projection.entry,sl:plan.projection.sl,tp1:plan.projection.tp1,tp2:plan.projection.tp2,time:closed.time,direction:plan.projection.direction},false);
  else if(typeof clearTradeLevels==="function")clearTradeLevels();
@@ -358,14 +358,14 @@ function recordStrategyTrade(signal){
 function evaluateStrategyJournal(symbol,candle){
  if(!candle)return;let changed=false;
  strategyJournal.forEach(t=>{if(t.symbol!==symbol||t.result!=="ABIERTA"||candle.time*1000<=t.entryTime)return;
-  const stop=t.direction==="COMPRAR"?candle.low<=t.sl:candle.high>=t.sl,target=t.direction==="COMPRAR"?candle.high>=t.tp:candle.low<=t.tp;
-  if(stop||target){t.result=stop?"PERDIDA":"GANADA";t.exitPrice=stop?t.sl:t.tp;t.exitTime=candle.time*1000;t.exitReason=stop&&target?"SL Y TP EN LA MISMA VELA · CONTADO COMO PÉRDIDA":stop?"STOP LOSS":"TAKE PROFIT";changed=true;}
+  const targetPrice=t.tp2||t.tp,stop=t.direction==="COMPRAR"?candle.low<=t.sl:candle.high>=t.sl,target=t.direction==="COMPRAR"?candle.high>=targetPrice:candle.low<=targetPrice;
+  if(stop||target){t.result=stop?"PERDIDA":"GANADA";t.exitPrice=stop?t.sl:targetPrice;t.exitTime=candle.time*1000;t.exitReason=stop?"STOP LOSS":"TP2";changed=true;}
  });
  if(changed){saveStrategyJournal();renderStrategyJournal();}
 }
 function renderStrategyJournal(){
  const allResults=[...backtestTradeData,...strategyJournal],closed=allResults.filter(t=>t.result==="GANADA"||t.result==="PERDIDA"),wins=closed.filter(t=>t.result==="GANADA").length,losses=closed.length-wins;
- setText("bt-wins",wins);setText("bt-losses",losses);setText("bt-rate",closed.length?(wins/closed.length*100).toFixed(1)+"%":"0%");setText("bt-total",strategyJournal.length+backtestTradeData.length);setText("bt-open",strategyJournal.filter(t=>t.result==="ABIERTA").length);
+ setText("bt-wins",wins);setText("bt-losses",losses);setText("bt-rate",closed.length?(wins/closed.length*100).toFixed(1)+"%":"0%");setText("bt-total",strategyJournal.length+backtestTradeData.length);setText("bt-open",allResults.filter(t=>t.result==="ABIERTA").length);
  const area=document.getElementById("history");if(!area)return;
  const safe=v=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
  if(typeof setChartBacktestTrades==="function")setChartBacktestTrades(strategyJournal.map(t=>({...t,tp1:t.tp1||t.tp,tp2:t.tp2||t.tp,price:t.exitPrice,exitTime:t.exitTime||Date.now()})));area.innerHTML=strategyJournal.length?strategyJournal.map(t=>'<article class="history-row"><div><strong>'+safe(t.market||t.symbol)+' · '+safe(t.direction)+'</strong><small>'+new Date(t.entryTime).toLocaleString("es-PA",{dateStyle:"short",timeStyle:"short"})+' · ENTRADA '+fmt(t.entry)+' · SL '+fmt(t.sl)+' · TP1 '+fmt(t.tp1||t.tp)+' · TP2 '+fmt(t.tp2||t.tp)+'</small></div><span class="history-result '+t.result+'">'+(t.result==="ABIERTA"?"EN CURSO":t.result)+'</span></article>').join(""):'<div class="empty-state">Aún no hay entradas confirmadas. Aquí aparecerán las señales registradas y su resultado al alcanzar TP o SL.</div>';
