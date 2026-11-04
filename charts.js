@@ -107,7 +107,7 @@ function toHeikinAshi(candles){
   return {...c,open:haOpen,high:haHigh,low:haLow,close:haClose};
  });
 }
-function drawTradeLevels(signal,mark=true){if(!signal)return;tradeLevels=[{value:Number(signal.entry),label:"ENTRADA",color:"#61b7ff"},{value:Number(signal.sl),label:"SL",color:"#ff6579"},{value:Number(signal.tp1),label:"TP1",color:"#ffd166"},{value:Number(signal.tp2),label:"TP2",color:"#39e6a0"}].filter(x=>Number.isFinite(x.value));signalMarker=mark&&Number.isFinite(Number(signal.time))?{time:Number(signal.time),direction:signal.direction}:null;drawMarketChart();}
+function drawTradeLevels(signal,mark=true){if(!signal)return;tradeLevels=[{value:Number(signal.entry),label:"ENTRADA",color:"#d9f99d"},{value:Number(signal.sl),label:"SL",color:"#ff6579"},{value:Number(signal.tp1),label:"TP1",color:"#39e6a0"},{value:Number(signal.tp2),label:"TP2",color:"#39e6a0"}].filter(x=>Number.isFinite(x.value));tradeLevels.direction=String(signal.direction||"COMPRAR").toUpperCase();tradeLevels.time=Number(signal.time)||candleData.at(-1)?.time||0;drawMarketChart();}
 function clearTradeLevels(){tradeLevels=[];signalMarker=null;drawMarketChart();}
 function getActiveChartSymbol(){return chartSymbol;}
 function drawMarketChart(){if(chartFrame!==null)return;chartFrame=requestAnimationFrame(()=>{chartFrame=null;renderMarketChart();});}
@@ -152,9 +152,9 @@ function renderMarketChart(){
    const zoneHeight=Math.max(4,rawBottom-rawTop),zoneTop=rawTop;
    ctx.fillStyle=color+(type==="ob"?(active?"48":"20"):"12");ctx.fillRect(zoneX,zoneTop,zoneWidth,zoneHeight);
    if(type==="ob"){
-    ctx.strokeStyle=active?"#ffd166":color;ctx.lineWidth=active?2:1;ctx.strokeRect(zoneX,zoneTop,zoneWidth,zoneHeight);
-    if(active){ctx.shadowColor="#ffd166";ctx.shadowBlur=7;ctx.strokeRect(zoneX,zoneTop,zoneWidth,zoneHeight);ctx.shadowBlur=0;}
-    const obLabel=items.find(v=>v.label)?.label||(side==="BUY"?"OB ALCISTA":"OB BAJISTA");tag((active?"★ ":"")+obLabel,zoneX+5,Math.max(top+13,zoneTop+13),active?"#ffd166":color);
+    ctx.strokeStyle=color;ctx.lineWidth=active?1.25:.8;ctx.strokeRect(zoneX,zoneTop,zoneWidth,zoneHeight);
+    const obLabel=items.find(v=>v.label)?.label||(side==="BUY"?"OB ALCISTA":"OB BAJISTA");
+    if(zoneHeight>9)tag(obLabel.replace(" · A FAVOR","").replace(" · EN CONTRA",""),zoneX+4,Math.max(top+12,zoneTop+12),color);
 
    }
   });
@@ -178,6 +178,22 @@ function renderMarketChart(){
  levelGroups.forEach(v=>{const rawY=yOf(v.value),outside=rawY<top||rawY>h-bottom,y=Math.max(top+2,Math.min(h-bottom-2,rawY));ctx.save();ctx.strokeStyle=v.color;ctx.lineWidth=1.35;ctx.setLineDash(v.labels.includes("SL")?[5,4]:[3,3]);ctx.beginPath();ctx.moveTo(left,y);ctx.lineTo(w-right,y);ctx.stroke();ctx.setLineDash([]);const txt=(outside?(rawY<top?"↑ ":"↓ "):"")+v.labels.join(" / ")+" "+Number(v.value).toPrecision(7);ctx.font="bold 8px Arial";const tw=ctx.measureText(txt).width;ctx.fillStyle="rgba(7,16,28,.96)";ctx.fillRect(left+3,Math.max(top,y-12),tw+9,13);ctx.fillStyle=v.color;ctx.textAlign="left";ctx.fillText(txt,left+7,Math.max(top+9,Math.min(h-bottom-3,y-3)));ctx.restore();});
  // Línea y etiqueta persistentes del último tick. Si se navega por el histórico y el precio queda fuera de escala, se fija un indicador en el borde visible.
  if(Number.isFinite(liveChartPrice)){const outside=liveChartPrice>max||liveChartPrice<min,py=Math.max(top+2,Math.min(h-bottom-2,yOf(liveChartPrice))),priceText=liveChartPrice.toFixed( Math.max(2,Math.min(8,Math.max(0,(String(liveChartPrice).split(".")[1]||"").length))) );ctx.save();ctx.strokeStyle="#ffd166";ctx.lineWidth=1;ctx.setLineDash(outside?[2,3]:[4,3]);ctx.beginPath();ctx.moveTo(left,py);ctx.lineTo(w-right,py);ctx.stroke();ctx.setLineDash([]);ctx.fillStyle="#ffd166";ctx.fillRect(w-right+1,py-12,right-2,24);ctx.fillStyle="#081321";ctx.font="bold 10px Arial";ctx.textAlign="left";ctx.fillText((outside?(liveChartPrice>max?"↑ ":"↓ "):"")+priceText,w-right+4,py+4);ctx.fillStyle="#ffd166";ctx.font="bold 9px Arial";ctx.textAlign="left";ctx.fillText("PRECIO ACTUAL",left+5,Math.max(top+12,Math.min(h-bottom-5,py-7)));ctx.beginPath();ctx.fillStyle="#ffd166";ctx.arc(w-right-3,py,3,0,Math.PI*2);ctx.fill();ctx.restore();}
+ // TradingView Long/Short Position overlay: green reward area, red risk area, entry band and target/stop guides.
+ if(tradeLevels.length>=3){
+  const byLabel=Object.fromEntries(tradeLevels.map(v=>[v.label,v.value])),entry=byLabel.ENTRADA,sl=byLabel.SL,tp=byLabel.TP2??byLabel.TP1??byLabel.TP1,dir=tradeLevels.direction||"COMPRAR";
+  if(Number.isFinite(entry)&&Number.isFinite(sl)&&Number.isFinite(tp)){
+   const buy=dir==="COMPRAR"||dir==="BUY",yE=yOf(entry),yT=yOf(tp),yS=yOf(sl),anchor=Math.max(left,Math.min(w-right-8,left+(Math.max(0,timeIndex(tradeLevels.time)-start)+.5)*step)),x2=Math.min(w-right,Math.max(anchor+Math.max(70,step*9),w-right-8));
+   ctx.save();ctx.fillStyle=buy?"rgba(35,207,112,.22)":"rgba(255,101,121,.20)";ctx.fillRect(anchor,Math.min(yE,yT),x2-anchor,Math.max(2,Math.abs(yE-yT)));
+   ctx.fillStyle=buy?"rgba(255,83,99,.22)":"rgba(35,207,112,.20)";ctx.fillRect(anchor,Math.min(yE,yS),x2-anchor,Math.max(2,Math.abs(yE-yS)));
+   ctx.strokeStyle="#d9f99d";ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(anchor,yE);ctx.lineTo(x2,yE);ctx.stroke();
+   ctx.strokeStyle="#39e6a0";ctx.setLineDash([7,5]);ctx.beginPath();ctx.moveTo(anchor,yT);ctx.lineTo(w-right,yT);ctx.stroke();
+   ctx.strokeStyle="#ff6579";ctx.beginPath();ctx.moveTo(anchor,yS);ctx.lineTo(w-right,yS);ctx.stroke();ctx.setLineDash([]);
+   const label=(txt,y,bg,fg)=>{ctx.font="bold 9px Arial";const width=ctx.measureText(txt).width+12,xx=Math.max(left,Math.min(w-right-width,anchor+4));ctx.fillStyle=bg;ctx.fillRect(xx,Math.max(top,Math.min(h-bottom-18,y-10)),width,18);ctx.fillStyle=fg;ctx.textAlign="left";ctx.fillText(txt,xx+6,Math.max(top+12,Math.min(h-bottom-5,y+2)));};
+   label("ENTRADA "+entry.toPrecision(7),yE,"#155c43","#e8fff1");label("TP1 "+tp.toPrecision(7),yT,"#20c968","#04170d");label("SL "+sl.toPrecision(7),yS,"#b83e50","#fff");
+   if(Number.isFinite(byLabel.TP2)&&byLabel.TP2!==byLabel.TP1)label("TP2 "+byLabel.TP2.toPrecision(7),yOf(byLabel.TP2),"#20c968","#04170d");
+   ctx.restore();
+  }
+ }
  // Historical trade zones and exact price labels.
  visibleTrades.forEach(t=>{
   const entryTime=Number(t.entryTime)/1000,exitTime=Number(t.exitTime||Date.now())/1000;
