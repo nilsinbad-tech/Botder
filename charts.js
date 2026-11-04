@@ -33,8 +33,8 @@ function createMarketChart(containerId="chart-area"){
    const rect=chartCanvas.getBoundingClientRect(),mid=(p[0].x+p[1].x)/2;
    pinchAnchorRatio=Math.max(0,Math.min(1,(mid-rect.left-10)/Math.max(1,rect.width-76)));
    const end=Math.max(0,Math.min(candleData.length+viewCount-1,viewEnd||candleData.length+futureSpace));
-   const visibleCount=Math.min(viewCount,end);
-   pinchAnchorIndex=Math.max(0,end-visibleCount)+pinchAnchorRatio*visibleCount;
+   const start=Math.max(0,end-viewCount);
+   pinchAnchorIndex=start+pinchAnchorRatio*viewCount;
    dragX=null;
   }
  });
@@ -48,13 +48,13 @@ function createMarketChart(containerId="chart-area"){
    const p=[...activePointers.values()],dist=Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y);
    if(pinchStart>0){
     viewCount=Math.max(15,Math.min(5000,Math.round(pinchCount*pinchStart/Math.max(1,dist))));
-    const visible=Math.min(viewCount,candleData.length);
-    viewEnd=Math.max(visible,Math.min(candleData.length+viewCount-1,Math.round(pinchAnchorIndex+(1-pinchAnchorRatio)*visible)));
+    const nextEnd=pinchAnchorIndex+(1-pinchAnchorRatio)*viewCount;
+    viewEnd=Math.max(Math.min(viewCount,candleData.length),Math.min(candleData.length+viewCount-1,Math.round(nextEnd)));
    }
    drawMarketChart();return;
   }
   if(dragX===null)return;
-  const step=(chartCanvas.parentElement.clientWidth-76)/Math.max(1,Math.min(viewCount,candleData.length));
+  const step=(chartCanvas.parentElement.clientWidth-76)/Math.max(1,viewCount);
   const shift=Math.round((dragX-e.clientX)/Math.max(1,step));
   viewEnd=Math.max(Math.min(viewCount,candleData.length),Math.min(candleData.length+viewCount-1,dragEnd+shift));
   drawMarketChart();
@@ -71,7 +71,7 @@ function createMarketChart(containerId="chart-area"){
  chartCanvas.addEventListener("pointerup",endDrag);
  chartCanvas.addEventListener("pointercancel",endDrag);
  chartCanvas.addEventListener("lostpointercapture",endDrag);
- chartCanvas.addEventListener("wheel",e=>{e.preventDefault();const rect=chartCanvas.getBoundingClientRect(),ratio=Math.max(0,Math.min(1,(e.clientX-rect.left-10)/Math.max(1,rect.width-76))),end=Math.max(0,Math.min(candleData.length+viewCount-1,viewEnd||candleData.length)),oldCount=Math.min(viewCount,candleData.length),anchor=Math.max(0,end-oldCount)+ratio*oldCount;viewCount=Math.max(15,Math.min(5000,Math.round(viewCount*(e.deltaY>0?1.2:.82))));const next=Math.min(viewCount,candleData.length);viewEnd=Math.max(next,Math.min(candleData.length+viewCount-1,Math.round(anchor+(1-ratio)*next)));drawMarketChart();},{passive:false});
+ chartCanvas.addEventListener("wheel",e=>{e.preventDefault();const rect=chartCanvas.getBoundingClientRect(),ratio=Math.max(0,Math.min(1,(e.clientX-rect.left-10)/Math.max(1,rect.width-76))),end=Math.max(0,Math.min(candleData.length+viewCount-1,viewEnd||candleData.length+futureSpace)),start=Math.max(0,end-viewCount),anchor=start+ratio*viewCount;viewCount=Math.max(15,Math.min(5000,Math.round(viewCount*(e.deltaY>0?1.2:.82))));const nextEnd=anchor+(1-ratio)*viewCount;viewEnd=Math.max(Math.min(viewCount,candleData.length),Math.min(candleData.length+viewCount-1,Math.round(nextEnd)));drawMarketChart();},{passive:false});
  resizeMarketChart();drawMarketChart();return true;
 }
 function chartPoint(e){if(!chartCanvas)return null;const r=chartCanvas.getBoundingClientRect(),x=e.clientX-r.left,y=e.clientY-r.top,p=chartPlot;if(x<p.left||x>r.width-p.right||y<p.top||y>r.height-p.bottom||!Number.isFinite(scaleMin)||!Number.isFinite(scaleMax))return null;return {price:scaleMax-(y-p.top)/(r.height-p.top-p.bottom)*(scaleMax-scaleMin),index:p.start+(x-p.left)/p.step-.5};}
