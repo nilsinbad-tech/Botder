@@ -259,7 +259,7 @@ function findDiagonalStructure(source,seconds,tf){
 function depthSafe(v){return v;}
 function backstepSafe(v){return v;}
 function detectOrderBlocks(source,side){const found=[];for(let i=Math.max(1,source.length-180);i<source.length-1;i++){const c=source[i],next=source.slice(i+1,Math.min(source.length,i+5));if(side==="BUY"&&c.close<c.open&&next.some(n=>n.close>c.high)&&next.some(n=>n.close>n.open))found.push({side,low:c.low,high:Math.max(c.open,c.close),time:c.time});if(side==="SELL"&&c.close>c.open&&next.some(n=>n.close<c.low)&&next.some(n=>n.close<n.open))found.push({side,low:Math.min(c.open,c.close),high:c.high,time:c.time});}return found.filter((z,i,a)=>a.findIndex(v=>v.time===z.time)===i);}
-function latestObBias(source){const all=[...detectOrderBlocks(source,"BUY"),...detectOrderBlocks(source,"SELL")].sort((a,b)=>a.time-b.time).slice(-5);if(all.length<2)return null;const buys=all.filter(x=>x.side==="BUY").length,sells=all.length-buys;if(buys>=3&&buys-sells>=2)return"BUY";if(sells>=3&&sells-buys>=2)return"SELL";return null;}
+function latestObBias(source){const all=[...detectOrderBlocks(source,"BUY"),...detectOrderBlocks(source,"SELL")].sort((a,b)=>a.time-b.time);return all.length?all.at(-1).side:null;}
 function buildStructuralPlan(m1,displayTf){
  const h1=getHigherTimeframeHistory(3600).length?getHigherTimeframeHistory(3600):candlesAtTf(m1,3600),h4=getHigherTimeframeHistory(14400).length?getHigherTimeframeHistory(14400):candlesAtTf(m1,14400),d1=getHigherTimeframeHistory(86400)||[];
  const biasD1=latestObBias(d1),bias1=latestObBias(h1),bias4=latestObBias(h4),trend=bias1&&bias4&&bias1===bias4?bias1:null;
