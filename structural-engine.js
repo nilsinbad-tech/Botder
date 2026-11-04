@@ -13,7 +13,7 @@ function structurePivots(d,depth=3,deviation=3,backstep=3){
 }
 function findDiagonalStructure(source,seconds,tf){
  if(!Array.isArray(source)||source.length<30)return null;
- const d=source.slice().sort((a,b)=>a.time-b.time),p=structurePivots(d,3,3,3),ranges=d.slice(-20).map(c=>c.high-c.low).sort((a,b)=>a-b),median=ranges[Math.floor(ranges.length/2)]||Math.abs(d.at(-1).close)*1e-7;
+ const d=source.slice().sort((a,b)=>a.time-b.time),p=structurePivots(d,30,5,3),ranges=d.slice(-20).map(c=>c.high-c.low).sort((a,b)=>a-b),median=ranges[Math.floor(ranges.length/2)]||Math.abs(d.at(-1).close)*1e-7;
  const decimals=Math.max(0,...d.slice(-20).map(c=>{const s=String(c.close);return s.includes(".")?s.split(".")[1].length:0;})),tick=Math.pow(10,-Math.min(10,decimals)),tol=Math.max(2*tick,median*.10,Math.abs(d.at(-1).close)*1e-10),gap=6;
  const find=(side,pts,opps,sign)=>{let best=null;const points=pts.slice(-36),other=opps.slice(-120);
   for(let a=0;a<points.length-1;a++)for(let b=a+1;b<points.length;b++){const p1=points[a],p2=points[b],dx=p2.i-p1.i;if(dx<gap)continue;const slope=(p2.price-p1.price)/dx;if(Math.sign(slope)!==sign||Math.abs(p2.price-p1.price)<median*.15)continue;const base=i=>p1.price+slope*(i-p1.i),touches=[];let last=-Infinity,left=true;
@@ -33,16 +33,16 @@ function buildStructuralPlan(baseCandles,displayTf,ctx=null){
  const history=(sec,key)=>Array.isArray(ctx?.[key])&&ctx[key].length?ctx[key]:(sec===60?baseCandles:(typeof getHigherTimeframeHistory==="function"?getHigherTimeframeHistory(sec):aggregate(sec)));
  const h4=closed(history(14400,"h4"),14400),m30=closed(history(1800,"m30"),1800),h1=closed(history(3600,"h1"),3600),d1=closed(history(86400,"d1"),86400),active=closed(Array.isArray(ctx?.active)?ctx.active:history(tf,"active"),tf),label=tf>=3600?"H"+tf/3600:"M"+tf/60,candidate=findDiagonalStructure(active,tf,label),lines=[],items=[];
  if(candidate){[candidate.line1,candidate.line2].forEach((l,n)=>lines.push({...l,side:candidate.side,primary:n===0,label:n===0?label+" · "+(candidate.side==="BUY"?"SOPORTE":"RESISTENCIA"):"",touches:n===0?candidate.touches.slice(0,3).map((t,i)=>({time:t.time,price:t.price,n:i+1})):[],projectTime:candidate.projectTime}));}
- const dir=candidate?.side||null,target=closed(history(600,"target"),600),tpPiv=target.length>=9?structurePivots(target,3,3,3):{highs:[],lows:[]},localPiv=candidate?structurePivots(active,3,3,3):{highs:[],lows:[]};
+ const dir=candidate?.side||null,target=closed(history(600,"target"),600),tpPiv=target.length>=65?structurePivots(target,30,5,3):{highs:[],lows:[]},localPiv=candidate?structurePivots(active,30,5,3):{highs:[],lows:[]};
  const getTp2=(side,price)=>{let a=(side==="BUY"?tpPiv.highs:tpPiv.lows).map(p=>({price:p.price,time:target[p.i]?.time,kind:"PIVOTE M10"})).filter(p=>side==="BUY"?p.price>price:p.price<price).sort((x,y)=>side==="BUY"?x.price-y.price:y.price-x.price);if(!a.length)a=(side==="BUY"?localPiv.highs:localPiv.lows).map(p=>({price:p.price,time:active[p.i]?.time,kind:"PIVOTE "+label})).filter(p=>side==="BUY"?p.price>price:p.price<price).sort((x,y)=>side==="BUY"?x.price-y.price:y.price-x.price);return a[0]||null;};
  let thirdTouch=null,rejection=null,confirmation=null,projection=null,signal=null,tp1=null,tp2=null,sl=null,validLevels=false,confirmed=false;
  if(candidate?.third){thirdTouch=candidate.third;const d=candidate.d,idx=thirdTouch.i,rej=d[idx],follow=d.slice(idx+1,idx+4),slope=(candidate.line1.price2-candidate.line1.price1)/Math.max(1,candidate.line1.time2-candidate.line1.time1),lineAt=t=>candidate.line1.price1+slope*(t-candidate.line1.time1),oppSlope=(candidate.line2.price2-candidate.line2.price1)/Math.max(1,candidate.line2.time2-candidate.line2.time1),oppAt=t=>candidate.line2.price1+oppSlope*(t-candidate.line2.time1),touchPrice=lineAt(thirdTouch.time),range=Math.max(1e-12,rej.high-rej.low),body=Math.abs(rej.close-rej.open),lw=Math.min(rej.open,rej.close)-rej.low,uw=rej.high-Math.max(rej.open,rej.close),doji=isDoji(rej);
   const rejected=dir==="BUY"?(doji||rej.close<rej.open)&&lw>=Math.max(body*.2,range*.12)&&rej.close>=touchPrice-candidate.tolerance*.15:(doji||rej.close>rej.open)&&uw>=Math.max(body*.2,range*.12)&&rej.close<=touchPrice+candidate.tolerance*.15;if(rejected)rejection=rej;
   const three=follow.length===3&&follow.every(c=>dir==="BUY"?c.close>c.open:c.close<c.open),exact=active.length-1===idx+3;if(rejected&&three&&exact)confirmation=follow[2];
-  const entryTime=confirmation?.time??d[Math.min(d.length-1,idx+3)]?.time??thirdTouch.time,entry=confirmation?.close??d[Math.min(d.length-1,idx+3)]?.close??touchPrice,tp1Price=oppAt(entryTime);tp1={price:tp1Price,kind:"LÍNEA OPUESTA"};tp2=getTp2(dir,tp1Price);const margin=candidate.tolerance*.25;sl=dir==="BUY"?candidate.first.price-margin:candidate.first.price+margin;
+  const entryTime=confirmation?.time??d[Math.min(d.length-1,idx+3)]?.time??thirdTouch.time,entry=touchPrice,tp1Price=oppAt(entryTime);tp1={price:tp1Price,kind:"LÍNEA OPUESTA"};tp2=getTp2(dir,tp1Price);const margin=candidate.tolerance*.25;sl=dir==="BUY"?candidate.first.price-margin:candidate.first.price+margin;
   validLevels=!!tp2&&Number.isFinite(entry)&&Number.isFinite(sl)&&(dir==="BUY"?sl<entry&&tp1Price>entry&&tp2.price>tp1Price:sl>entry&&tp1Price<entry&&tp2.price<tp1Price);confirmed=!!rejection&&!!confirmation&&validLevels;
-  const low=touchPrice-candidate.tolerance,high=touchPrice+candidate.tolerance;projection={direction:dir==="BUY"?"COMPRAR":"VENDER",zoneLow:low,zoneHigh:high,low,high,entry,sl,tp1:tp1Price,tp2:tp2?.price,projectTime:thirdTouch.time,stage:!rejection?"T3 · ESPERANDO RECHAZO":!three?"ESPERANDO 3 VELAS A FAVOR":!exact?"CONFIRMACIÓN CERRADA":!validLevels?"NIVELES NO VÁLIDOS":confirmed?"SEÑAL CONFIRMADA":"ESPERANDO",timeframe:label,confirmed,reason:"Rechazo en tercer toque + 3 velas cerradas a favor"};
-  if(confirmed)signal={direction:dir==="BUY"?"COMPRAR":"VENDER",entry,sl,tp1:tp1Price,tp2:tp2.price,time:confirmation.time+candidate.seconds,touchTime:thirdTouch.time,touchIndex:idx,timeframe:label,mode:"CANAL 3 TOQUES + RECHAZO + 3 VELAS"};
+  const low=touchPrice-candidate.tolerance,high=touchPrice+candidate.tolerance;projection={direction:dir==="BUY"?"COMPRAR":"VENDER",zoneLow:low,zoneHigh:high,low,high,entry,sl,tp1:tp1Price,tp2:tp2?.price,entryTolerance:candidate.tolerance,projectTime:thirdTouch.time,stage:!rejection?"T3 · ESPERANDO RECHAZO":!three?"ESPERANDO 3 VELAS A FAVOR":!exact?"CONFIRMACIÓN CERRADA":!validLevels?"NIVELES NO VÁLIDOS":confirmed?"SEÑAL CONFIRMADA":"ESPERANDO",timeframe:label,confirmed,reason:"Rechazo en tercer toque + 3 velas cerradas a favor"};
+  if(confirmed)signal={direction:dir==="BUY"?"COMPRAR":"VENDER",entry,sl,tp1:tp1Price,tp2:tp2.price,time:confirmation.time+candidate.seconds,touchTime:thirdTouch.time,touchIndex:idx,entryTolerance:candidate.tolerance,timeframe:label,mode:"CANAL 3 TOQUES + RECHAZO + 3 VELAS"};
   if(confirmed)items.push({type:"signal",price:thirdTouch.price,label:signal.direction,side:signal.direction,time:thirdTouch.time});
  }
  const h4Obs=[...detectOrderBlocks(h4,"BUY"),...detectOrderBlocks(h4,"SELL")].sort((a,b)=>a.time-b.time),m30Obs=[...detectOrderBlocks(m30,"BUY"),...detectOrderBlocks(m30,"SELL")].sort((a,b)=>a.time-b.time),bias4=h4Obs.at(-1)?.side||null,bias30=m30Obs.at(-1)?.side||null,biasD1=latestObBias(d1);
@@ -100,7 +100,7 @@ function runStructuralBacktest(symbol,market,candles,displayTf){
 function analyzeCandles(symbol,market,candles){
  if(!Array.isArray(candles)||candles.length<100)return;const d=candles.slice().sort((a,b)=>a.time-b.time),i=d.length-2;if(i<65)return;const closed=d[i],tf=Number(document.getElementById("timeframe")?.value)||60,plan=buildStructuralPlan(d.slice(0,i+1),tf);
  if(typeof evaluateOpenOperations==="function")evaluateOpenOperations(symbol,closed);if(typeof evaluateStrategyJournal==="function")evaluateStrategyJournal(symbol,closed);
- lastProjection=plan.projection;setText("side-analysis-status","● "+plan.status);setText("structure-diagnostic","ESTRUCTURA "+(plan.candidate?.tf||"M"+tf/60)+" · "+plan.status+" · "+plan.recommendation+" · "+(plan.activeSource?.length||0)+" VELAS · PIVOTE 3/3");
+ lastProjection=plan.projection;setText("side-analysis-status","● "+plan.status);setText("structure-diagnostic","ESTRUCTURA "+(plan.candidate?.tf||"M"+tf/60)+" · "+plan.status+" · "+plan.recommendation+" · "+(plan.activeSource?.length||0)+" VELAS · ZIGZAG 30/5/3");
  setText("trend-h4",plan.bias4==="BUY"?"ZONA COMPRA":plan.bias4==="SELL"?"ZONA VENTA":"SIN ZONA H4");setText("confirm-m30",plan.recommendation||"INFORMATIVO");setText("confirm-m1",plan.rejection?"RECHAZO DETECTADO":plan.thirdTouch?"ESPERANDO 3 VELAS A FAVOR":"ESPERANDO 3 TOQUES");setText("touch-status",plan.thirdTouch?"3º TOQUE":(plan.candidate?.touches?.length||0)+"/3 TOQUES");setText("ob-status",plan.bias4||"BUSCANDO");setText("channel-status",plan.candidate?.side==="BUY"?"ALCISTA":plan.candidate?.side==="SELL"?"BAJISTA":"BUSCANDO");
  if(typeof renderProjection==="function")renderProjection(plan);
  const active=plan.activeSource?.at(-1),btKey=symbol+":"+tf;if(structuralBacktestValidatedKey!==btKey&&structuralBacktestRunningKey!==btKey&&plan.activeSource?.length>=120){structuralBacktestKey=btKey;runStructuralBacktest(symbol,market,plan.activeSource,tf);}
@@ -116,11 +116,50 @@ function recordStrategyTrade(signal){
 }
 function renderStrategyJournal(){
  const closed=strategyJournal.filter(t=>t.result==="GANADA"||t.result==="PERDIDA"),wins=closed.filter(t=>t.result==="GANADA").length;
- setText("bt-wins",wins);setText("bt-losses",closed.length-wins);setText("bt-rate",closed.length?(wins/closed.length*100).toFixed(1)+"%":"0%");setText("bt-total",strategyJournal.length);setText("bt-open",strategyJournal.filter(t=>t.result==="ABIERTA").length);
+ setText("bt-wins",wins);setText("bt-losses",closed.length-wins);setText("bt-rate",closed.length?(wins/closed.length*100).toFixed(1)+"%":"0%");setText("bt-total",strategyJournal.filter(t=>t.result!=="ESPERANDO ENTRADA").length);setText("bt-open",strategyJournal.filter(t=>t.result==="ABIERTA"||t.result==="ESPERANDO ENTRADA").length);
  const area=document.getElementById("history");if(!area)return;const safe=v=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
- if(typeof setChartBacktestTrades==="function")setChartBacktestTrades([...(backtestTradeData||[]),...strategyJournal.map(t=>({...t,tp1:t.tp1,tp2:t.tp2,price:t.exitPrice,exitTime:t.exitTime||Date.now()}))]);
- area.innerHTML=strategyJournal.length?strategyJournal.map(t=>'<article class="history-row"><div><strong>'+safe(t.market||t.symbol)+' · '+safe(t.direction)+' · '+safe(t.timeframe)+'</strong><small>'+new Date(t.entryTime).toLocaleString("es-PA",{dateStyle:"short",timeStyle:"short"})+' · T3 '+new Date(t.touchTime||t.entryTime).toLocaleTimeString("es-PA",{hour:"2-digit",minute:"2-digit"})+' · ENTRADA '+fmt(t.entry)+' · SL '+fmt(t.sl)+' · TP1 '+fmt(t.tp1)+' · TP2 '+fmt(t.tp2)+(t.exitPrice!=null?' · SALIDA '+fmt(t.exitPrice):'')+(t.exitReason?' · '+safe(t.exitReason):'')+'</small></div><span class="history-result '+t.result+'">'+(t.result==="ABIERTA"?"EN CURSO":t.result)+'</span></article>').join(""):'<div class="empty-state">Aún no hay señales confirmadas registradas.</div>';
+ if(typeof setChartBacktestTrades==="function")setChartBacktestTrades([...(backtestTradeData||[]),...strategyJournal.map(t=>({...t,tp1:t.tp1,tp2:t.tp2,price:t.exitPrice,entryTime:t.entryTime||t.touchTime,zoneTime:t.touchTime,exitTime:t.exitTime||0,entered:t.result!=="ESPERANDO ENTRADA",timeframeSeconds:t.timeframeSeconds}))]);
+ area.innerHTML=strategyJournal.length?strategyJournal.map(t=>'<article class="history-row"><div><strong>'+safe(t.market||t.symbol)+' · '+safe(t.direction)+' · '+safe(t.timeframe)+'</strong><small>'+new Date(t.entryTime).toLocaleString("es-PA",{dateStyle:"short",timeStyle:"short"})+' · T3 '+new Date(t.touchTime||t.entryTime).toLocaleTimeString("es-PA",{hour:"2-digit",minute:"2-digit"})+' · ENTRADA '+fmt(t.entry)+' · SL '+fmt(t.sl)+' · TP1 '+fmt(t.tp1)+' · TP2 '+fmt(t.tp2)+(t.exitPrice!=null?' · SALIDA '+fmt(t.exitPrice):'')+(t.exitReason?' · '+safe(t.exitReason):'')+'</small></div><span class="history-result '+t.result+'">'+(t.result==="ABIERTA"?"ENTRADA ACTIVADA":t.result==="ESPERANDO ENTRADA"?"ESPERANDO TOQUE":t.result)+'</span></article>').join(""):'<div class="empty-state">Aún no hay señales confirmadas registradas.</div>';
 }
+
+
+/* Señales automáticas: el sistema activa al tocar la zona de entrada; no requiere botones.
+   La entrada es el tercer toque estructural, SL el primer toque, TP1 la línea opuesta y TP2 el pivote siguiente. */
+function renderSignals(){
+ const active=strategyJournal.filter(t=>t.symbol===(typeof selectedSymbol!=="undefined"?selectedSymbol:t.symbol)&&!["GANADA","PERDIDA"].includes(t.result));
+ setText("signal-count",active.length);
+ const safe=v=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+ const price=v=>Number.isFinite(Number(v))?fmt(v):"—";
+ const markup=active.length?active.map(t=>'<article class="signal-card"><div class="muted">'+safe(t.market||t.symbol)+' · '+safe(t.timeframe)+'</div><h3 class="'+(t.direction==="COMPRAR"?"buy":"sell")+'">'+safe(t.direction)+'</h3><div class="levels"><div class="level"><span>ENTRADA · ZONA T3</span><strong>'+price(t.entry)+'</strong></div><div class="level"><span>SL · PRIMER TOQUE</span><strong>'+price(t.sl)+'</strong></div><div class="level"><span>TP1 · LÍNEA OPUESTA</span><strong>'+price(t.tp1)+'</strong></div><div class="level"><span>TP2 · PIVOTE</span><strong>'+price(t.tp2)+'</strong></div></div><div class="muted">'+safe(t.result==="ESPERANDO ENTRADA"?"ESPERANDO TOQUE DE ZONA":t.result==="ABIERTA"?"ENTRADA ACTIVADA · EN SEGUIMIENTO":t.result)+'</div></article>').join(""):'<div class="empty-state">Buscando la próxima entrada estructural.</div>';
+ ["signals-top","signals-sidebar","signals"].forEach(id=>{const area=document.getElementById(id);if(area)area.innerHTML=markup;});
+}
+function recordStrategyTrade(signal){
+ if(!signal||strategyJournal.some(t=>t.symbol===signal.symbol&&t.structureKey===signal.structureKey))return;
+ strategyJournal.unshift({id:"STR-"+Date.now().toString(36).toUpperCase(),symbol:signal.symbol,market:signal.market,direction:signal.direction,entry:Number(signal.entry),sl:Number(signal.sl),tp1:Number(signal.tp1),tp2:Number(signal.tp2),entryTolerance:Number(signal.entryTolerance)||0,timeframe:signal.timeframe||"",timeframeSeconds:Number(document.getElementById("timeframe")?.value)||60,structureKey:signal.structureKey,touchTime:Number(signal.touchTime||signal.time)*1000,signalTime:Number(signal.time)*1000,entryTime:0,result:"ESPERANDO ENTRADA"});
+ strategyJournal=strategyJournal.slice(0,2000);saveStrategyJournal();renderStrategyJournal();renderSignals();
+}
+function evaluateStrategyJournal(symbol,candle){
+ if(!candle)return;let changed=false;
+ strategyJournal.forEach(t=>{
+  if(t.symbol!==symbol||["GANADA","PERDIDA"].includes(t.result))return;
+  const entry=Number(t.entry),tol=Math.max(0,Number(t.entryTolerance)||0);
+  if(t.result==="ESPERANDO ENTRADA"){
+   if(candle.time*1000<Number(t.signalTime||0))return;
+   const touched=candle.low<=entry+tol&&candle.high>=entry-tol;
+   if(!touched)return;
+   t.result="ABIERTA";t.entryTime=candle.time*1000;t.triggerPrice=entry;changed=true;
+  }
+  if(t.result!=="ABIERTA"||candle.time*1000<Number(t.entryTime||0))return;
+  const stop=t.direction==="COMPRAR"?candle.low<=t.sl:candle.high>=t.sl;
+  const one=t.direction==="COMPRAR"?candle.high>=t.tp1:candle.low<=t.tp1;
+  const two=t.direction==="COMPRAR"?candle.high>=t.tp2:candle.low<=t.tp2;
+  if(stop){t.result="PERDIDA";t.exitPrice=t.sl;t.exitReason="SL";t.exitTime=candle.time*1000;changed=true;return;}
+  if(two||one){t.result="GANADA";t.exitPrice=two?t.tp2:t.tp1;t.exitReason=two?"TP2":"TP1";t.exitTime=candle.time*1000;changed=true;}
+ });
+ if(changed){saveStrategyJournal();renderStrategyJournal();renderSignals();}
+}
+function markEntered(){return false;}
+function markIgnored(){return false;}
 
 if(typeof renderStrategyJournal==="function")renderStrategyJournal();
 
