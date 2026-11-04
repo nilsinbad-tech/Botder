@@ -55,7 +55,7 @@ document.addEventListener("DOMContentLoaded",()=>{["rsi-timeframe","rsi-period",
 
 const strategyConfig={emaPeriods:[9,20,50],rsiPeriod:14};
 
-let analysisGranularity=60,lastProjection=null,lastProjectionNotice="";
+let analysisGranularity=60,lastProjection=null,lastProjectionNotice="",cachedStructureItems=[];
 function emaSeries(v,p){const o=Array(v.length).fill(null);if(v.length<p)return o;let e=v.slice(0,p).reduce((a,b)=>a+b,0)/p,k=2/(p+1);o[p-1]=e;for(let i=p;i<v.length;i++){e=v[i]*k+e*(1-k);o[i]=e;}return o;}
 function rsiSeries(v,p=14){const o=Array(v.length).fill(null);if(v.length<=p)return o;let g=0,l=0;for(let i=1;i<=p;i++){let d=v[i]-v[i-1];g+=Math.max(0,d);l+=Math.max(0,-d);}let ag=g/p,al=l/p;o[p]=al===0?100:100-100/(1+ag/al);for(let i=p+1;i<v.length;i++){let d=v[i]-v[i-1];ag=(ag*(p-1)+Math.max(0,d))/p;al=(al*(p-1)+Math.max(0,-d))/p;o[i]=al===0?100:100-100/(1+ag/al);}return o;}
 function pivotsAt(d,end,depth=2){let highs=[],lows=[];for(let i=Math.max(depth,end-180);i<=end-depth;i++){let h=true,l=true;for(let j=1;j<=depth;j++){if(d[i].high<=d[i-j].high||d[i].high<d[i+j].high)h=false;if(d[i].low>=d[i-j].low||d[i].low>d[i+j].low)l=false;}if(h)highs.push({i,price:d[i].high});if(l)lows.push({i,price:d[i].low});}return{highs,lows};}
@@ -84,7 +84,7 @@ document.addEventListener("DOMContentLoaded",()=>{try{obAnalysisSeconds=Number(l
 function obNearEma9(d,i,x,ob){if(!ob||!d[i]||!Number.isFinite(x.e9[i]))return false;const lo=Math.min(ob.low,ob.high),hi=Math.max(ob.low,ob.high),e=x.e9[i],dist=e<lo?lo-e:e>hi?e-hi:0;let sum=0,n=0;for(let k=Math.max(1,i-13);k<=i;k++){const c=d[k],p=d[k-1],tr=Math.max(c.high-c.low,Math.abs(c.high-p.close),Math.abs(c.low-p.close));if(Number.isFinite(tr)){sum+=tr;n++;}}const atr=n?sum/n:Math.max(d[i].high-d[i].low,1e-8);return dist<=atr*1.5;}
 function structureAt(d,i,x){
  const c=d[i],prev=d[i-1];if(!c||!prev||x.rsi[i]==null)return{annotations:[],signal:null,projection:null};
- const od=aggregateCandlesM1(d,i-1,obAnalysisSeconds),ld=aggregateCandlesM1(d,i-1,liquidityAnalysisSeconds),oi=od.lastIndex,li=ld.lastIndex;
+ const od=aggregateCandlesM1(d,i,obAnalysisSeconds),ld=aggregateCandlesM1(d,i-1,liquidityAnalysisSeconds),oi=od.lastIndex,li=ld.lastIndex;
  const op=pivotsAt(od.candles,oi-2),lp=pivotsAt(ld.candles,li-2),z=getZones(od.candles,oi),pools=activeLiquidityPools(ld.candles,li-2,lp),piv=pivotsAt(d,i-2),ann=[];z.ob=z.ob.filter(v=>obNearEma9(d,i,x,v));
  const mark=(type,price,label,side,time=c.time)=>{if(Number.isFinite(price))ann.push({type,price,label,side,time});};
  piv.highs.slice(-8).forEach(p=>mark("pivot",p.price,"PIVOTE ALTO","",d[p.i].time));piv.lows.slice(-8).forEach(p=>mark("pivot",p.price,"PIVOTE BAJO","",d[p.i].time));
@@ -135,6 +135,7 @@ function analyzeCandles(symbol,market,candles){
  const obGroups=new Map();unique.filter(v=>v.type==="ob").forEach(v=>{const key=v.time+"|"+v.side;if(!obGroups.has(key))obGroups.set(key,[]);obGroups.get(key).push(v);});
  const newestOb=[...obGroups.entries()].sort((a,b)=>Number(b[0].split("|")[0])-Number(a[0].split("|")[0]))[0];
  if(newestOb)newestOb[1].forEach(v=>v.active=true);
+ cachedStructureItems=unique;
  lastProjection=structureProjection;renderProjectionCard(zoneOutlook);
  const trendBuy=x.e9[i]>x.e20[i],trendSell=x.e9[i]<x.e20[i],tradePlan=trendBuy?zoneOutlook?.buy:trendSell?zoneOutlook?.sell:null;
  if(typeof drawTradeLevels==="function"){if(r.signal)drawTradeLevels(r.signal);else if(tradePlan)drawTradeLevels({entry:tradePlan.entry,sl:tradePlan.sl,tp1:tradePlan.tp1,tp2:tradePlan.tp2,time:d[i].time,direction:tradePlan.direction});else if(typeof clearTradeLevels==="function")clearTradeLevels();}
@@ -151,6 +152,18 @@ function analyzeCandles(symbol,market,candles){
  lastSignalKey=key;addSignal({...r.signal,symbol,market,candleTime:r.signal.time});
  notifyBot("Botder: señal confirmada",r.signal.direction+" · Entrada "+fmt(r.signal.entry)+" · SL "+fmt(r.signal.sl));
  if(typeof drawTradeLevels==="function")drawTradeLevels(r.signal);
+}
+function analyzeLiveStructure(symbol,candles){
+ if(!Array.isArray(candles)||candles.length<100||symbol!==selectedMarket?.symbol)return;
+ const d=candles.slice().sort((a,b)=>a.time-b.time),i=d.length-1,x=makeIndicators(d);
+ if(i<65)return;
+ // Solo previsualiza OB de la vela que se está formando; nunca genera señales ni modifica el backtest.
+ const live=structureAt(d,i,x),liveOb=live.annotations.filter(a=>a.type==="ob");
+ const merged=[...cachedStructureItems.filter(a=>a.type!=="ob"||a.time<d[i].time),...liveOb];
+ const groups=new Map();merged.filter(a=>a.type==="ob").forEach(a=>{const k=a.time+"|"+a.side;if(!groups.has(k))groups.set(k,[]);groups.get(k).push(a);});
+ const newest=[...groups.entries()].sort((a,b)=>Number(b[0].split("|")[0])-Number(a[0].split("|")[0]))[0];
+ if(newest)newest[1].forEach(a=>a.active=true);
+ if(typeof setStructureOverlay==="function")setStructureOverlay({items:merged,projection:lastProjection});
 }
 function drawRsiPanel(series){let host=document.getElementById("rsi-area");if(!host)return;host.innerHTML="";let cv=document.createElement("canvas");cv.style.cssText="width:100%;height:100%;display:block";host.appendChild(cv);let dpr=Math.min(devicePixelRatio||1,2),w=host.clientWidth,h=host.clientHeight;cv.width=w*dpr;cv.height=h*dpr;let x=cv.getContext("2d");x.scale(dpr,dpr);for(let level of [40,50,60]){let y=10+(100-level)/100*(h-28);x.strokeStyle=level===50?"#8495aa":"#43546b";x.setLineDash([4,3]);x.beginPath();x.moveTo(24,y);x.lineTo(w-8,y);x.stroke();x.setLineDash([]);x.fillStyle="#a8b5c6";x.font="9px Arial";x.fillText(String(level),2,y+3);}x.beginPath();let st=Math.max(0,series.length-200),beg=false;for(let i=st;i<series.length;i++){if(series[i]==null)continue;let px=24+(i-st)/Math.max(1,series.length-st-1)*(w-32),py=10+(100-series[i])/100*(h-28);if(!beg){x.moveTo(px,py);beg=true;}else x.lineTo(px,py);}x.strokeStyle="#48a8ff";x.lineWidth=1.7;x.stroke();setText("rsi-current","RSI: "+(series.at(-1)==null?"--":series.at(-1).toFixed(1)));}
 function optimizeBacktest(){setText("optimizer-result","Validación pendiente: no se optimizan parámetros para forzar un porcentaje de acierto.");}
