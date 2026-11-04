@@ -9,26 +9,55 @@ function createMarketChart(containerId="chart-area"){
  chartContext=chartCanvas.getContext("2d");if(!chartContext)return false;
  if(resizeObserver)resizeObserver.disconnect();resizeObserver=new ResizeObserver(resizeMarketChart);resizeObserver.observe(host);
  chartCanvas.addEventListener("pointerdown",e=>{
+  if(e.pointerType==="mouse"&&e.button!==0)return;
   activePointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
-  chartCanvas.setPointerCapture(e.pointerId);
-  if(activePointers.size===1){dragX=e.clientX;dragEnd=Math.max(0,Math.min(candleData.length,viewEnd||candleData.length));viewEnd=dragEnd;chartCanvas.style.cursor="grabbing";}
-  if(activePointers.size===2){const p=[...activePointers.values()];pinchStart=Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y);pinchCount=viewCount;const rect=chartCanvas.getBoundingClientRect(),mid=(p[0].x+p[1].x)/2;pinchAnchorRatio=Math.max(0,Math.min(1,(mid-rect.left-10)/Math.max(1,rect.width-76)));const end=Math.max(0,Math.min(candleData.length,viewEnd||candleData.length));const visibleCount=Math.min(viewCount,end);pinchAnchorIndex=Math.max(0,end-visibleCount)+pinchAnchorRatio*visibleCount;dragX=null;}
+  try{chartCanvas.setPointerCapture(e.pointerId);}catch(_){}
+  if(activePointers.size===1){
+   dragX=e.clientX;
+   dragEnd=Math.max(0,Math.min(candleData.length,viewEnd||candleData.length));
+   viewEnd=dragEnd;
+   chartCanvas.style.cursor="grabbing";
+  }else if(activePointers.size===2){
+   const p=[...activePointers.values()];
+   pinchStart=Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y);
+   pinchCount=viewCount;
+   const rect=chartCanvas.getBoundingClientRect(),mid=(p[0].x+p[1].x)/2;
+   pinchAnchorRatio=Math.max(0,Math.min(1,(mid-rect.left-10)/Math.max(1,rect.width-76)));
+   const end=Math.max(0,Math.min(candleData.length,viewEnd||candleData.length));
+   const visibleCount=Math.min(viewCount,end);
+   pinchAnchorIndex=Math.max(0,end-visibleCount)+pinchAnchorRatio*visibleCount;
+   dragX=null;
+  }
  });
  chartCanvas.addEventListener("pointermove",e=>{
   if(!activePointers.has(e.pointerId))return;
+  const previous=activePointers.get(e.pointerId);
   activePointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
   if(activePointers.size>=2){
    const p=[...activePointers.values()],dist=Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y);
-   if(pinchStart>0){viewCount=Math.max(15,Math.min(5000,Math.round(pinchCount*pinchStart/Math.max(1,dist))));const visible=Math.min(viewCount,candleData.length);const end=pinchAnchorIndex+(1-pinchAnchorRatio)*visible;viewEnd=Math.max(visible,Math.min(candleData.length,Math.round(end)));}
+   if(pinchStart>0){
+    viewCount=Math.max(15,Math.min(5000,Math.round(pinchCount*pinchStart/Math.max(1,dist))));
+    const visible=Math.min(viewCount,candleData.length);
+    viewEnd=Math.max(visible,Math.min(candleData.length,Math.round(pinchAnchorIndex+(1-pinchAnchorRatio)*visible)));
+   }
    drawMarketChart();return;
   }
   if(dragX===null)return;
-  const step=(chartCanvas.parentElement.clientWidth-76)/Math.max(1,viewCount);
+  const step=(chartCanvas.parentElement.clientWidth-76)/Math.max(1,Math.min(viewCount,candleData.length));
   const shift=Math.round((dragX-e.clientX)/Math.max(1,step));
-  viewEnd=Math.max(Math.min(viewCount,candleData.length),Math.min(candleData.length,dragEnd+shift));drawMarketChart();
+  viewEnd=Math.max(Math.min(viewCount,candleData.length),Math.min(candleData.length,dragEnd+shift));
+  drawMarketChart();
  });
- const endDrag=e=>{activePointers.delete(e.pointerId);if(activePointers.size<2)pinchStart=0;if(activePointers.size===1){const p=[...activePointers.values()][0];dragX=p.x;dragEnd=viewEnd;}else{dragX=null;chartCanvas.style.cursor="grab";}};
- chartCanvas.addEventListener("pointerup",endDrag);chartCanvas.addEventListener("pointercancel",endDrag);
+ const endDrag=e=>{
+  activePointers.delete(e.pointerId);
+  if(activePointers.size<2)pinchStart=0;
+  if(activePointers.size===1){
+   const p=[...activePointers.values()][0];dragX=p.x;dragEnd=viewEnd;
+  }else{dragX=null;chartCanvas.style.cursor="grab";}
+ };
+ chartCanvas.addEventListener("pointerup",endDrag);
+ chartCanvas.addEventListener("pointercancel",endDrag);
+ chartCanvas.addEventListener("lostpointercapture",endDrag);
  chartCanvas.addEventListener("wheel",e=>{e.preventDefault();const rect=chartCanvas.getBoundingClientRect(),ratio=Math.max(0,Math.min(1,(e.clientX-rect.left-10)/Math.max(1,rect.width-76))),end=Math.max(0,Math.min(candleData.length,viewEnd||candleData.length)),oldCount=Math.min(viewCount,end),anchor=Math.max(0,end-oldCount)+ratio*oldCount;viewCount=Math.max(15,Math.min(5000,Math.round(viewCount*(e.deltaY>0?1.2:.82))));const next=Math.min(viewCount,candleData.length);viewEnd=Math.max(next,Math.min(candleData.length,Math.round(anchor+(1-ratio)*next)));drawMarketChart();},{passive:false});
  resizeMarketChart();drawMarketChart();return true;
 }
