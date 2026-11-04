@@ -110,7 +110,7 @@ function renderMarketChart(){
  const annotations=[
   ...recent("liquidity",2,""),
   ...recent("bos",2).filter(a=>a.side!=="BULL"),...recent("choch",2),...recent("sweep",2),...visibleAnnotations.filter(a=>a.type==="signal"),
-  ...["BUY","SELL"].flatMap(side=>{const a=allAnnotations.filter(v=>v.type==="ob"&&v.side===side&&v.time>=visibleStart&&v.time<=visibleEnd).sort((u,v)=>u.time-v.time),groups=new Map();a.forEach(v=>{if(!groups.has(v.time))groups.set(v.time,[]);groups.get(v.time).push(v);});const valid=[...groups.values()].filter(g=>g.length>=2);return valid.slice(-2).flat();})
+  ...(()=>{const a=allAnnotations.filter(v=>v.type==="ob"&&v.time>=visibleStart&&v.time<=visibleEnd).sort((u,v)=>v.time-u.time),groups=new Map();a.forEach(v=>{if(!groups.has(v.time+"|"+v.side))groups.set(v.time+"|"+v.side,[]);groups.get(v.time+"|"+v.side).push(v);});const candidates=[...groups.values()].filter(g=>g.length>=2).map(g=>({items:g,hi:Math.max(...g.map(v=>v.price)),lo:Math.min(...g.map(v=>v.price)),time:g[0].time})).sort((u,v)=>v.time-u.time),kept=[];for(const z of candidates){if(kept.some(k=>z.lo<=k.hi&&z.hi>=k.lo))continue;kept.push(z);}return kept.flatMap(z=>z.items);})()
  ];
  const xAt=time=>{const ix=data.findIndex(v=>v.time>=time);return left+(Math.max(0,ix)+.5)*step;};
  const zoneGroups=new Map();
