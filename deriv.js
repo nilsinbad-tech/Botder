@@ -202,7 +202,7 @@ function loadMarketHistory(symbol, granularity = selectedGranularity) {
 function openMarket(symbol) {
   if (!symbol || !sendDeriv({ forget_all: "ticks" })) { /* socket may still be connecting */ }
   if (!derivSocket || derivSocket.readyState !== WebSocket.OPEN) return;
-  selectedSymbol = symbol; candleBuffer = []; higherTfBuffers={1800:[],3600:[],14400:[],86400:[]}; tickSubId = null; candleSubId = null; lastTickAt = 0; lastTickResubscribeAt = 0;
+  selectedSymbol = symbol; candleBuffer = []; higherTfBuffers={600:[],1800:[],3600:[],14400:[],86400:[]}; tickSubId = null; candleSubId = null; lastTickAt = 0; lastTickResubscribeAt = 0;
   sendDeriv({ forget_all: "candles" });
   sendDeriv({ forget_all: "ticks" });
   if (typeof setChartSymbol === "function") setChartSymbol(symbol);
