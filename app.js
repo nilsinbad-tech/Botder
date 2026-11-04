@@ -149,54 +149,6 @@ function runStructuralBacktest(symbol,market,candles,displayTf){
 function runBacktest(symbol,market,candles){if(!Array.isArray(candles)||candles.length<100){setText("chart-message","Esperando al menos 100 velas M1 para el backtesting.");return;}let d=candles.slice().sort((a,b)=>a.time-b.time),x=makeIndicators(d),trades=[],annotations=[],nextFree=-1;for(let i=65;i<d.length-1;i++){let r=structureAt(d,i,x);annotations.push(...r.annotations);if(r.signal){annotations.push({type:"signal",price:r.signal.entry,label:r.signal.direction,side:r.signal.direction,time:d[i].time});if(i>nextFree){let t=computeTrade(d,r.signal,i);trades.push({...t,symbol,market});nextFree=t.exitTime?Math.max(i,d.findIndex(v=>v.time*1000===t.exitTime)):i;}}}backtestTrades.splice(0,backtestTrades.length,...trades);setBacktestTrades(trades);backtestSymbol=symbol;backtestReady=true;updateDailyPanel();drawRsiPanel(x.rsi,d);let closed=trades.filter(t=>t.result==="GANADA"||t.result==="PERDIDA"),wins=closed.filter(t=>t.result==="GANADA").length;setText("chart-message","Historial M1 actualizado · señales actuales según estructura H1/H4 + confirmación de 3 OB M1.");}
 function notifyBot(title,body){if("Notification" in window&&Notification.permission==="granted")new Notification(title,{body});}
 function activateAlerts(){if(!("Notification" in window)){setText("alert-status","Este navegador no admite notificaciones.");return;}Notification.requestPermission().then(p=>setText("alert-status",p==="granted"?"ALERTAS ACTIVADAS":"PERMISO NO CONCEDIDO"));}
-function analyzeCandles(symbol,market,candles){
- if(!Array.isArray(candles)||candles.length<100)return;
- const d=candles.slice().sort((a,b)=>a.time-b.time),x=makeIndicators(d),i=d.length-2;
- const r=structureAt(d,i,x);
- evaluateOpenOperations(symbol,d[i]);
- if(r.signal){const live=candles.at(-1);if(live&&live.time>d[i].time&&live.close>=r.signal.entry){}}
- // Toda la estructura, las zonas y las entradas se calculan en M1.
- let structureItems=[],structureProjection=r.projection,zoneOutlook=null;
- if(i>=65){
-  zoneOutlook=buildZoneOutlook(d,i,x);
-  for(let k=65;k<=i;k++){
-   const part=structureAt(d,k,x);structureItems.push(...part.annotations);
-  }
- }
- const unique=[...new Map(structureItems.map(v=>[v.type+"|"+v.time+"|"+v.price+"|"+v.label,v])).values()];
- const obGroups=new Map();unique.filter(v=>v.type==="ob").forEach(v=>{const key=v.time+"|"+v.side;if(!obGroups.has(key))obGroups.set(key,[]);obGroups.get(key).push(v);});
- const newestOb=[...obGroups.entries()].sort((a,b)=>Number(b[0].split("|")[0])-Number(a[0].split("|")[0]))[0];
- if(newestOb)newestOb[1].forEach(v=>v.active=true);
- cachedStructureItems=unique;
- lastProjection=structureProjection;renderProjectionCard(zoneOutlook);
- const trendBuy=x.e9[i]>x.e20[i],trendSell=x.e9[i]<x.e20[i],tradePlan=trendBuy?zoneOutlook?.buy:trendSell?zoneOutlook?.sell:null;
- if(typeof drawTradeLevels==="function"){if(r.signal)drawTradeLevels(r.signal);else if(tradePlan)drawTradeLevels({entry:tradePlan.entry,sl:tradePlan.sl,tp1:tradePlan.tp1,tp2:tradePlan.tp2,time:d[i].time,direction:tradePlan.direction});else if(typeof clearTradeLevels==="function")clearTradeLevels();}
- const counts={pivot:unique.filter(a=>a.type==="pivot").length,liquidity:unique.filter(a=>a.type==="liquidity").length,bos:unique.filter(a=>a.type==="bos").length,choch:unique.filter(a=>a.type==="choch").length,ob:unique.filter(a=>a.type==="ob").length/2,fvg:unique.filter(a=>a.type==="fvg").length/2};
- setText("structure-diagnostic","Estructura M1 · "+counts.pivot+" pivotes · "+counts.liquidity+" liquidez · "+counts.bos+" BOS · "+counts.choch+" CHoCH · "+counts.ob+" OB · "+counts.fvg+" FVG");
- setText("side-analysis-status","● Estructura M1 · Entrada M1");
- if(typeof setStructureOverlay==="function")setStructureOverlay({items:unique,projection:structureProjection});
- drawRsiPanel(x.rsi,d);
- const stage=structureProjection?structureProjection.stage:"SIN ZONA",notice=symbol+":"+stage+":"+(structureProjection?.direction||"");
- if(structureProjection&&stage==="PRECIO EN ZONA"&&notice!==lastProjectionNotice)notifyBot("Botder: precio en zona",structureProjection.direction+" · "+fmt(structureProjection.low)+" – "+fmt(structureProjection.high));
- lastProjectionNotice=notice;
- if(!r.signal)return;
- const key=symbol+":"+r.signal.time+":"+r.signal.direction;if(key===lastSignalKey)return;
- lastSignalKey=key;addSignal({...r.signal,symbol,market,candleTime:r.signal.time});
- notifyBot("Botder: señal confirmada",r.signal.direction+" · Entrada "+fmt(r.signal.entry)+" · SL "+fmt(r.signal.sl));
- if(typeof drawTradeLevels==="function")drawTradeLevels(r.signal);
-}
-function analyzeLiveStructure(symbol,candles){
- if(!Array.isArray(candles)||candles.length<100||symbol!==selectedMarket?.symbol)return;
- const d=candles.slice().sort((a,b)=>a.time-b.time),i=d.length-1,x=makeIndicators(d);
- if(i<65)return;
- // Solo previsualiza OB de la vela que se está formando; nunca genera señales ni modifica el backtest.
- const live=structureAt(d,i,x),liveOb=live.annotations.filter(a=>a.type==="ob");
- const merged=[...cachedStructureItems.filter(a=>a.type!=="ob"||a.time<d[i].time),...liveOb];
- const groups=new Map();merged.filter(a=>a.type==="ob").forEach(a=>{const k=a.time+"|"+a.side;if(!groups.has(k))groups.set(k,[]);groups.get(k).push(a);});
- const newest=[...groups.entries()].sort((a,b)=>Number(b[0].split("|")[0])-Number(a[0].split("|")[0]))[0];
- if(newest)newest[1].forEach(a=>a.active=true);
- if(typeof setStructureOverlay==="function")setStructureOverlay({items:merged,projection:lastProjection});
-}
 function drawRsiPanel(series){let host=document.getElementById("rsi-area");if(!host)return;host.innerHTML="";let cv=document.createElement("canvas");cv.style.cssText="width:100%;height:100%;display:block";host.appendChild(cv);let dpr=Math.min(devicePixelRatio||1,2),w=host.clientWidth,h=host.clientHeight;cv.width=w*dpr;cv.height=h*dpr;let x=cv.getContext("2d");x.scale(dpr,dpr);for(let level of [40,50,60]){let y=10+(100-level)/100*(h-28);x.strokeStyle=level===50?"#8495aa":"#43546b";x.setLineDash([4,3]);x.beginPath();x.moveTo(24,y);x.lineTo(w-8,y);x.stroke();x.setLineDash([]);x.fillStyle="#a8b5c6";x.font="9px Arial";x.fillText(String(level),2,y+3);}x.beginPath();let st=Math.max(0,series.length-200),beg=false;for(let i=st;i<series.length;i++){if(series[i]==null)continue;let px=24+(i-st)/Math.max(1,series.length-st-1)*(w-32),py=10+(100-series[i])/100*(h-28);if(!beg){x.moveTo(px,py);beg=true;}else x.lineTo(px,py);}x.strokeStyle="#48a8ff";x.lineWidth=1.7;x.stroke();setText("rsi-current","RSI: "+(series.at(-1)==null?"--":series.at(-1).toFixed(1)));}
 function optimizeBacktest(){setText("optimizer-result","Validación pendiente: no se optimizan parámetros para forzar un porcentaje de acierto.");}
 function setAnalysisGranularity(){analysisGranularity=60;}
