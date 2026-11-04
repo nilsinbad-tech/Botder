@@ -59,7 +59,7 @@ function connectDeriv() {
       if (rows) {
         historical = rows.map(c => ({time:Number(c.epoch ?? c.open_time),open:Number(c.open),high:Number(c.high),low:Number(c.low),close:Number(c.close)})).filter(c => [c.time,c.open,c.high,c.low,c.close].every(Number.isFinite));
       } else if (Array.isArray(history.times) && Array.isArray(history.prices)) {
-        historical = aggregateTicks(history.times, history.prices, selectedGranularity);
+        historical = aggregateTicks(history.times, history.prices, 60);
       }
       if (historical.length) {
         // Conserva los ticks que hayan llegado mientras se descargaba el historial.
@@ -78,7 +78,7 @@ function connectDeriv() {
         showApiDiagnostic("Respuesta de historial recibida sin datos de velas. Tipo: " + data.msg_type + ".");
       }
     }
-    if (data.msg_type === "candles" && responseSymbol(data) === selectedSymbol && data.req_id !== 12) {
+    if (data.msg_type === "candles" && responseSymbol(data) === selectedSymbol && ![12,13,14,15].includes(data.req_id)) {
       candleBuffer = (data.candles || []).map(c => ({ time: Number(c.epoch), open: Number(c.open), high: Number(c.high), low: Number(c.low), close: Number(c.close) }));
       if (typeof updateCandles === "function") updateCandles(candleBuffer);
       if (typeof analyzeCandles === "function") analyzeCandles(selectedSymbol, selectedMarketName(), candleBuffer);
@@ -104,7 +104,7 @@ function connectDeriv() {
       }
       if (Number.isFinite(price) && Number.isFinite(epoch) && selectedSymbol) {
         updateOperationPrice(selectedSymbol, price);
-        const interval = selectedGranularity, bucket = Math.floor(epoch / interval) * interval;
+        const interval = 60, bucket = Math.floor(epoch / interval) * interval;
         let live = candleBuffer[candleBuffer.length - 1], candleClosed = false;
         if (!live || live.time !== bucket) {
           live = { time: bucket, open: price, high: price, low: price, close: price };
