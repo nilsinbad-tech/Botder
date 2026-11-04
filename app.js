@@ -273,4 +273,4 @@ function renderStrategyJournal(){
  const safe=v=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
  if(typeof setChartBacktestTrades==="function")setChartBacktestTrades(strategyJournal.map(t=>({...t,tp1:t.tp,tp2:t.tp,price:t.exitPrice,exitTime:t.exitTime||Date.now()})));area.innerHTML=strategyJournal.length?strategyJournal.slice(0,100).map(t=>'<article class="history-row"><div><strong>'+safe(t.market||t.symbol)+' · '+safe(t.direction)+'</strong><small>'+new Date(t.entryTime).toLocaleString("es-PA",{dateStyle:"short",timeStyle:"short"})+' · ENTRADA '+fmt(t.entry)+' · SL '+fmt(t.sl)+' · TP '+fmt(t.tp)+'</small></div><span class="history-result '+t.result+'">'+(t.result==="ABIERTA"?"EN CURSO":t.result)+'</span></article>').join(""):'<div class="empty-state">El historial aparecerá cuando se confirmen entradas.</div>';
 }
-document.addEventListener("DOMContentLoaded",loadStrategyJournal);
+loadStrategyJournal();
