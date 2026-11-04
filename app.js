@@ -150,11 +150,6 @@ function setBacktestTrades(trades){backtestTradeData=trades.slice();if(typeof dr
 function runBacktest(symbol,market,candles){if(!Array.isArray(candles)||candles.length<100){setText("chart-message","Esperando al menos 100 velas M1 para el backtesting.");return;}let d=candles.slice().sort((a,b)=>a.time-b.time),x=makeIndicators(d),trades=[],annotations=[],nextFree=-1;for(let i=65;i<d.length-1;i++){let r=structureAt(d,i,x);annotations.push(...r.annotations);if(r.signal){annotations.push({type:"signal",price:r.signal.entry,label:r.signal.direction,side:r.signal.direction,time:d[i].time});if(i>nextFree){let t=computeTrade(d,r.signal,i);trades.push({...t,symbol,market});nextFree=t.exitTime?Math.max(i,d.findIndex(v=>v.time*1000===t.exitTime)):i;}}}backtestTrades.splice(0,backtestTrades.length,...trades);setBacktestTrades(trades);if(typeof setStructureOverlay==="function")setStructureOverlay({items:annotations,projection:null});backtestSymbol=symbol;backtestReady=true;updateDailyPanel();drawRsiPanel(x.rsi,d);let closed=trades.filter(t=>t.result==="GANADA"||t.result==="PERDIDA"),wins=closed.filter(t=>t.result==="GANADA").length;setText("chart-message","Backtesting M1 · "+trades.length+" señales · "+closed.length+" cerradas · "+wins+" ganadas · "+(closed.length-wins)+" perdidas.");}
 function notifyBot(title,body){if("Notification" in window&&Notification.permission==="granted")new Notification(title,{body});}
 function activateAlerts(){if(!("Notification" in window)){setText("alert-status","Este navegador no admite notificaciones.");return;}Notification.requestPermission().then(p=>setText("alert-status",p==="granted"?"ALERTAS ACTIVADAS":"PERMISO NO CONCEDIDO"));}
-function aggregateStructureM5(candles){
- const buckets=new Map();
- candles.forEach((c,i)=>{const time=Math.floor(c.time/300)*300;let b=buckets.get(time);if(!b){b={time,open:c.open,high:c.high,low:c.low,close:c.close,_sourceIndex:i};buckets.set(time,b);}else{b.high=Math.max(b.high,c.high);b.low=Math.min(b.low,c.low);b.close=c.close;b._sourceIndex=i;}});
- return [...buckets.values()].sort((a,b)=>a.time-b.time);
-}
 function analyzeCandles(symbol,market,candles){
  if(!Array.isArray(candles)||candles.length<100)return;
  const d=candles.slice().sort((a,b)=>a.time-b.time),x=makeIndicators(d),i=d.length-2;
