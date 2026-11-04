@@ -182,9 +182,9 @@ function renderMarketChart(){
  const zoneRight=Math.min(w-right,Math.max(x2,x1+step*7)),zoneLeft=Math.max(left,x1),zoneWidth=Math.max(4,zoneRight-zoneLeft);
  const yEntry=yOf(p.entry),yOne=yOf(p.tp1),yTwo=Number.isFinite(Number(p.tp2))?yOf(p.tp2):null,yStop=yOf(p.sl);
  ctx.save();ctx.beginPath();ctx.rect(left,top,pw,ph);ctx.clip();
- ctx.globalAlpha=.105;ctx.fillStyle="#26d98b";ctx.fillRect(zoneLeft,Math.min(yEntry,yOne),zoneWidth,Math.max(2,Math.abs(yEntry-yOne)));
- if(yTwo!==null){ctx.globalAlpha=.075;ctx.fillStyle="#20b8a0";ctx.fillRect(zoneLeft,Math.min(yOne,yTwo),zoneWidth,Math.max(2,Math.abs(yOne-yTwo)));}
- ctx.globalAlpha=.085;ctx.fillStyle="#ff5d72";ctx.fillRect(zoneLeft,Math.min(yEntry,yStop),zoneWidth,Math.max(2,Math.abs(yEntry-yStop)));
+ ctx.globalAlpha=.04;ctx.fillStyle="#26d98b";ctx.fillRect(zoneLeft,Math.min(yEntry,yOne),zoneWidth,Math.max(2,Math.abs(yEntry-yOne)));
+ if(yTwo!==null){ctx.globalAlpha=.025;ctx.fillStyle="#20b8a0";ctx.fillRect(zoneLeft,Math.min(yOne,yTwo),zoneWidth,Math.max(2,Math.abs(yOne-yTwo)));}
+ ctx.globalAlpha=.035;ctx.fillStyle="#ff5d72";ctx.fillRect(zoneLeft,Math.min(yEntry,yStop),zoneWidth,Math.max(2,Math.abs(yEntry-yStop)));
  ctx.globalAlpha=.42;ctx.lineWidth=.65;ctx.setLineDash([3,3]);
  [[yOne,"#39e6a0"],[yTwo,"#20b8a0"],[yStop,"#ff6579"]].forEach(([yy,color])=>{if(!Number.isFinite(yy))return;ctx.strokeStyle=color;ctx.beginPath();ctx.moveTo(zoneLeft,yy);ctx.lineTo(zoneRight,yy);ctx.stroke();});
  ctx.restore();ctx.setLineDash([4,3]);[[p.entry,"ENTRADA",col],[p.sl,"SL","#ff6579"],[p.tp1,"TP1","#39e6a0"],[p.tp2,"TP2","#39e6a0"]].forEach(([v,label,color])=>{if(!Number.isFinite(Number(v)))return;const y=yOf(Number(v));ctx.strokeStyle=color;ctx.lineWidth=1*lineScale;ctx.beginPath();ctx.moveTo(Math.max(left,x1),y);ctx.lineTo(x2,y);ctx.stroke();ctx.setLineDash([]);const text=label+" "+Number(v).toPrecision(7);ctx.font="bold 4.5px Arial";ctx.textAlign="left";const tw=ctx.measureText(text).width,bx=Math.min(w-right-tw-10,Math.max(left,x1)+2),by=Math.max(top+12,Math.min(h-bottom-3,y-3));ctx.fillStyle="rgba(0,0,0,.96)";ctx.fillRect(bx,by-9,tw+7,12);ctx.strokeStyle=color;ctx.lineWidth=.45;ctx.strokeRect(bx,by-9,tw+7,12);ctx.fillStyle="#f8fafc";ctx.fillText(text,bx+3,by);ctx.setLineDash([4,3]);});ctx.setLineDash([]);ctx.fillStyle=col;ctx.font="bold 4.5px Arial";ctx.textAlign="left";ctx.fillText((buy?"COMPRA · T3":"VENTA · T3"),Math.max(left,Math.min(w-right-125,x1+3)),Math.max(top+11,yt-7));ctx.restore();}}
