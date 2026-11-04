@@ -223,7 +223,7 @@ function buildStructuralPlan(m1,displayTf){
  const status=!bias1||!bias4?"ESPERANDO CONTEXTO H1 / H4":bias1!==bias4?"CONFLICTO H1 / H4 · ESPERAR":!candidate?"BUSCANDO CANAL DIAGONAL":trend!==dir?"FORMACIÓN CONTRA TENDENCIA · NO OPERAR":!validLevels?"ESPERANDO MÁXIMO / MÍNIMO OBJETIVO":!third?"TERCER TOQUE PROYECTADO":near.length<3?"TERCER TOQUE · ESPERANDO 3 OB M1":!inZone?"ESPERANDO RESPETO DE LA ZONA":dir==="BUY"?"COMPRA CONFIRMADA":"VENTA CONFIRMADA";
  let projection=null;if(candidate&&trend===dir&&validLevels){projection={direction:dir==="BUY"?"COMPRAR":"VENDER",low:zoneLow,high:zoneHigh,zoneLow,zoneHigh,entry:third?third.price:zoneCenter,sl,tp:target.price,targetTf,projectTime:third?last.time+candidate.seconds:expectedTime,expiresAt:(third?last.time:expectedTime)+candidate.seconds*5,stage:status,reason:"3 toques · H1/H4 alineados · TP "+targetTf+" anterior",timeframe:candidate.tf,confirmed};}
  const signal=confirmed?{direction:dir==="BUY"?"COMPRAR":"VENDER",entry:last.close,sl,tp1:target.price,tp2:target.price,singleTarget:true,rsi:50,time:last.time,index:m1.length-1,mode:"3 TOQUES + 3 OB M1 + H1/H4",timeframe:candidate.tf,emaPeriods:[9,20]}:null;
- return{lines,items,projection,status,confirmed,trend,bias1,bias4,biasD1,auxBias,auxSeconds,candidate,near,last,signal,targetTf};
+ return{lines,items,projection,status,confirmed,trend,bias1,bias4,biasD1,h1Class,h4Class,candidate,near,last,signal,targetTf};
 }
 function renderProjection(plan){
  const el=document.getElementById("projection-card"),status=document.getElementById("projection-status");if(!el)return;
