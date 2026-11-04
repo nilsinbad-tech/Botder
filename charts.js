@@ -183,7 +183,26 @@ function renderMarketChart(){
  levelGroups.forEach(v=>{const rawY=yOf(v.value),outside=rawY<top||rawY>h-bottom,y=Math.max(top+2,Math.min(h-bottom-2,rawY));ctx.save();ctx.strokeStyle=v.color;ctx.lineWidth=.8*lineScale;ctx.setLineDash(v.labels.includes("SL")?[5,4]:[3,3]);ctx.beginPath();ctx.moveTo(left,y);ctx.lineTo(w-right,y);ctx.stroke();ctx.setLineDash([]);const txt=(outside?(rawY<top?"↑ ":"↓ "):"")+v.labels.join(" / ")+" "+Number(v.value).toPrecision(7);ctx.font="bold 4.5px Arial";const tw=ctx.measureText(txt).width;ctx.fillStyle="rgba(7,16,28,.96)";ctx.fillRect(left+3,Math.max(top,y-12),tw+9,13);ctx.fillStyle=v.color;ctx.textAlign="left";ctx.fillText(txt,left+7,Math.max(top+9,Math.min(h-bottom-3,y-3)));ctx.restore();});
  // Línea y etiqueta persistentes del último tick. Si se navega por el histórico y el precio queda fuera de escala, se fija un indicador en el borde visible.
  if(Number.isFinite(liveChartPrice)){const outside=liveChartPrice>max||liveChartPrice<min,py=Math.max(top+2,Math.min(h-bottom-2,yOf(liveChartPrice))),priceText=liveChartPrice.toFixed( Math.max(2,Math.min(8,Math.max(0,(String(liveChartPrice).split(".")[1]||"").length))) );ctx.save();ctx.strokeStyle="#ffd166";ctx.lineWidth=.6;ctx.setLineDash(outside?[2,3]:[4,3]);ctx.beginPath();ctx.moveTo(left,py);ctx.lineTo(w-right,py);ctx.stroke();ctx.setLineDash([]);ctx.fillStyle="#ffd166";ctx.fillRect(w-right+1,py-12,right-2,24);ctx.fillStyle="#081321";ctx.font="bold 5px Arial";ctx.textAlign="left";ctx.fillText((outside?(liveChartPrice>max?"↑ ":"↓ "):"")+priceText,w-right+4,py+4);ctx.fillStyle="#ffd166";ctx.font="bold 4.5px Arial";ctx.textAlign="left";ctx.fillText("PRECIO ACTUAL",left+5,Math.max(top+12,Math.min(h-bottom-5,py-7)));ctx.beginPath();ctx.fillStyle="#ffd166";ctx.arc(w-right-3,py,3,0,Math.PI*2);ctx.fill();ctx.restore();}
- // Entrada resaltada con marcador puntual, sin rectángulos de riesgo/recompensa.
+ // Backtest visual: cuerpo verde/rojo limitado desde la vela de entrada hasta la vela de cierre.
+ visibleTrades.filter(t=>(!t.symbol||!chartSymbol||t.symbol===chartSymbol)&&(!t.timeframeSeconds||Number(t.timeframeSeconds)===Number(chartGranularity))).forEach(t=>{
+  const et=Number(t.entryTime)/1000;if(!Number.isFinite(et))return;
+  const xIndex=time=>timeIndex(time),ei=xIndex(et),xi=Number(t.exitTime)>0?xIndex(Number(t.exitTime)/1000):Math.min(start+data.length-1,start+viewCount-1);
+  if(ei>start+viewCount||xi<start||ei>xi)return;
+  const x1=Math.max(left,left+(ei-start+.5)*step),x2=Math.min(w-right,left+(xi-start+.5)*step+Math.max(1,step*.35));
+  if(x2<=x1)return;
+  const entry=Number(t.entry),sl=Number(t.sl),tp=Number(t.tp2||t.tp1);
+  if(![entry,sl,tp].every(Number.isFinite))return;
+  const ye=yOf(entry),ys=yOf(sl),yt=yOf(tp),greenTop=Math.min(ye,yt),greenBottom=Math.max(ye,yt),redTop=Math.min(ye,ys),redBottom=Math.max(ye,ys);
+  const done=t.result==="GANADA"||t.result==="PERDIDA",active=t.result==="ABIERTA"||!done;
+  const green=t.result==="PERDIDA"?"#39e6a0":"#39e6a0",red="#ff6579";
+  ctx.save();ctx.globalAlpha=active?.13:.19;ctx.fillStyle=green;ctx.fillRect(x1,greenTop,Math.max(1,x2-x1),Math.max(1,greenBottom-greenTop));ctx.fillStyle=red;ctx.fillRect(x1,redTop,Math.max(1,x2-x1),Math.max(1,redBottom-redTop));
+  ctx.globalAlpha=.72;ctx.strokeStyle=green;ctx.lineWidth=.65;ctx.strokeRect(x1,greenTop,Math.max(1,x2-x1),Math.max(1,greenBottom-greenTop));ctx.strokeStyle=red;ctx.strokeRect(x1,redTop,Math.max(1,x2-x1),Math.max(1,redBottom-redTop));
+  ctx.globalAlpha=.95;ctx.strokeStyle="#e8edf5";ctx.setLineDash([2,2]);ctx.beginPath();ctx.moveTo(x1,ye);ctx.lineTo(x2,ye);ctx.stroke();ctx.setLineDash([]);
+  const color=active?"#ffd166":t.result==="GANADA"?"#39e6a0":"#ff6579";ctx.fillStyle=color;ctx.beginPath();ctx.arc(x1,ye,2.8,0,Math.PI*2);ctx.fill();
+  ctx.font="bold 4.5px Arial";ctx.textAlign="left";ctx.fillText(active?"EN CURSO":(t.exitReason||t.result),Math.min(w-right-45,x2+2),Math.max(top+8,Math.min(h-bottom-4,ye-3)));
+  ctx.restore();
+ });
+
  // Canales y puntos de la estructura guardados en cada operación del backtest.
  visibleTrades.forEach(t=>{
   (t.structureLines||[]).forEach(line=>{

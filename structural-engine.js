@@ -79,7 +79,7 @@ function runStructuralBacktest(symbol,market,candles,displayTf){
     if(two){result="GANADA";price=sig.tp2;exitTime=bar.time*1000;exitReason="TP2";break;}
     if(one){result="GANADA";price=sig.tp1;exitTime=bar.time*1000;exitReason="TP1";break;}
    }
-   trades.push({...sig,id:"BT-"+symbol+"-"+sig.time,symbol,market,price,entryTime:sig.time*1000,exitTime,result,exitReason,structureKey:keyTrade});
+   trades.push({...sig,id:"BT-"+symbol+"-"+sec+"-"+sig.time,symbol,market,timeframeSeconds:sec,timeframe:label,price,exitPrice:exitTime?price:null,entryTime:sig.time*1000,exitTime,result,exitReason,structureKey:keyTrade,structureLines:[c.line1,c.line2].filter(Boolean)});
   }
   if(i<d.length){
    const pct=Math.min(99,Math.round((i-from)/Math.max(1,d.length-from)*100));
@@ -208,12 +208,20 @@ function evaluateStrategyJournal(symbol,candle){
  if(changed){saveStrategyJournal();renderStrategyJournal();}
 }
 function renderStrategyJournal(){
- const entered=strategyJournal.filter(t=>t.entered===true),closed=entered.filter(t=>t.result==="GANADA"||t.result==="PERDIDA"),wins=closed.filter(t=>t.result==="GANADA").length;
- setText("bt-wins",wins);setText("bt-losses",closed.length-wins);setText("bt-rate",closed.length?(wins/closed.length*100).toFixed(1)+"%":"0%");setText("bt-total",entered.length);setText("bt-open",entered.filter(t=>t.result==="ABIERTA").length);
- const area=document.getElementById("history");
- if(typeof setChartBacktestTrades==="function")setChartBacktestTrades([...(backtestTradeData||[]),...entered.map(t=>({...t,price:t.exitPrice,exitTime:t.exitTime||0}))]);
- if(!area)return;const safe=v=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
- area.innerHTML=entered.length?entered.map(t=>{const status=t.result==="ABIERTA"?"EN CURSO":t.result;return '<article class="history-row"><div><strong>'+safe(t.market||t.symbol)+' · '+safe(t.direction)+' · '+safe(t.timeframe)+'</strong><small>'+new Date(t.entryTime).toLocaleString("es-PA",{dateStyle:"short",timeStyle:"short"})+' · ENTRADA '+fmt(t.entry)+' · SL '+fmt(t.sl)+' · TP1 '+fmt(t.tp1)+' · TP2 '+fmt(t.tp2)+(t.exitPrice!=null?' · SALIDA '+fmt(t.exitPrice):'')+(t.exitReason?' · '+safe(t.exitReason):'')+'</small></div><span class="history-result '+safe(t.result)+'">'+status+'</span></article>';}).join(""):'<div class="empty-state">Aún no hay operaciones marcadas como ENTRÉ.</div>';
+ const bt=Array.isArray(backtestTradeData)?backtestTradeData:(Array.isArray(backtestTrades)?backtestTrades:[]);
+ const closed=bt.filter(t=>t.result==="GANADA"||t.result==="PERDIDA"),wins=closed.filter(t=>t.result==="GANADA").length;
+ const manualClosed=strategyJournal.filter(t=>t.entered===true&&(t.result==="GANADA"||t.result==="PERDIDA"));
+ const useManual=closed.length===0&&manualClosed.length>0,stats=useManual?manualClosed:closed,total=useManual?manualClosed.length:bt.length;
+ const winCount=useManual?manualClosed.filter(t=>t.result==="GANADA").length:wins;
+ const lossCount=useManual?manualClosed.length-winCount:closed.length-winCount;
+ setText("bt-total",total);setText("bt-wins",winCount);setText("bt-losses",lossCount);setText("bt-rate",stats.length?(winCount/stats.length*100).toFixed(1)+"%":"0%");
+ setText("bt-open",strategyJournal.filter(t=>t.entered===true&&t.result==="ABIERTA").length+bt.filter(t=>t.result==="ABIERTA").length);
+ const chartRows=[...bt,...strategyJournal.map(t=>({...t,timeframeSeconds:Number(t.timeframeSeconds)||Number(document.getElementById("timeframe")?.value)||60,exitPrice:t.exitPrice,exitTime:t.exitTime||0}))];
+ if(typeof setChartBacktestTrades==="function")setChartBacktestTrades(chartRows);
+ const area=document.getElementById("history");if(!area)return;
+ const rows=[...bt.map(t=>({...t,_source:"BACKTEST"})),...strategyJournal.map(t=>({...t,_source:t.entered?"MANUAL":"SEÑAL"}))].sort((a,b)=>Number(b.entryTime)-Number(a.entryTime)).slice(0,300);
+ const safe=v=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+ area.innerHTML=rows.length?rows.map(t=>{const status=t.result==="ABIERTA"?"EN CURSO":t.result==="PENDIENTE"?"SEÑAL · SIN DECISIÓN":t.result==="NO ENTRÉ"?"NO ENTRÉ":t.result;return '<article class="history-row"><div><strong>'+safe(t.market||t.symbol)+' · '+safe(t.direction)+' · '+safe(t.timeframe||"")+' · '+safe(t._source)+'</strong><small>'+new Date(t.entryTime).toLocaleString("es-PA",{dateStyle:"short",timeStyle:"short"})+' · ENTRADA '+fmt(t.entry)+' · SL '+fmt(t.sl)+' · TP1 '+fmt(t.tp1)+' · TP2 '+fmt(t.tp2)+(t.exitPrice!=null?' · SALIDA '+fmt(t.exitPrice):'')+(t.exitReason?' · '+safe(t.exitReason):'')+'</small></div><span class="history-result '+safe(t.result||"ABIERTA")+'">'+safe(status)+'</span></article>';}).join(""):'<div class="empty-state">Todavía no hay señales ni operaciones registradas.</div>';
 }
 function recordStrategyTrade(signal){
  if(!signal||strategyJournal.some(t=>t.symbol===signal.symbol&&t.structureKey===signal.structureKey))return;
