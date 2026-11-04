@@ -1,6 +1,6 @@
 let candleData=[],chartSymbol=null,tradeLevels=[],signalMarker=null,chartCanvas=null,chartContext=null,resizeObserver=null,candleStyle="normal";
 let backtestTradeData=[];let structureOverlay={items:[],projection:null};
-let viewEnd=0,viewCount=100,dragX=null,dragEnd=0,activePointers=new Map(),pinchStart=0,pinchCount=100,pinchAnchorIndex=0,pinchAnchorRatio=.5,chartFrame=null,scaleMin=null,scaleMax=null,scaleWindow="",chartGranularity=60;
+let viewEnd=0,viewCount=100,followLive=true,dragX=null,dragEnd=0,activePointers=new Map(),pinchStart=0,pinchCount=100,pinchAnchorIndex=0,pinchAnchorRatio=.5,chartFrame=null,scaleMin=null,scaleMax=null,scaleWindow="",chartGranularity=60;
 function createMarketChart(containerId="chart-area"){
  const host=document.getElementById(containerId);if(!host)return false;
  host.innerHTML="";chartCanvas=document.createElement("canvas");
@@ -13,6 +13,7 @@ function createMarketChart(containerId="chart-area"){
   activePointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
   try{chartCanvas.setPointerCapture(e.pointerId);}catch(_){}
   if(activePointers.size===1){
+   followLive=false;
    dragX=e.clientX;
    dragEnd=Math.max(0,Math.min(candleData.length,viewEnd||candleData.length));
    viewEnd=dragEnd;
@@ -62,10 +63,10 @@ function createMarketChart(containerId="chart-area"){
  resizeMarketChart();drawMarketChart();return true;
 }
 function resizeMarketChart(){if(!chartCanvas||!chartContext)return;const host=chartCanvas.parentElement;if(!host)return;const r=host.getBoundingClientRect(),dpr=Math.min(devicePixelRatio||1,2);chartCanvas.width=Math.max(1,Math.floor(r.width*dpr));chartCanvas.height=Math.max(1,Math.floor(r.height*dpr));chartContext.setTransform(dpr,0,0,dpr,0,0);drawMarketChart();}
-function setChartSymbol(s){chartSymbol=s;candleData=[];tradeLevels=[];signalMarker=null;viewEnd=0;viewCount=100;scaleMin=null;scaleMax=null;scaleWindow="";drawMarketChart();}
+function setChartSymbol(s){chartSymbol=s;candleData=[];tradeLevels=[];signalMarker=null;followLive=true;viewEnd=0;viewCount=100;scaleMin=null;scaleMax=null;scaleWindow="";drawMarketChart();}
 function setChartGranularity(seconds){chartGranularity=Number(seconds)||60;scaleMin=null;scaleMax=null;scaleWindow="";drawMarketChart();}
-function updateCandles(c){if(!Array.isArray(c))return;const oldLength=candleData.length,wasFollowing=viewEnd===0||viewEnd>=oldLength,distanceFromEnd=Math.max(0,oldLength-viewEnd);candleData=c.filter(x=>[x.time,x.open,x.high,x.low,x.close].every(Number.isFinite)).sort((a,b)=>a.time-b.time).slice();viewEnd=wasFollowing?candleData.length:Math.max(Math.min(viewCount,candleData.length),candleData.length-distanceFromEnd);scaleMin=null;scaleMax=null;scaleWindow="";drawMarketChart();}
-function addCandle(c){if(!c||![c.time,c.open,c.high,c.low,c.close].every(Number.isFinite))return;const following=viewEnd>=candleData.length;const last=candleData[candleData.length-1];if(last&&last.time===c.time)candleData[candleData.length-1]=c;else{candleData.push(c);}if(following)viewEnd=candleData.length;else viewEnd=Math.min(viewEnd,candleData.length);drawMarketChart();}
+function updateCandles(c){if(!Array.isArray(c))return;const oldLength=candleData.length,wasFollowing=followLive,distanceFromEnd=Math.max(0,oldLength-viewEnd);candleData=c.filter(x=>[x.time,x.open,x.high,x.low,x.close].every(Number.isFinite)).sort((a,b)=>a.time-b.time).slice();viewEnd=wasFollowing?candleData.length:Math.max(Math.min(viewCount,candleData.length),Math.min(candleData.length,viewEnd));scaleMin=null;scaleMax=null;scaleWindow="";drawMarketChart();}
+function addCandle(c){if(!c||![c.time,c.open,c.high,c.low,c.close].every(Number.isFinite))return;const last=candleData[candleData.length-1];if(last&&last.time===c.time)candleData[candleData.length-1]=c;else{candleData.push(c);}if(followLive)viewEnd=candleData.length;else viewEnd=Math.min(viewEnd,candleData.length);drawMarketChart();}
 function setBacktestTrades(trades){backtestTradeData=Array.isArray(trades)?trades.slice():[];drawMarketChart();}
 function setStructureOverlay(data){structureOverlay=data||{items:[],projection:null};drawMarketChart();}
 function toHeikinAshi(candles){
