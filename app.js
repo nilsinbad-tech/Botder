@@ -172,55 +172,37 @@ function structurePivots(d,depth=3,deviation=3,backstep=3){
  return{highs:stable.filter(p=>p.type==="high"),lows:stable.filter(p=>p.type==="low"),zigzag:stable,settings:{depth,deviation,backstep,minMove,confirmedRightBars:depth}};
 }
 function findDiagonalStructure(source,seconds,tf){
- if(!Array.isArray(source)||source.length<22)return null;
- const d=source.slice(-500),p=structurePivots(d,5,3,3);
- const ranges=d.slice(-50).map(c=>c.high-c.low).sort((a,b)=>a-b);
- const median=ranges[Math.floor(ranges.length/2)]||Math.abs(d.at(-1).close)*.0001;
- const tol=Math.max(median*.22,Math.abs(d.at(-1).close)*.000005);
- const find=(side,points,sign)=>{
-  let best=null;const pts=points.slice(-36);
-  for(let ai=0;ai<pts.length-2;ai++)for(let bi=ai+1;bi<pts.length-1;bi++){
-   const p1=pts[ai],p2=pts[bi],dx=p2.i-p1.i;
-   if(dx<6)continue;
-   const slope=(p2.price-p1.price)/dx;
-   if(Math.sign(slope)!==sign||Math.abs(p2.price-p1.price)<median*.35)continue;
-   const aligned=pts.filter(q=>Math.abs(q.price-(p1.price+slope*(q.i-p1.i)))<=tol).sort((a,b)=>a.i-b.i);
-   const touches=[];
-   for(const q of aligned){const prev=touches.at(-1);if(!prev||q.i-prev.i>=5)touches.push(q);else if(Math.abs(q.price-(p1.price+slope*(q.i-p1.i)))<Math.abs(prev.price-(p1.price+slope*(prev.i-p1.i))))touches[touches.length-1]=q;}
-   if(touches.length<2)continue;
-   const sequence=touches.slice(-3),first=sequence[0],last=sequence.at(-1),previous=sequence.at(-2),gap=Math.max(5,Math.min(40,last.i-previous.i));
-   // Una línea estructural queda invalidada si una vela cierra/penetra más allá del margen; no se cuentan contactos posteriores a la ruptura.
-   let broken=false;
-   for(let k=p1.i+1;k<d.length;k++){
-    const level=p1.price+slope*(k-p1.i),c=d[k];
-    if(side==="BUY"?c.close<level-tol*1.25:c.close>level+tol*1.25){broken=true;break;}
+ if(!Array.isArray(source)||source.length<30)return null;
+ const d=source.slice().sort((a,b)=>a.time-b.time),p=structurePivots(d,3,3,3),ranges=d.slice(-20).map(c=>Math.max(0,c.high-c.low)).sort((a,b)=>a-b),median=ranges[Math.floor(ranges.length/2)]||Math.abs(d.at(-1).close)*1e-7;
+ const decimals=Math.max(0,...d.slice(-20).map(c=>{const s=String(c.close);return s.includes(".")?s.split(".")[1].length:0;})),tickSize=Math.pow(10,-Math.min(10,decimals)),tolerance=Math.max(tickSize*2,median*.10,Math.abs(d.at(-1).close)*1e-10),minSeparation=5;
+ const find=(side,points,oppositePoints,sign)=>{let best=null;const pts=points.slice(-28),opps=oppositePoints.slice(-80);
+  for(let ai=0;ai<pts.length-1;ai++)for(let bi=ai+1;bi<pts.length;bi++){
+   const p1=pts[ai],p2=pts[bi],dx=p2.i-p1.i;if(dx<minSeparation)continue;
+   const slope=(p2.price-p1.price)/dx;if(Math.sign(slope)!==sign||Math.abs(p2.price-p1.price)<median*.15)continue;
+   const baseAt=i=>p1.price+slope*(i-p1.i),touches=[];let lastTouch=-Infinity,leftZone=true;
+   for(let k=p1.i;k<d.length;k++){const c=d[k],line=baseAt(k),prev=d[k-1],prevLine=k>0?baseAt(k-1):line;
+    if(k>lastTouch&&prev&&(side==="BUY"?prev.close>prevLine+tolerance*2:prev.close<prevLine-tolerance*2))leftZone=true;
+    const wick=side==="BUY"?c.low<=line+tolerance&&c.high>=line-tolerance:c.high>=line-tolerance&&c.low<=line+tolerance;
+    const closeAway=side==="BUY"?c.close>line+tolerance*.15:c.close<line-tolerance*.15;
+    if(wick&&closeAway&&leftZone&&k-lastTouch>=minSeparation){touches.push({i:k,price:side==="BUY"?c.low:c.high,time:c.time});lastTouch=k;leftZone=false;}
    }
-   if(broken)continue;
-   // Los tres toques deben pertenecer a una misma secuencia reciente, no a máximos/minimos aislados de sesiones distintas.
-   if(d.length-1-last.i>Math.max(45,gap*3))continue;
-   const score=300-(d.length-1-last.i)*2-(last.i-first.i)*.02;
-   if(!best||score>best.score)best={side,p1,p2,slope,touches:sequence,score,gap,third:sequence.length===3?last:null};
-  }
-  return best;
- };
- // COMPRA: la línea estructural es el soporte ascendente (mínimos). VENTA: la resistencia descendente (máximos).
- const buy=find("BUY",p.lows,1),sell=find("SELL",p.highs,-1),v=[buy,sell].filter(Boolean).sort((a,b)=>b.score-a.score)[0];
- if(!v)return null;
- const baseAt=i=>v.p1.price+v.slope*(i-v.p1.i);
- const opposite=v.side==="BUY"?p.highs:p.lows;
- const offsets=opposite.map(q=>q.price-baseAt(q.i)).filter(x=>v.side==="BUY"?x>tol:x< -tol);
- if(!offsets.length)return null;
- offsets.sort((a,b)=>a-b);const offset=offsets[Math.floor(offsets.length/2)];
- const oppositeTouches=[];
- for(const q of opposite.slice(-40)){
-  const dist=Math.abs(q.price-(baseAt(q.i)+offset));
-  if(dist<=tol*1.6&&(!oppositeTouches.length||q.i-oppositeTouches.at(-1).i>=5))oppositeTouches.push(q);
- }
- const upperSequence=oppositeTouches.slice(-3);
- const firstCandle=d[v.touches[0].i],last=v.touches.at(-1),projectedIndex=last.i+v.gap;
- const line1={time1:d[v.p1.i].time,time2:d[v.p2.i].time,price1:v.p1.price,price2:v.p2.price,touches:v.touches.map((t,i)=>({time:d[t.i].time,price:t.price,n:i+1}))};
- const line2={time1:d[v.p1.i].time,time2:d[v.p2.i].time,price1:v.p1.price+offset,price2:v.p2.price+offset,touches:upperSequence.map((t,i)=>({time:d[t.i].time,price:t.price,n:i+1}))};
- return{side:v.side,tf,seconds,d,first:v.touches[0],second:v.touches[1],third:v.third,firstStop:v.touches[0].price,touches:v.touches.map((t,i)=>({...t,n:i+1,time:d[t.i].time})),line1,line2,projectTime:d.at(-1).time+(projectedIndex-(d.length-1))*seconds,projectPrice1:baseAt(projectedIndex),projectPrice2:baseAt(projectedIndex)+offset,tolerance:tol,expectedIndex:projectedIndex,gap:v.gap,zigzagSettings:"5/3/3"};
+   if(touches.length<2)continue;
+   const offsets=opps.filter(q=>q.i>=p1.i).map(q=>q.price-baseAt(q.i)).filter(v=>side==="BUY"?v>tolerance*2:v< -tolerance*2);if(offsets.length<2)continue;
+   offsets.sort((a,b)=>a-b);const offset=offsets[Math.floor(offsets.length/2)];if(Math.abs(offset)<tolerance*3)continue;
+   const oppositeTouches=[];let lastOpp=-Infinity;
+   for(const q of opps.filter(q=>q.i>=p1.i).sort((a,b)=>a.i-b.i)){if(Math.abs(q.price-(baseAt(q.i)+offset))<=tolerance*2&&q.i-lastOpp>=minSeparation){oppositeTouches.push(q);lastOpp=q.i;}}
+   if(oppositeTouches.length<2)continue;
+   let broken=false;for(let k=p2.i+1;k<d.length;k++){const low=baseAt(k),high=low+offset,c=d[k];if(c.close<Math.min(low,high)-tolerance||c.close>Math.max(low,high)+tolerance){broken=true;break;}}if(broken)continue;
+   const age=d.length-1-touches.at(-1).i;if(age>Math.max(90,minSeparation*6))continue;
+   const score=touches.length*100+oppositeTouches.length*15-age*.25-(d.length-1-p2.i)*.015;
+   if(!best||score>best.score)best={side,p1,p2,slope,offset,touches,oppositeTouches,score,third:touches[2]||null};
+  }return best;};
+ const buy=find("BUY",p.lows,p.highs,1),sell=find("SELL",p.highs,p.lows,-1),chosen=[buy,sell].filter(Boolean).sort((a,b)=>b.score-a.score)[0];if(!chosen)return null;
+ const baseAt=i=>chosen.p1.price+chosen.slope*(i-chosen.p1.i),upperAt=i=>baseAt(i)+chosen.offset;
+ const line1={time1:d[chosen.p1.i].time,time2:d[chosen.p2.i].time,price1:chosen.p1.price,price2:chosen.p2.price,touches:chosen.touches.slice(0,3).map((t,i)=>({time:t.time,price:t.price,n:i+1}))};
+ const line2={time1:d[chosen.p1.i].time,time2:d[chosen.p2.i].time,price1:chosen.p1.price+chosen.offset,price2:chosen.p2.price+chosen.offset,touches:chosen.oppositeTouches.slice(0,3).map(t=>({time:t.time,price:t.price}))};
+ const first=chosen.touches[0],second=chosen.touches[1],third=chosen.touches[2]||null;
+ return{side:chosen.side,tf,seconds,d,first,second,third,firstStop:first.price,touches:chosen.touches.map((t,i)=>({...t,n:i+1})),line1,line2,projectTime:d.at(-1).time+seconds,projectPrice1:baseAt(d.length),projectPrice2:upperAt(d.length),tolerance,expectedIndex:d.length,gap:minSeparation,zigzagSettings:"3/3/3",pivotSettings:p.settings,oppositeTouches:chosen.oppositeTouches};
 }
 function depthSafe(v){return v;}
 function backstepSafe(v){return v;}
