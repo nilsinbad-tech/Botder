@@ -190,7 +190,7 @@ function renderMarketChart(){
   ctx.setLineDash([]);
   const dot=(x,y,color)=>{ctx.fillStyle=color;ctx.beginPath();ctx.arc(x,y,4,0,Math.PI*2);ctx.fill();ctx.strokeStyle="#101827";ctx.lineWidth=1;ctx.stroke();};
   const label=(txt,x,y,color)=>{ctx.font="bold 10px Arial";ctx.textAlign="left";const tw=ctx.measureText(txt).width;ctx.fillStyle="rgba(8,13,22,.88)";ctx.fillRect(x,y-10,tw+8,14);ctx.fillStyle=color;ctx.fillText(txt,x+3,y);};
-  label(t.direction==="COMPRAR"?"BUY":"SELL",Math.min(w-right-55,x1+5),yEntry-5,"#70bdff");
+  label(t.direction==="COMPRAR"?"COMPRA":"VENTA",Math.min(w-right-55,x1+5),yEntry-5,"#70bdff");
   if(t.exitTime&&Number.isFinite(exitPrice)){
    const won=t.result==="GANADA";dot(x2,yExit,won?"#39e6a0":"#ff6579");
    const resultText=won?"GANADA":"PERDIDA";
