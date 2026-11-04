@@ -1,6 +1,6 @@
 let candleData=[],chartSymbol=null,tradeLevels=[],signalMarker=null,chartCanvas=null,chartContext=null,resizeObserver=null,candleStyle="normal";
 let backtestTradeData=[];let structureOverlay={items:[],projection:null};
-let viewEnd=0,viewCount=100,followLive=true,dragX=null,dragEnd=0,activePointers=new Map(),pinchStart=0,pinchCount=100,pinchAnchorIndex=0,pinchAnchorRatio=.5,chartFrame=null,scaleMin=null,scaleMax=null,scaleWindow="",chartGranularity=60;let lastPanDelta=0,lastPanAt=0,panMomentumFrame=null;const futureSpace=25;let drawingMode="pan",userDrawings=[],pendingDrawing=null,priceScaleDrag=null,chartPlot={left:10,right:66,top:16,bottom:25,step:1,start:0};
+let viewEnd=0,viewCount=100,followLive=true,dragX=null,dragEnd=0,activePointers=new Map(),pinchStart=0,pinchCount=100,pinchAnchorIndex=0,pinchAnchorRatio=.5,chartFrame=null,scaleMin=null,scaleMax=null,scaleWindow="",chartGranularity=60;let lastPanDelta=0,lastPanAt=0,panMomentumFrame=null;const futureSpace=25;let drawingMode="pan",userDrawings=[],pendingDrawing=null,priceScaleDrag=null,verticalPanDrag=null,chartPlot={left:10,right:66,top:16,bottom:25,step:1,start:0};
 function createMarketChart(containerId="chart-area"){
  const host=document.getElementById(containerId);if(!host)return false;
  // Evita crear un segundo canvas sobre el primero: app.js y este archivo podían inicializar el mismo gráfico.
@@ -22,6 +22,7 @@ function createMarketChart(containerId="chart-area"){
    }
    if(drawingMode==="line"||drawingMode==="zone"){const p=chartPoint(e);if(p){if(drawingMode==="line")userDrawings.push({type:"line",price:p.price});else pendingDrawing={type:"zone",x1:p.index,x2:p.index,p1:p.price,p2:p.price};}drawMarketChart();return;}
    followLive=false;
+   verticalPanDrag={y:e.clientY,min:scaleMin,max:scaleMax};
    dragX=e.clientX;
    dragEnd=Math.max(Math.min(viewCount,candleData.length),Math.min(candleData.length+viewCount-1,viewEnd||candleData.length+futureSpace));
    viewEnd=dragEnd;
@@ -44,6 +45,7 @@ function createMarketChart(containerId="chart-area"){
   const previous=activePointers.get(e.pointerId);
   activePointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
   if(priceScaleDrag){const height=Math.max(1,chartCanvas.parentElement.clientHeight-41),factor=Math.exp((e.clientY-priceScaleDrag.y)/height*2.2),mid=(priceScaleDrag.min+priceScaleDrag.max)/2,half=(priceScaleDrag.max-priceScaleDrag.min)*factor/2;scaleMin=mid-half;scaleMax=mid+half;scaleWindow="manual-price-scale";drawMarketChart();return;}
+  if(verticalPanDrag&&activePointers.size===1){const plotHeight=Math.max(1,chartCanvas.parentElement.clientHeight-chartPlot.top-chartPlot.bottom),shift=(verticalPanDrag.y-e.clientY)/plotHeight*(verticalPanDrag.max-verticalPanDrag.min);scaleMin=verticalPanDrag.min+shift;scaleMax=verticalPanDrag.max+shift;scaleWindow="manual-pan:"+windowKey;drawMarketChart();}
   if(activePointers.size>=2){
    const p=[...activePointers.values()],dist=Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y);
    if(pinchStart>0){
@@ -64,6 +66,7 @@ function createMarketChart(containerId="chart-area"){
   if(pendingDrawing){if(Math.abs(pendingDrawing.x2-pendingDrawing.x1)>1&&Math.abs(pendingDrawing.p2-pendingDrawing.p1)>0)userDrawings.push(pendingDrawing);pendingDrawing=null;drawMarketChart();}
   activePointers.delete(e.pointerId);
   if(priceScaleDrag){priceScaleDrag=null;chartCanvas.style.cursor="grab";}
+  if(verticalPanDrag){verticalPanDrag=null;}
   if(activePointers.size===0&&Math.abs(lastPanDelta)>=1&&performance.now()-lastPanAt<100){
    if(panMomentumFrame!==null)cancelAnimationFrame(panMomentumFrame);
    let velocity=lastPanDelta*.72;
@@ -112,7 +115,7 @@ function renderMarketChart(){
  const end=Math.max(0,Math.min(candleData.length+viewCount-1,viewEnd||candleData.length+futureSpace)),start=Math.max(0,end-viewCount),raw=candleStyle==="heikin"?toHeikinAshi(candleData):candleData,data=raw.slice(start,Math.min(end,candleData.length));
  if(!data.length)return;const windowKey=start+":"+end+":"+viewCount;let lows=data.map(c=>c.low),highs=data.map(c=>c.high);const visibleStart=data[0].time,visibleEnd=data[data.length-1].time;const visibleTrades=backtestTradeData.filter(t=>{const et=Number(t.entryTime)/1000,xt=Number(t.exitTime||Date.now())/1000;return Number.isFinite(et)&&et<=visibleEnd&&xt>=visibleStart;});visibleTrades.forEach(t=>[t.entry,t.sl,t.tp1,t.tp2,t.price].forEach(v=>{v=Number(v);if(Number.isFinite(v)){lows.push(v);highs.push(v);}}));const candleMin=Math.min(...data.map(c=>c.low)),candleMax=Math.max(...data.map(c=>c.high));tradeLevels.forEach(x=>{if(Number.isFinite(x.value)){lows.push(x.value);highs.push(x.value);}});
  const scaleItems=(structureOverlay.items||[]).filter(a=>Number.isFinite(a.price)&&a.time<=visibleEnd),scaleZones=new Map();scaleItems.filter(a=>a.type==="ob"||a.type==="fvg").forEach(a=>{const k=a.type+"|"+a.time+"|"+a.side;if(!scaleZones.has(k))scaleZones.set(k,[]);scaleZones.get(k).push(a);});const recentScaleZones=[...scaleZones.values()].filter(g=>g.length>=2).sort((a,b)=>a[0].time-b[0].time).slice(-24).flat();const visibleAnnotationsForScale=scaleItems.filter(a=>a.time>=visibleStart&&a.type!=="ob"&&a.type!=="fvg").concat(recentScaleZones);visibleAnnotationsForScale.forEach(a=>{lows.push(a.price);highs.push(a.price);});const rawMin=Math.min(...lows),rawMax=Math.max(...highs);
- if(scaleWindow!==windowKey||scaleMin===null||scaleMax===null){const pad=(rawMax-rawMin)*.08||Math.abs(rawMax)*.0001||1;scaleMin=rawMin-pad;scaleMax=rawMax+pad;scaleWindow=windowKey;}else{const span=scaleMax-scaleMin,pad=span*.08;if(rawMin<scaleMin+pad)scaleMin=rawMin-pad;if(rawMax>scaleMax-pad)scaleMax=rawMax+pad;}
+ if(scaleMin===null||scaleMax===null||(scaleWindow!==windowKey&&scaleWindow!=="manual-pan:"+windowKey)){const pad=(rawMax-rawMin)*.08||Math.abs(rawMax)*.0001||1;scaleMin=rawMin-pad;scaleMax=rawMax+pad;scaleWindow=windowKey;}else if(scaleWindow!=="manual-pan:"+windowKey){const span=scaleMax-scaleMin,pad=span*.08;if(rawMin<scaleMin+pad)scaleMin=rawMin-pad;if(rawMax>scaleMax-pad)scaleMax=rawMax+pad;}
  const min=scaleMin,max=scaleMax;
  const yOf=v=>top+(max-v)/(max-min)*ph;
  for(let i=0;i<=4;i++){let v=max-(max-min)*i/4,y=top+ph*i/4;ctx.fillStyle="#8495aa";ctx.textAlign="left";ctx.fillText(v.toFixed(4),w-right+5,y+3);}
