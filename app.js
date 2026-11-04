@@ -188,7 +188,7 @@ function findDiagonalStructure(source,seconds,tf){
  const d=source.slice(-300),p=structurePivots(d),ranges=d.slice(-35).map(c=>c.high-c.low).sort((x,y)=>x-y),median=ranges[Math.floor(ranges.length/2)]||Math.abs(d.at(-1).close)*.0001,tol=Math.max(median*.38,Math.abs(d.at(-1).close)*.000015);
  const find=(side,points,sign)=>{let best=null;const pts=points.slice(-24);for(let ai=0;ai<pts.length-1;ai++)for(let bi=ai+1;bi<pts.length;bi++){
   const p1=pts[ai],p2=pts[bi],dx=p2.i-p1.i;if(dx<4)continue;const slope=(p2.price-p1.price)/dx;
-  if(Math.sign(slope)!==sign||Math.abs(slope)*Math.min(40,d.length-p2.i)<median*.55)continue;
+  if(Math.sign(slope)!==sign||Math.abs(p2.price-p1.price)<median*.25)continue;
   const touches=pts.filter(p=>Math.abs(p.price-(p1.price+slope*(p.i-p1.i)))<=tol).sort((x,y)=>x.i-y.i);if(touches.length<2)continue;
   const last=touches.at(-1),prev=touches.at(-2),gap=Math.max(4,Math.min(40,last.i-prev.i)),actualThird=touches[2]||null,expectedIndex=actualThird?actualThird.i:last.i+gap;
   if(!actualThird&&d.length-1>expectedIndex+5)continue;if(actualThird&&d.length-1>actualThird.i+5&&Math.abs(d.at(-1).close-actualThird.price)>tol*1.5)continue;
