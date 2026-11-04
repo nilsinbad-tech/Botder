@@ -1,7 +1,9 @@
 const DERIV_CONFIG = { endpoint: "wss://api.derivws.com/trading/v1/options/ws/public" };
 let derivSocket = null, availableSymbols = [], selectedSymbol = null;
-let candleBuffer = [], tickSubId = null, candleSubId = null, reconnectTimer = null, symbolsTimer = null, selectedGranularity = 60, lastTickAt = 0, lastTickResubscribeAt = 0;
+let candleBuffer = [], higherTfBuffers={3600:[],14400:[],86400:[]}, tickSubId = null, candleSubId = null, reconnectTimer = null, symbolsTimer = null, selectedGranularity = 60, lastTickAt = 0, lastTickResubscribeAt = 0;
 
+function getHigherTimeframeHistory(seconds){return higherTfBuffers[Number(seconds)]||[];}
+function getDisplayCandles(seconds){const base=aggregateForDisplay(candleBuffer,seconds);if(seconds<3600)return base;const history=higherTfBuffers[seconds]||[];if(!history.length)return base;const live=base.at(-1);if(!live)return history.slice();const out=history.filter(c=>c.time!==live.time);out.push(live);return out.sort((a,b)=>a.time-b.time);}
 function responseSymbol(data) { const q=data && data.echo_req || {}; const value=q.ticks_history||q.ticks||q.symbol||data?.tick?.symbol||data?.ohlc?.symbol||null; return Array.isArray(value)?value[0]:value; }
 function sendDeriv(data) {
   if (!derivSocket || derivSocket.readyState !== WebSocket.OPEN) return false;
@@ -49,6 +51,7 @@ function connectDeriv() {
       showApiDiagnostic("Deriv respondió: " + received.length + " símbolos. Buscando índices Volatility...");
       renderMarkets(received);
     }
+    if([13,14,15].includes(data.req_id)&&selectedSymbol&&(data.msg_type==="history"||data.msg_type==="candles")){const seconds=data.req_id===13?3600:data.req_id===14?14400:86400,rows=data.candles||data.history?.candles||[],parsed=rows.map(c=>({time:Number(c.epoch??c.open_time),open:Number(c.open),high:Number(c.high),low:Number(c.low),close:Number(c.close)})).filter(c=>[c.time,c.open,c.high,c.low,c.close].every(Number.isFinite));if(parsed.length){higherTfBuffers[seconds]=parsed.sort((a,b)=>a.time-b.time);if(selectedGranularity===seconds&&typeof updateCandles==="function")updateCandles(getDisplayCandles(seconds));if(typeof analyzeCandles==="function"&&candleBuffer.length>=100)analyzeCandles(selectedSymbol,selectedMarketName(),candleBuffer);showApiDiagnostic("Historial HTF cargado · "+(seconds===3600?"H1":seconds===14400?"H4":"D1")+" · "+parsed.length+" velas.");}}
     if (data.req_id === 12 && selectedSymbol && (data.msg_type === "history" || data.msg_type === "candles")) {
       const history = data.history || {};
       let historical = [];
@@ -66,7 +69,7 @@ function connectDeriv() {
         const newerLive=[...liveByTime.values()].filter(c=>c.time>lastHistoryTime).sort((a,b)=>a.time-b.time);
         candleBuffer=[...historical,...newerLive];
         if (typeof setBacktestHistory === "function") setBacktestHistory(selectedSymbol, selectedMarketName(), historical);
-        if (typeof updateCandles === "function") updateCandles(aggregateForDisplay(candleBuffer,selectedGranularity));
+        if (typeof updateCandles === "function") updateCandles(getDisplayCandles(selectedGranularity));
         if (typeof analyzeCandles === "function") analyzeCandles(selectedSymbol, selectedMarketName(), candleBuffer);
         showChartMessage("Historial base M1 · "+historical.length+" velas · vista "+(selectedGranularity===3600?"H1":selectedGranularity===14400?"H4":"M"+(selectedGranularity/60))+".");
         showApiDiagnostic("Deriv entregó " + historical.length + " velas para " + selectedSymbol + ".");
@@ -85,7 +88,7 @@ function connectDeriv() {
       const o = data.ohlc, candle = { time: Number(o.open_time), open: Number(o.open), high: Number(o.high), low: Number(o.low), close: Number(o.close) };
       if (candleBuffer.length && candleBuffer[candleBuffer.length - 1].time === candle.time) candleBuffer[candleBuffer.length - 1] = candle;
       else candleBuffer.push(candle);
-      if(selectedGranularity===60){if(typeof addCandle==="function")addCandle(candle);}else if(typeof updateCandles==="function")updateCandles(aggregateForDisplay(candleBuffer,selectedGranularity));
+      if(selectedGranularity===60){if(typeof addCandle==="function")addCandle(candle);}else if(typeof updateCandles==="function")updateCandles(getDisplayCandles(selectedGranularity));
       // El precio visible lo controla exclusivamente el flujo tick; no permitir que una vela histórica lo retrase.
       if (typeof analyzeCandles === "function") analyzeCandles(selectedSymbol, selectedMarketName(), candleBuffer);
     }
@@ -112,7 +115,7 @@ function connectDeriv() {
           candleBuffer[candleBuffer.length - 1] = live;
         }
         // Actualiza la vela visible con cada tick; el dibujo se agrupa en requestAnimationFrame.
-        if(selectedGranularity===60){if(typeof addCandle==="function")addCandle(live);}else if(typeof updateCandles==="function")updateCandles(aggregateForDisplay(candleBuffer,selectedGranularity));
+        if(selectedGranularity===60){if(typeof addCandle==="function")addCandle(live);}else if(typeof updateCandles==="function")updateCandles(getDisplayCandles(selectedGranularity));
         // Previsualiza OB en cada tick mientras la vela M1 se está formando; no espera al cierre.
         if (typeof analyzeLiveStructure === "function") analyzeLiveStructure(selectedSymbol, candleBuffer);
         // Recalcula la estructura/backtest solo cuando comienza una vela nueva (la anterior cerró).
@@ -191,7 +194,7 @@ function loadMarketHistory(symbol, granularity = selectedGranularity) {
     sendDeriv({ ticks_history: symbol, count: 5000, end: "latest", style: "ticks", req_id: 12 });
     showChartMessage("Construyendo velas de 30 segundos desde ticks de Deriv...");
   } else {
-    sendDeriv({ ticks_history: symbol, count: 5000, end: "latest", style: "candles", granularity: 60, req_id: 12 });
+    sendDeriv({ ticks_history: symbol, count: 5000, end: "latest", style: "candles", granularity: 60, req_id: 12 });sendDeriv({ticks_history:symbol,count:5000,end:"latest",style:"candles",granularity:3600,req_id:13});sendDeriv({ticks_history:symbol,count:5000,end:"latest",style:"candles",granularity:14400,req_id:14});sendDeriv({ticks_history:symbol,count:1000,end:"latest",style:"candles",granularity:86400,req_id:15});
     // El historial M1 de 5000 velas se carga en una sola respuesta; los ticks actualizan la vela viva sin reemplazarlo por un bloque corto.
     showChartMessage("Cargando historial · " + (selectedGranularity/60) + " min...");
   }
@@ -199,7 +202,7 @@ function loadMarketHistory(symbol, granularity = selectedGranularity) {
 function openMarket(symbol) {
   if (!symbol || !sendDeriv({ forget_all: "ticks" })) { /* socket may still be connecting */ }
   if (!derivSocket || derivSocket.readyState !== WebSocket.OPEN) return;
-  selectedSymbol = symbol; candleBuffer = []; tickSubId = null; candleSubId = null; lastTickAt = 0; lastTickResubscribeAt = 0;
+  selectedSymbol = symbol; candleBuffer = []; higherTfBuffers={3600:[],14400:[],86400:[]}; tickSubId = null; candleSubId = null; lastTickAt = 0; lastTickResubscribeAt = 0;
   sendDeriv({ forget_all: "candles" });
   sendDeriv({ forget_all: "ticks" });
   if (typeof setChartSymbol === "function") setChartSymbol(symbol);
@@ -212,7 +215,7 @@ function getAvailableSymbols() { return availableSymbols; }
 function isDerivConnected() { return derivSocket && derivSocket.readyState === WebSocket.OPEN; }
 document.addEventListener("DOMContentLoaded", () => {
   const tf = document.getElementById("timeframe");
-  if(tf){tf.value="60";tf.disabled=false;tf.addEventListener("change",()=>{selectedGranularity=Number(tf.value)||60;if(typeof setChartGranularity==="function")setChartGranularity(selectedGranularity);if(selectedSymbol&&candleBuffer.length&&typeof updateCandles==="function")updateCandles(aggregateForDisplay(candleBuffer,selectedGranularity));});}
+  if(tf){tf.value="60";tf.disabled=false;tf.addEventListener("change",()=>{selectedGranularity=Number(tf.value)||60;if(typeof setChartGranularity==="function")setChartGranularity(selectedGranularity);if(selectedSymbol&&candleBuffer.length&&typeof updateCandles==="function"){const h=getHigherTimeframeHistory(selectedGranularity);updateCandles(h.length?getDisplayCandles(selectedGranularity):aggregateForDisplay(candleBuffer,selectedGranularity));analyzeCandles(selectedSymbol,selectedMarketName(),candleBuffer);}});}
   const style=document.getElementById("candle-style");if(style)style.addEventListener("change",()=>{if(typeof setCandleStyle==="function")setCandleStyle(style.value);});
 });
 connectDeriv();
