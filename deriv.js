@@ -78,7 +78,7 @@ function connectDeriv() {
         showApiDiagnostic("Respuesta de historial recibida sin datos de velas. Tipo: " + data.msg_type + ".");
       }
     }
-    if (data.msg_type === "candles" && responseSymbol(data) === selectedSymbol && ![12,13,14,15,16,17,18,19].includes(data.req_id)) {
+    if (data.msg_type === "candles" && responseSymbol(data) === selectedSymbol && ![12,13,14,15,16,17,18,19,20].includes(data.req_id)) {
       candleBuffer = (data.candles || []).map(c => ({ time: Number(c.epoch), open: Number(c.open), high: Number(c.high), low: Number(c.low), close: Number(c.close) }));
       if (typeof updateCandles === "function") updateCandles(candleBuffer);
       if (typeof analyzeCandles === "function") analyzeCandles(selectedSymbol, selectedMarketName(), candleBuffer);
@@ -202,7 +202,7 @@ function loadMarketHistory(symbol, granularity = selectedGranularity) {
 function openMarket(symbol) {
   if (!symbol || !sendDeriv({ forget_all: "ticks" })) { /* socket may still be connecting */ }
   if (!derivSocket || derivSocket.readyState !== WebSocket.OPEN) return;
-  selectedSymbol = symbol; candleBuffer = []; higherTfBuffers={300:[],600:[],900:[],1800:[],3600:[],14400:[],86400:[]}; tickSubId = null; candleSubId = null; lastTickAt = 0; lastTickResubscribeAt = 0;
+  selectedSymbol = symbol; candleBuffer = []; higherTfBuffers={120:[],300:[],600:[],900:[],1800:[],3600:[],14400:[],86400:[]}; tickSubId = null; candleSubId = null; lastTickAt = 0; lastTickResubscribeAt = 0;
   sendDeriv({ forget_all: "candles" });
   sendDeriv({ forget_all: "ticks" });
   if (typeof setChartSymbol === "function") setChartSymbol(symbol);
