@@ -1,10 +1,14 @@
 /* BOTDER STRUCTURAL ENGINE v1 · independent timeframe channel model */
 function structurePivots(d,depth=3,deviation=3,backstep=3){
  const found=[];if(!Array.isArray(d)||d.length<depth*2+3)return{highs:[],lows:[],zigzag:[]};
- const r=d.slice(-20).map(c=>c.high-c.low).sort((a,b)=>a-b),median=r[Math.floor(r.length/2)]||0,minMove=Math.max(median*deviation/10,Math.abs(d.at(-1).close)*1e-8,1e-10);
- for(let i=depth;i<d.length-depth;i++){let hi=true,lo=true;for(let k=1;k<=depth;k++){if(d[i].high<=d[i-k].high||d[i].high<d[i+k].high)hi=false;if(d[i].low>=d[i-k].low||d[i].low>d[i+k].low)lo=false;}if(hi)found.push({i,time:d[i].time,price:d[i].high,type:"high",confirmedAt:i+depth});if(lo)found.push({i,time:d[i].time,price:d[i].low,type:"low",confirmedAt:i+depth});}
- found.sort((a,b)=>a.i-b.i||(a.type==="high"?-1:1));const stable=[];for(const p of found){const last=stable.at(-1);if(last&&last.type===p.type&&p.i-last.i<=backstep)continue;const opposite=[...stable].reverse().find(q=>q.type!==p.type);if(opposite&&Math.abs(p.price-opposite.price)<minMove)continue;stable.push(p);}
- return{highs:stable.filter(p=>p.type==="high"),lows:stable.filter(p=>p.type==="low"),zigzag:stable,settings:{depth,deviation,backstep,minMove,confirmedRightBars:depth}};
+ for(let i=depth;i<d.length-depth;i++){
+  let hi=true,lo=true;for(let k=1;k<=depth;k++){if(d[i].high<=d[i-k].high||d[i].high<d[i+k].high)hi=false;if(d[i].low>=d[i-k].low||d[i].low>d[i+k].low)lo=false;}
+  if(!hi&&!lo)continue;const prior=d.slice(Math.max(0,i-20),i).map(c=>Math.max(0,c.high-c.low)).sort((a,b)=>a-b),median=prior[Math.floor(prior.length/2)]||0,minMove=Math.max(median*deviation/10,Math.abs(d[i].close)*1e-8,1e-10);
+  if(hi)found.push({i,time:d[i].time,price:d[i].high,type:"high",confirmedAt:i+depth,minMove});if(lo)found.push({i,time:d[i].time,price:d[i].low,type:"low",confirmedAt:i+depth,minMove});
+ }
+ found.sort((a,b)=>a.i-b.i||(a.type==="high"?-1:1));const stable=[];
+ for(const p of found){const last=stable.at(-1);if(last&&last.type===p.type&&p.i-last.i<=backstep)continue;const opposite=[...stable].reverse().find(q=>q.type!==p.type);if(opposite&&Math.abs(p.price-opposite.price)<Math.max(p.minMove,opposite.minMove))continue;stable.push(p);}
+ return{highs:stable.filter(p=>p.type==="high"),lows:stable.filter(p=>p.type==="low"),zigzag:stable,settings:{depth,deviation,backstep,confirmedRightBars:depth,immutableConfirmedPivots:true}};
 }
 function findDiagonalStructure(source,seconds,tf){
  if(!Array.isArray(source)||source.length<30)return null;
