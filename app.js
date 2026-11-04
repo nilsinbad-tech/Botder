@@ -216,6 +216,7 @@ function buildStructuralPlan(m1,displayTf){
  const expectedTime=candidate?.projectTime,referenceTime=candidate?.third?.time??expectedTime,obSet=dir==="BUY"?buy:sell,near=obSet.filter(o=>Math.abs((o.low+o.high)/2-zoneCenter)<=Math.max(candidate?.tolerance||0,1e-9)*2&&Math.abs(o.time-referenceTime)<=Math.max(900,(candidate?.seconds||60)*2)).slice(-3);
  const third=candidate?.third||null,inZone=!!third&&last&&last.close>=third.price-(candidate.tolerance*1.5)&&last.close<=third.price+(candidate.tolerance*1.5),validLevels=!!candidate&&Number.isFinite(sl)&&!!target&&(dir==="BUY"?sl<zoneCenter&&target.price>zoneCenter:sl>zoneCenter&&target.price<zoneCenter);
  const confirmed=!!candidate&&!!third&&near.length>=3&&trend===dir&&inZone&&validLevels;
+ const h1Latest=[...detectOrderBlocks(h1,"BUY"),...detectOrderBlocks(h1,"SELL")].sort((x,y)=>x.time-y.time).at(-1),h4Latest=[...detectOrderBlocks(h4,"BUY"),...detectOrderBlocks(h4,"SELL")].sort((x,y)=>x.time-y.time).at(-1),h1Class=h1Latest?(h1Latest.side===trend?"A FAVOR":"EN CONTRA"):"SIN OB",h4Class=h4Latest?(h4Latest.side===trend?"A FAVOR":"EN CONTRA"):"SIN OB";
  const h4buy=detectOrderBlocks(h4,"BUY").slice(-1),h4sell=detectOrderBlocks(h4,"SELL").slice(-1);
  [...h4buy,...h4sell].forEach(o=>{const favorable=o.side===trend;items.push({type:"ob",price:o.low,label:"OB H4 "+(favorable?"A FAVOR":"EN CONTRA"),side:o.side,time:o.time,active:favorable},{type:"ob",price:o.high,label:"",side:o.side,time:o.time,active:favorable});});
  near.forEach(o=>items.push({type:"ob",price:o.low,label:"OB M1",side:o.side,time:o.time,active:true},{type:"ob",price:o.high,label:"",side:o.side,time:o.time,active:true}));
@@ -238,7 +239,7 @@ function analyzeCandles(symbol,market,candles){
  const closed=d[i],plan=buildStructuralPlan(d.slice(0,i+1),Number(document.getElementById("timeframe")?.value)||60);
  evaluateOpenOperations(symbol,closed);evaluateStrategyJournal(symbol,closed);
  lastProjection=plan.projection;setText("side-analysis-status","● "+plan.status);
- setText("structure-diagnostic","D1 "+(plan.biasD1||"—")+" · H1 "+(plan.bias1||"—")+" · H4 "+(plan.bias4||"—")+" · OB M1 "+plan.near.length+"/3");
+ setText("structure-diagnostic","D1 "+(plan.biasD1||"—")+" · H1 "+(plan.bias1||"—")+" · H4 "+(plan.bias4||"—")+" · OB H1 "+plan.h1Class+" · OB H4 "+plan.h4Class+" · OB M1 "+plan.near.length+"/3");
  renderProjection(plan);
  if(typeof setStructureOverlay==="function")setStructureOverlay({items:plan.items,lines:plan.lines,projection:plan.projection});
  if(plan.signal){const key=symbol+":"+plan.signal.time+":"+plan.signal.direction;if(key!==lastSignalKey){lastSignalKey=key;addSignal({...plan.signal,symbol,market,candleTime:plan.signal.time});recordStrategyTrade({...plan.signal,symbol,market});notifyBot("BOTDER · "+plan.signal.direction,"Tercer toque respetado y tres OB M1 confirmados.");}}
