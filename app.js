@@ -295,7 +295,7 @@ function buildStructuralPlan(m1,displayTf,historyContext=null){
  const m30Class=m30Latest?(m30Latest.side===dir?"A FAVOR":"EN CONTRA"):"SIN OB";
  const addObPair=(o,label,active,tf)=>items.push({type:"ob",price:o.low,label,side:o.side,time:o.time,active:!!active,tf},{type:"ob",price:o.high,label:"",side:o.side,time:o.time,active:!!active,tf});
  // H4 y M30 son contexto visual; nunca bloquean una entrada de la estructura local.
- h4Obs.slice(-2).forEach(o=>addObPair(o,"OB H4",o.side===bias4,14400));
+ h4Obs.slice(-2).forEach(o=>addObPair(o,"ZONA H4 "+(o.side==="BUY"?"COMPRA":"VENTA"),o.side===bias4,14400));
  m30Obs.slice(-2).forEach(o=>addObPair(o,"OB M30",o.side===bias30,1800));
  const localObs=[...detectOrderBlocks(activeSource,"BUY"),...detectOrderBlocks(activeSource,"SELL")].sort((x,y)=>x.time-y.time);
  localObs.slice(-3).forEach(o=>addObPair(o,"OB "+tfLabel,o.side===dir,activeTf));
