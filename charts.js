@@ -50,7 +50,10 @@ function createMarketChart(containerId="chart-area"){
   if(activePointers.size>=2){
    const p=[...activePointers.values()],dist=Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y);
    if(pinchStart>0){
+    // Zoom suave: pellizcar acerca/aleja las velas y conserva el punto bajo el centro de los dedos.
     viewCount=Math.max(15,Math.min(5000,Math.round(pinchCount*pinchStart/Math.max(1,dist))));
+    const rect=chartCanvas.getBoundingClientRect(),mid=(p[0].x+p[1].x)/2;
+    pinchAnchorRatio=Math.max(0,Math.min(1,(mid-rect.left-10)/Math.max(1,rect.width-76)));
     const nextEnd=pinchAnchorIndex+(1-pinchAnchorRatio)*viewCount;
     viewEnd=Math.max(Math.min(viewCount,candleData.length),Math.min(candleData.length+viewCount-1,Math.round(nextEnd)));
    }
