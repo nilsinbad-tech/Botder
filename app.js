@@ -1,12 +1,13 @@
 const signals=[],operations=[],history=[],backtestTrades=[];
 let signalCounter=0,lastSignalKey="",selectedMarket=null,backtestSymbol=null,m1Candles=[],backtestReady=false;
+const usedStructureKeys=new Set();
 const TZ="America/Panama";
 function panamaParts(ts=Date.now()){const p=new Intl.DateTimeFormat("en-CA",{timeZone:TZ,year:"numeric",month:"2-digit",day:"2-digit"}).formatToParts(new Date(ts));return Object.fromEntries(p.map(x=>[x.type,x.value]));}
 function panamaDay(ts){const p=panamaParts(ts);return p.year+"-"+p.month+"-"+p.day;}
 function updateDailyPanel(){const now=new Date(),date=panamaDay(now.getTime());const clock=new Intl.DateTimeFormat("es-PA",{timeZone:TZ,hour:"2-digit",minute:"2-digit",second:"2-digit",hour12:false}).format(now);const label=new Intl.DateTimeFormat("es-PA",{timeZone:TZ,day:"2-digit",month:"2-digit",year:"numeric"}).format(now);const c=document.getElementById("panama-clock");if(c)c.textContent=clock+" · "+label;const today=backtestTrades.filter(t=>panamaDay(t.exitTime||t.entryTime)===date);const wins=today.filter(t=>t.result==="GANADA").length,losses=today.filter(t=>t.result==="PERDIDA").length,total=wins+losses;setText("daily-wins",wins);setText("daily-losses",losses);setText("daily-total",total);setText("daily-rate",total?(wins/total*100).toFixed(1)+"%":"0%");setText("daily-date",date);}
 function setText(id,value){const e=document.getElementById(id);if(e)e.textContent=value;}
 function selectMarket(name,symbol){selectedMarket={name,symbol};document.querySelectorAll(".market").forEach(c=>c.classList.toggle("active",c.dataset.symbol===symbol));setText("chart-title",name);setText("chart-message","Cargando historial real...");if(typeof openMarket==="function")openMarket(symbol);}
-function addSignal(data){if(!data||signals.some(s=>s.symbol===data.symbol&&s.candleTime===data.candleTime&&s.direction===data.direction))return;signalCounter++;signals.unshift({id:"SIG-"+String(signalCounter).padStart(4,"0"),createdAt:Date.now(),status:"ACTIVE",...data});renderSignals();}
+function addSignal(data){if(!data)return;const structureKey=data.structureKey||"";if(signals.some(s=>s.symbol===data.symbol&&s.direction===data.direction&&(structureKey?s.structureKey===structureKey:s.candleTime===data.candleTime)))return;if(structureKey&&usedStructureKeys.has(structureKey))return;if(structureKey)usedStructureKeys.add(structureKey);signalCounter++;signals.unshift({id:"SIG-"+String(signalCounter).padStart(4,"0"),createdAt:Date.now(),status:"ACTIVE",...data});renderSignals();}
 function markEntered(id){const s=signals.find(x=>x.id===id);if(!s||s.status!=="ACTIVE")return;s.status="ENTERED";operations.unshift({...s,enteredAt:Date.now(),currentPrice:Number(s.entry),result:"OPEN"});renderSignals();renderOperations();}
 function markIgnored(id){const s=signals.find(x=>x.id===id);if(!s||s.status!=="ACTIVE")return;s.status="IGNORED";history.unshift({...s,result:"NO ENTRÉ",finishedAt:Date.now()});renderSignals();renderHistory();}
 function signedMove(direction,from,to){return direction==="COMPRAR"?to-from:from-to;}
@@ -131,14 +132,14 @@ function runStructuralBacktest(symbol,market,candles,displayTf){
   const target=candlesAtTf(prefix,600);
   const plan=buildStructuralPlan(prefix,displayTf,{h4,m30,h1,d1,target});
   if(!plan.signal)continue;
-  const s=plan.signal;let result="ABIERTA",price=s.entry,exitTime=null,exitIndex=-1;
+  const s=plan.signal,cand=plan.candidate,structureKey=cand?[displayTf,cand.side,cand.line1.time1,cand.line1.time2,Number(cand.line1.price1).toPrecision(12),Number(cand.line1.price2).toPrecision(12)].join(":"):"";if(structureKey&&trades.some(t=>t.structureKey===structureKey))continue;let result="ABIERTA",price=s.entry,exitTime=null,exitIndex=-1;
   for(let j=i+1;j<d.length;j++){
    const bar=d[j],stop=s.direction==="COMPRAR"?bar.low<=s.sl:bar.high>=s.sl,first=s.direction==="COMPRAR"?bar.high>=s.tp1:bar.low<=s.tp1,second=s.direction==="COMPRAR"?bar.high>=s.tp2:bar.low<=s.tp2;
    if(stop){result="PERDIDA";price=s.sl;exitTime=bar.time*1000;exitIndex=j;break;}
    if(second){result="GANADA";price=s.tp2;exitTime=bar.time*1000;exitIndex=j;break;}
    if(first){result="GANADA";price=s.tp1;exitTime=bar.time*1000;exitIndex=j;break;}
   }
-  trades.push({id:"BT-"+symbol+"-"+s.time,symbol,market,direction:s.direction,entry:s.entry,sl:s.sl,tp1:s.tp1,tp2:s.tp2,price,entryTime:s.time*1000,exitTime,result,timeframe:s.timeframe,structureLines:(plan.lines||[]).map(line=>({...line,touches:(line.touches||[]).map(t=>({...t}))})),exitReason:result==="GANADA"?(price===s.tp2?"TP2":"TP1"):"SL"});
+  trades.push({id:"BT-"+symbol+"-"+s.time,symbol,market,direction:s.direction,entry:s.entry,sl:s.sl,tp1:s.tp1,tp2:s.tp2,price,entryTime:s.time*1000,exitTime,result,timeframe:s.timeframe,structureKey,structureLines:(plan.lines||[]).map(line=>({...line,touches:(line.touches||[]).map(t=>({...t}))})),exitReason:result==="GANADA"?(price===s.tp2?"TP2":"TP1"):"SL"});
   nextFree=exitIndex>i?exitIndex:i+1;
  }
  backtestTrades.splice(0,backtestTrades.length,...trades);setBacktestTrades(trades);backtestSymbol=symbol;backtestReady=true;
@@ -330,11 +331,11 @@ function analyzeCandles(symbol,market,candles){
  setText("trend-h4",side);setText("confirm-m30",confirm);setText("confirm-m1",plan.rejection?"RECHAZO DETECTADO":plan.thirdTouch?"ESPERANDO VELA DE RECHAZO":"ESPERANDO 3 TOQUES");
  setText("touch-status",plan.thirdTouch?"3º TOQUE":"BUSCANDO");setText("ob-status",plan.h4Class||"BUSCANDO");setText("channel-status",plan.candidate?(plan.candidate.side==="BUY"?"ALCISTA":"BAJISTA"):"BUSCANDO");
  renderProjection(plan);
- const btKey=symbol+":"+d[i].time+":"+tf+":"+((higherTfBuffers[600]||[]).length)+":"+((higherTfBuffers[14400]||[]).length)+":"+((higherTfBuffers[1800]||[]).length)+":"+((higherTfBuffers[3600]||[]).length)+":"+((higherTfBuffers[86400]||[]).length);if(structuralBacktestKey!==btKey){structuralBacktestKey=btKey;runStructuralBacktest(symbol,market,d.slice(0,i+1),tf);}
+ const btKey=symbol+":"+d[i].time+":"+tf;if(structuralBacktestKey!==btKey){structuralBacktestKey=btKey;runStructuralBacktest(symbol,market,d.slice(0,i+1),tf);}
  if(typeof setStructureOverlay==="function")setStructureOverlay({items:plan.items,lines:plan.lines,projection:plan.projection,activeTf:plan.activeTf});
  if(plan.projection&&typeof drawTradeLevels==="function")drawTradeLevels({entry:plan.projection.entry,sl:plan.projection.sl,tp1:plan.projection.tp1,tp2:plan.projection.tp2,time:closed.time,direction:plan.projection.direction},false);
  else if(typeof clearTradeLevels==="function")clearTradeLevels();
- if(plan.signal){const key=symbol+":"+plan.signal.time+":"+plan.signal.direction;if(key!==lastSignalKey){lastSignalKey=key;addSignal({...plan.signal,symbol,market,candleTime:plan.signal.time});recordStrategyTrade({...plan.signal,symbol,market});notifyBot("BOTDER · "+plan.signal.direction,"Tercer toque + vela de rechazo + vela de confirmación a favor.");}}
+ if(plan.signal&&plan.candidate){const c=plan.candidate,structureKey=[tf,c.side,c.line1.time1,c.line1.time2,Number(c.line1.price1).toPrecision(12),Number(c.line1.price2).toPrecision(12)].join(":");const key=symbol+":"+structureKey;if(key!==lastSignalKey&&!usedStructureKeys.has(key)&&!strategyJournal.some(t=>t.structureKey===key)){lastSignalKey=key;usedStructureKeys.add(key);addSignal({...plan.signal,symbol,market,candleTime:plan.signal.time,structureKey:key});recordStrategyTrade({...plan.signal,symbol,market,structureKey:key});notifyBot("BOTDER · "+plan.signal.direction,"Una señal: tercer toque válido de la estructura.");}}
  if(typeof drawRsiPanel==="function")drawRsiPanel(makeIndicators(d).rsi,d);
 }
 function analyzeLiveStructure(symbol,candles){
@@ -348,8 +349,8 @@ let structuralBacktestKey="";
 function saveStrategyJournal(){try{localStorage.setItem("botder-structure-journal",JSON.stringify(strategyJournal.slice(0,2000)));}catch(e){}}
 function loadStrategyJournal(){try{const v=JSON.parse(localStorage.getItem("botder-structure-journal")||"[]");if(Array.isArray(v))strategyJournal=v.slice(0,2000);}catch(e){strategyJournal=[];}renderStrategyJournal();}
 function recordStrategyTrade(signal){
- if(!signal||strategyJournal.some(t=>t.symbol===signal.symbol&&t.entryTime===Number(signal.time)*1000&&t.direction===signal.direction))return;
- strategyJournal.unshift({id:"STR-"+Date.now().toString(36).toUpperCase(),symbol:signal.symbol,market:signal.market,direction:signal.direction,entry:Number(signal.entry),sl:Number(signal.sl),tp1:Number(signal.tp1),tp2:Number(signal.tp2),tp:Number(signal.tp2),timeframe:signal.timeframe||"",entryTime:Number(signal.time)*1000,result:"ABIERTA"});
+ if(!signal||strategyJournal.some(t=>t.symbol===signal.symbol&&(signal.structureKey?t.structureKey===signal.structureKey:t.entryTime===Number(signal.time)*1000&&t.direction===signal.direction)))return;
+ strategyJournal.unshift({id:"STR-"+Date.now().toString(36).toUpperCase(),symbol:signal.symbol,market:signal.market,direction:signal.direction,entry:Number(signal.entry),sl:Number(signal.sl),tp1:Number(signal.tp1),tp2:Number(signal.tp2),tp:Number(signal.tp2),timeframe:signal.timeframe||"",structureKey:signal.structureKey||"",entryTime:Number(signal.time)*1000,result:"ABIERTA"});
  strategyJournal=strategyJournal.slice(0,2000);saveStrategyJournal();renderStrategyJournal();
 }
 function evaluateStrategyJournal(symbol,candle){
