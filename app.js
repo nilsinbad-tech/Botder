@@ -60,6 +60,18 @@ function emaSeries(v,p){const o=Array(v.length).fill(null);if(v.length<p)return 
 function rsiSeries(v,p=14){const o=Array(v.length).fill(null);if(v.length<=p)return o;let g=0,l=0;for(let i=1;i<=p;i++){let d=v[i]-v[i-1];g+=Math.max(0,d);l+=Math.max(0,-d);}let ag=g/p,al=l/p;o[p]=al===0?100:100-100/(1+ag/al);for(let i=p+1;i<v.length;i++){let d=v[i]-v[i-1];ag=(ag*(p-1)+Math.max(0,d))/p;al=(al*(p-1)+Math.max(0,-d))/p;o[i]=al===0?100:100-100/(1+ag/al);}return o;}
 function pivotsAt(d,end,depth=2){let highs=[],lows=[];for(let i=Math.max(depth,end-180);i<=end-depth;i++){let h=true,l=true;for(let j=1;j<=depth;j++){if(d[i].high<=d[i-j].high||d[i].high<d[i+j].high)h=false;if(d[i].low>=d[i-j].low||d[i].low>d[i+j].low)l=false;}if(h)highs.push({i,price:d[i].high});if(l)lows.push({i,price:d[i].low});}return{highs,lows};}
 function lastPivot(a){return a.length?a[a.length-1]:null;}
+// Liquidez real: requiere dos pivotes similares y un nivel que siga sin barrer.
+function activeLiquidityPools(d,end,pivots){
+ const ranges=[];for(let k=Math.max(1,end-39);k<=end;k++)ranges.push(d[k].high-d[k].low);ranges.sort((a,b)=>a-b);
+ const medianRange=ranges.length?ranges[Math.floor(ranges.length/2)]:0,tolerance=Math.max(medianRange*.18,Math.abs(d[end]?.close||0)*1e-7,1e-8);
+ const find=(items,side)=>{const candidates=[];for(const base of items){const cluster=items.filter(p=>Math.abs(p.price-base.price)<=tolerance);if(cluster.length<2)continue;
+  const latest=cluster.reduce((a,b)=>a.i>b.i?a:b),level=cluster.reduce((sum,p)=>sum+p.price,0)/cluster.length;let swept=false;
+  for(let k=latest.i+1;k<=end;k++){if(side==="BSL"?d[k].high>level+tolerance:d[k].low<level-tolerance){swept=true;break;}}
+  if(swept||(side==="BSL"?level<=d[end].close:level>=d[end].close))continue;
+  candidates.push({price:level,i:latest.i,count:cluster.length,side});}
+  candidates.sort((a,b)=>side==="BSL"?a.price-b.price:b.price-a.price);return candidates[0]||null;};
+ return{bsl:find(pivots.highs,"BSL"),ssl:find(pivots.lows,"SSL")};
+}
 function reject(c,buy){let body=Math.abs(c.close-c.open),lw=Math.min(c.open,c.close)-c.low,uw=c.high-Math.max(c.open,c.close);return buy?c.close>c.open&&lw>=Math.max(body*.35,(c.high-c.low)*.2):c.close<c.open&&uw>=Math.max(body*.35,(c.high-c.low)*.2);}
 function getZones(d,i){let ob=[],fvg=[];for(let k=Math.max(2,i-35);k<=i;k++){let c=d[k],future=d.slice(k+1,Math.min(i+1,k+5));if(k<i&&c.close<c.open&&future.some(x=>x.close>c.high))ob.push({side:"BUY",low:c.low,high:Math.max(c.open,c.close),i:k});if(k<i&&c.close>c.open&&future.some(x=>x.close<c.low))ob.push({side:"SELL",low:Math.min(c.open,c.close),high:c.high,i:k});if(d[k].low>d[k-2].high)fvg.push({side:"BUY",low:d[k-2].high,high:d[k].low,i:k});if(d[k].high<d[k-2].low)fvg.push({side:"SELL",low:d[k].high,high:d[k-2].low,i:k});}return{ob,fvg};}
 function makeIndicators(d){let close=d.map(x=>x.close);return{e9:emaSeries(close,9),e20:emaSeries(close,20),e50:emaSeries(close,50),rsi:rsiSeries(close,14)};}
@@ -71,8 +83,9 @@ function structureAt(d,i,x){
  const mark=(type,price,label,side,time=c.time)=>{if(Number.isFinite(price))ann.push({type,price,label,side,time});};
  piv.highs.slice(-8).forEach(p=>mark("pivot",p.price,"PIVOTE ALTO","",d[p.i].time));
  piv.lows.slice(-8).forEach(p=>mark("pivot",p.price,"PIVOTE BAJO","",d[p.i].time));
- if(hi)mark("liquidity",hi.price,"LIQUIDEZ BSL","",d[hi.i].time);
- if(lo)mark("liquidity",lo.price,"LIQUIDEZ SSL","",d[lo.i].time);
+ const pools=activeLiquidityPools(d,i-2,piv);
+ if(pools.bsl)mark("liquidity",pools.bsl.price,"LIQUIDEZ BSL","",d[pools.bsl.i].time);
+ if(pools.ssl)mark("liquidity",pools.ssl.price,"LIQUIDEZ SSL","",d[pools.ssl.i].time);
  ["BUY","SELL"].forEach(side=>{const v=z.ob.filter(v=>v.side===side).at(-1);if(v){mark("ob",v.low,"OB "+side,v.side,d[v.i].time);mark("ob",v.high,"",v.side,d[v.i].time);}});
  z.fvg.slice(-4).forEach(v=>{mark("fvg",v.low,"FVG "+v.side,v.side,d[v.i].time);mark("fvg",v.high,"",v.side,d[v.i].time);});
  let bos=null;
@@ -118,7 +131,7 @@ function structureAt(d,i,x){
  }
  let projection=null,bias=x.e9[i]>x.e20[i]&&x.e20[i]>x.e50[i]?"BUY":x.e9[i]<x.e20[i]&&x.e20[i]<x.e50[i]?"SELL":null;
  if(bias){
-  const pool=bias==="BUY"?lo:hi,zones=bias==="BUY"?z.ob.filter(v=>v.side==="BUY").concat(z.fvg.filter(v=>v.side==="BUY")):z.ob.filter(v=>v.side==="SELL").concat(z.fvg.filter(v=>v.side==="SELL"));
+  const pool=bias==="BUY"?pools.ssl:pools.bsl,zones=bias==="BUY"?z.ob.filter(v=>v.side==="BUY").concat(z.fvg.filter(v=>v.side==="BUY")):z.ob.filter(v=>v.side==="SELL").concat(z.fvg.filter(v=>v.side==="SELL"));
   const zone=zones.at(-1);
   if(pool&&zone){
    const low=Math.min(zone.low,zone.high),high=Math.max(zone.low,zone.high);
@@ -130,7 +143,7 @@ function structureAt(d,i,x){
 }
 function buildZoneOutlook(d,i,x){
  if(!d[i])return{buy:null,sell:null};
- const p=pivotsAt(d,i-2),lo=lastPivot(p.lows),hi=lastPivot(p.highs),z=getZones(d,i);
+ const p=pivotsAt(d,i-2),pools=activeLiquidityPools(d,i-2,p),lo=pools.ssl,hi=pools.bsl,z=getZones(d,i);
  const make=side=>{const ob=z.ob.filter(v=>v.side===side).at(-1);if(!ob)return null;const low=Math.min(ob.low,ob.high),high=Math.max(ob.low,ob.high),buy=side==="BUY",entry=buy?high:low,stopPool=buy?lo:hi,targetPool=buy?hi:lo;
  const sl=stopPool&&((buy&&stopPool.price<entry)||(!buy&&stopPool.price>entry))?stopPool.price:(buy?low:high),risk=Math.abs(entry-sl);
  const tp=targetPool&&((buy&&targetPool.price>entry)||(!buy&&targetPool.price<entry))?targetPool.price:(buy?entry+risk*2:entry-risk*2);
