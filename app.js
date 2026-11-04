@@ -101,7 +101,7 @@ function structureAt(d,i,x){
  return{annotations:ann,signal,projection};
 }
 function buildZoneOutlook(d,i,x){
- if(!d[i])return{buy:null,sell:null};const od=aggregateCandlesM1(d,i-1,obAnalysisSeconds),ld=aggregateCandlesM1(d,i-1,liquidityAnalysisSeconds),oi=od.lastIndex,li=ld.lastIndex,p=pivotsAt(ld.candles,li-2),pools=activeLiquidityPools(ld.candles,li-2,p),z=getZones(od.candles,oi);
+ if(!d[i])return{buy:null,sell:null};const od=aggregateCandlesM1(d,i-1,obAnalysisSeconds),ld=aggregateCandlesM1(d,i-1,liquidityAnalysisSeconds),oi=od.lastIndex,li=ld.lastIndex,p=pivotsAt(ld.candles,li-2),pools=activeLiquidityPools(ld.candles,li-2,p),z=getZones(od.candles,oi);z.ob=z.ob.filter(v=>obNearEma9(d,i,x,v));
  const make=side=>{const ob=z.ob.filter(v=>v.side===side).at(-1);if(!ob)return null;const low=Math.min(ob.low,ob.high),high=Math.max(ob.low,ob.high),buy=side==="BUY",entry=buy?high:low,targets=(buy?pools.bslLevels:pools.sslLevels).filter(p=>buy?p.price>entry:p.price<entry).sort((a,b)=>buy?a.price-b.price:b.price-a.price),stop=(buy?pools.sslLevels:pools.bslLevels).filter(p=>buy?p.price<entry:p.price>entry).sort((a,b)=>buy?b.price-a.price:a.price-b.price)[0];if(!stop||targets.length<2)return null;return{direction:buy?"COMPRAR":"VENDER",low,high,entry,sl:stop.price,tp1:targets[0].price,tp2:targets[1].price,source:(buy?"OB ALCISTA":"OB BAJISTA")+" M"+(obAnalysisSeconds/60),reason:"OB M"+(obAnalysisSeconds/60)+" · liquidez M"+(liquidityAnalysisSeconds/60)+" · gráfico M1"};};return{buy:make("BUY"),sell:make("SELL")};
 }
 function renderProjectionCard(zones){
