@@ -3,6 +3,8 @@ let backtestTradeData=[];let structureOverlay={items:[],projection:null};
 let viewEnd=0,viewCount=100,followLive=true,dragX=null,dragEnd=0,activePointers=new Map(),pinchStart=0,pinchCount=100,pinchAnchorIndex=0,pinchAnchorRatio=.5,chartFrame=null,scaleMin=null,scaleMax=null,scaleWindow="",chartGranularity=60;const futureSpace=25;let drawingMode="pan",userDrawings=[],pendingDrawing=null,chartPlot={left:10,right:66,top:16,bottom:25,step:1,start:0};
 function createMarketChart(containerId="chart-area"){
  const host=document.getElementById(containerId);if(!host)return false;
+ // Evita crear un segundo canvas sobre el primero: app.js y este archivo podían inicializar el mismo gráfico.
+ if(chartCanvas&&chartCanvas.isConnected&&chartCanvas.parentElement===host&&chartContext)return true;
  host.innerHTML="";chartCanvas=document.createElement("canvas");
  chartCanvas.style.cssText="position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:grab";
  host.appendChild(chartCanvas);const tools=document.createElement("div");tools.style.cssText="position:absolute;z-index:5;top:8px;left:8px;display:flex;gap:5px";[["pan","MOVER"],["line","LÍNEA"],["zone","ZONA"],["clear","BORRAR"]].forEach(([mode,label])=>{const b=document.createElement("button");b.type="button";b.textContent=label;b.style.cssText="border:1px solid #48617e;border-radius:6px;background:#101d2d;color:#e8f0fa;padding:6px 9px;font-size:10px;font-weight:700";b.addEventListener("click",()=>{if(mode==="clear"){userDrawings=[];pendingDrawing=null;}else drawingMode=mode;tools.querySelectorAll("button").forEach(x=>x.style.background=x===b?"#245b78":"#101d2d");drawMarketChart();});tools.appendChild(b);});host.appendChild(tools);
