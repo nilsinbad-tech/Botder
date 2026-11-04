@@ -58,9 +58,6 @@ const strategyConfig={emaPeriods:[9,20,50],rsiPeriod:14};
 let analysisGranularity=60,lastProjection=null,lastProjectionNotice="";
 function emaSeries(v,p){const o=Array(v.length).fill(null);if(v.length<p)return o;let e=v.slice(0,p).reduce((a,b)=>a+b,0)/p,k=2/(p+1);o[p-1]=e;for(let i=p;i<v.length;i++){e=v[i]*k+e*(1-k);o[i]=e;}return o;}
 function rsiSeries(v,p=14){const o=Array(v.length).fill(null);if(v.length<=p)return o;let g=0,l=0;for(let i=1;i<=p;i++){let d=v[i]-v[i-1];g+=Math.max(0,d);l+=Math.max(0,-d);}let ag=g/p,al=l/p;o[p]=al===0?100:100-100/(1+ag/al);for(let i=p+1;i<v.length;i++){let d=v[i]-v[i-1];ag=(ag*(p-1)+Math.max(0,d))/p;al=(al*(p-1)+Math.max(0,-d))/p;o[i]=al===0?100:100-100/(1+ag/al);}return o;}
-function atrSeries(d,p=14){const tr=d.map((c,i)=>i?Math.max(c.high-c.low,Math.abs(c.high-d[i-1].close),Math.abs(c.low-d[i-1].close)):c.high-c.low),o=Array(d.length).fill(null);if(d.length<=p)return o;let a=tr.slice(1,p+1).reduce((x,y)=>x+y,0)/p;o[p]=a;for(let i=p+1;i<d.length;i++){a=(a*(p-1)+tr[i])/p;o[i]=a;}return o;}
-function adxSeries(d,p=14){const n=d.length,tr=Array(n).fill(0),up=Array(n).fill(0),dn=Array(n).fill(0);for(let i=1;i<n;i++){let u=d[i].high-d[i-1].high,v=d[i-1].low-d[i].low;up[i]=u>v&&u>0?u:0;dn[i]=v>u&&v>0?v:0;tr[i]=Math.max(d[i].high-d[i].low,Math.abs(d[i].high-d[i-1].close),Math.abs(d[i].low-d[i-1].close));}const sm=a=>{let o=Array(n).fill(null),v=a.slice(1,p+1).reduce((x,y)=>x+y,0);o[p]=v;for(let i=p+1;i<n;i++){v=v-v/p+a[i];o[i]=v;}return o;},t=sm(tr),u=sm(up),v=sm(dn),dx=Array(n).fill(null),pdi=Array(n).fill(null),mdi=Array(n).fill(null),adx=Array(n).fill(null);for(let i=p;i<n;i++)if(t[i]){pdi[i]=100*u[i]/t[i];mdi[i]=100*v[i]/t[i];dx[i]=100*Math.abs(pdi[i]-mdi[i])/Math.max(.00001,pdi[i]+mdi[i]);}let seed=dx.slice(p,2*p).filter(Number.isFinite);if(seed.length===p){adx[2*p-1]=seed.reduce((a,b)=>a+b,0)/p;for(let i=2*p;i<n;i++)adx[i]=(adx[i-1]*(p-1)+dx[i])/p;}return{adx,pdi,mdi};}
-function bollingerSeries(v,p=20,m=2){let o=Array(v.length).fill(null);for(let i=p-1;i<v.length;i++){let a=v.slice(i-p+1,i+1),mid=a.reduce((x,y)=>x+y,0)/p,sd=Math.sqrt(a.reduce((x,y)=>x+(y-mid)**2,0)/p);o[i]={mid,upper:mid+m*sd,lower:mid-m*sd};}return o;}
 function pivotsAt(d,end,depth=2){let highs=[],lows=[];for(let i=Math.max(depth,end-180);i<=end-depth;i++){let h=true,l=true;for(let j=1;j<=depth;j++){if(d[i].high<=d[i-j].high||d[i].high<d[i+j].high)h=false;if(d[i].low>=d[i-j].low||d[i].low>d[i+j].low)l=false;}if(h)highs.push({i,price:d[i].high});if(l)lows.push({i,price:d[i].low});}return{highs,lows};}
 function lastPivot(a){return a.length?a[a.length-1]:null;}
 function reject(c,buy){let body=Math.abs(c.close-c.open),lw=Math.min(c.open,c.close)-c.low,uw=c.high-Math.max(c.open,c.close);return buy?c.close>c.open&&lw>=Math.max(body*.35,(c.high-c.low)*.2):c.close<c.open&&uw>=Math.max(body*.35,(c.high-c.low)*.2);}
@@ -119,7 +116,7 @@ function structureAt(d,i,x){
   const targets=buy?piv.highs.filter(p=>p.price>entry).map(p=>p.price).sort((a,b)=>a-b):piv.lows.filter(p=>p.price<entry).map(p=>p.price).sort((a,b)=>b-a);
   const structuralTp1=targets.find(v=>Math.abs(v-entry)>=risk*1.2),tp1=structuralTp1||(buy?entry+risk*1.5:entry-risk*1.5);
   const structuralTp2=targets.find(v=>Math.abs(v-entry)>=risk*2&&(buy?v>tp1:v<tp1)),tp2=structuralTp2||(buy?entry+risk*2.5:entry-risk*2.5);
-  if(risk>0&&Number.isFinite(tp1)&&Number.isFinite(tp2))signal={direction,entry,sl,tp1,tp2,rsi:x.rsi[i],adx:x.adx.adx[i],time:c.time,index:i,mode:"Liquidez + OB alcista/bajista + rechazo + CHoCH/BOS + EMA 9/20/50 + RSI",emaPeriods:[9,20,50]};
+  if(risk>0&&Number.isFinite(tp1)&&Number.isFinite(tp2))signal={direction,entry,sl,tp1,tp2,rsi:x.rsi[i],time:c.time,index:i,mode:"Liquidez + OB alcista/bajista + rechazo + CHoCH/BOS + EMA 9/20/50 + RSI",emaPeriods:[9,20,50]};
  }
  let projection=null,bias=x.e9[i]>x.e20[i]&&x.e20[i]>x.e50[i]?"BUY":x.e9[i]<x.e20[i]&&x.e20[i]<x.e50[i]?"SELL":null;
  if(bias){
@@ -138,17 +135,17 @@ function buildZoneOutlook(d,i,x){
  const p=pivotsAt(d,i-2),lo=lastPivot(p.lows),hi=lastPivot(p.highs),z=getZones(d,i);
  const make=side=>{const ob=z.ob.filter(v=>v.side===side).at(-1);if(!ob)return null;const low=Math.min(ob.low,ob.high),high=Math.max(ob.low,ob.high),buy=side==="BUY",entry=buy?high:low,stopPool=buy?lo:hi,targetPool=buy?hi:lo;
  const sl=stopPool&&((buy&&stopPool.price<entry)||(!buy&&stopPool.price>entry))?stopPool.price:(buy?low:high),risk=Math.abs(entry-sl);
- const tp=targetPool&&((buy&&targetPool.price>entry)||(!buy&&targetPool.price<entry))?targetPool.price+(buy?1:-1)*atr*.1:(buy?entry+risk*2:entry-risk*2);
+ const tp=targetPool&&((buy&&targetPool.price>entry)||(!buy&&targetPool.price<entry))?targetPool.price:(buy?entry+risk*2:entry-risk*2);
  return{direction:buy?"COMPRAR":"VENDER",low,high,entry,sl,tp,source:buy?"OB ALCISTA":"OB BAJISTA",reason:buy?"Entrada en borde superior. SL en liquidez SSL inferior. TP apenas por encima de liquidez BSL.":"Entrada en borde inferior. SL en liquidez BSL superior. TP apenas por debajo de liquidez SSL."};};
  return{buy:make("BUY"),sell:make("SELL")};
 }
 function renderProjectionCard(zones){
  const a=document.getElementById("projection-card"),s=document.getElementById("projection-status");if(!a)return;
  const list=[zones?.buy,zones?.sell].filter(Boolean);
- if(!list.length){a.className="empty-state";a.textContent="Esperando un OB válido en M5.";if(s)s.textContent="ANALIZANDO";return;}
+ if(!list.length){a.className="empty-state";a.textContent="Esperando un OB válido en M1.";if(s)s.textContent="ANALIZANDO";return;}
  a.className="zone-outlook-list";
  a.innerHTML=list.map(p=>{const buy=p.direction==="COMPRAR";return '<article class="projection-card '+(buy?"projection-buy":"projection-sell")+'"><div class="projection-stage '+(buy?"buy":"sell")+'">'+(buy?"OB ALCISTA · COMPRA":"OB BAJISTA · VENTA")+'</div><div class="projection-meta"><b>ENTRADA OB:</b> '+fmt(p.entry)+'<br><b>SL LIQUIDEZ:</b> '+fmt(p.sl)+'<br><b>TP LIQUIDEZ:</b> '+fmt(p.tp)+'<br><span class="zone-source">'+p.source+' · '+fmt(p.low)+' — '+fmt(p.high)+'</span><br>'+p.reason+'<br><b>CONFIRMACIÓN PENDIENTE · NO ENTRAR SOLO POR TOQUE</b></div></article>';}).join("");
- if(s)s.textContent="OB M5 · ENTRADA / SL / TP";
+ if(s)s.textContent="OB M1 · ENTRADA / SL / TP";
 }
 function computeTrade(d,s,i){let t={...s,entryTime:d[i].time*1000,tp1Hit:false};for(let j=i+1;j<d.length;j++){let c=d[j],stop=s.direction==="COMPRAR"?c.low<=s.sl:c.high>=s.sl,one=s.direction==="COMPRAR"?c.high>=s.tp1:c.low<=s.tp1,two=s.direction==="COMPRAR"?c.high>=s.tp2:c.low<=s.tp2;if(stop){t.result="PERDIDA";t.price=s.sl;t.exitTime=c.time*1000;return t;}if(one)t.tp1Hit=true;if(two){t.result="GANADA";t.price=s.tp2;t.exitTime=c.time*1000;return t;}}t.result="ABIERTA";return t;}
 function setBacktestTrades(trades){backtestTradeData=trades.slice();if(typeof drawMarketChart==="function")drawMarketChart();const closed=trades.filter(t=>t.result==="GANADA"||t.result==="PERDIDA"),wins=closed.filter(t=>t.result==="GANADA").length,losses=closed.length-wins;setText("bt-wins",wins);setText("bt-losses",losses);setText("bt-total",trades.length);setText("bt-rate",closed.length?(wins/closed.length*100).toFixed(1)+"%":"0%");setText("bt-open",trades.filter(t=>t.result==="ABIERTA").length);}
@@ -180,8 +177,8 @@ function analyzeCandles(symbol,market,candles){
  const unique=[...new Map(structureItems.map(v=>[v.type+"|"+v.time+"|"+v.price+"|"+v.label,v])).values()];
  lastProjection=structureProjection;renderProjectionCard(zoneOutlook);
  const counts={pivot:unique.filter(a=>a.type==="pivot").length,liquidity:unique.filter(a=>a.type==="liquidity").length,bos:unique.filter(a=>a.type==="bos").length,choch:unique.filter(a=>a.type==="choch").length,ob:unique.filter(a=>a.type==="ob").length/2,fvg:unique.filter(a=>a.type==="fvg").length/2};
- setText("structure-diagnostic","Estructura M5 · "+counts.pivot+" pivotes · "+counts.liquidity+" liquidez · "+counts.bos+" BOS · "+counts.choch+" CHoCH · "+counts.ob+" OB · "+counts.fvg+" FVG");
- setText("side-analysis-status","● Estructura M5 · Entrada M1");
+ setText("structure-diagnostic","Estructura M1 · "+counts.pivot+" pivotes · "+counts.liquidity+" liquidez · "+counts.bos+" BOS · "+counts.choch+" CHoCH · "+counts.ob+" OB · "+counts.fvg+" FVG");
+ setText("side-analysis-status","● Estructura M1 · Entrada M1");
  if(typeof setStructureOverlay==="function")setStructureOverlay({items:unique,projection:structureProjection});
  drawRsiPanel(x.rsi,d);
  const stage=structureProjection?structureProjection.stage:"SIN ZONA",notice=symbol+":"+stage+":"+(structureProjection?.direction||"");
