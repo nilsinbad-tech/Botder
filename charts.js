@@ -115,7 +115,7 @@ function renderMarketChart(){
  const xAt=time=>{const ix=data.findIndex(v=>v.time>=time);return left+(Math.max(0,ix)+.5)*step;};
  const zoneGroups=new Map();
  annotations.filter(a=>a.type==="ob"||a.type==="fvg").forEach(a=>{const key=[a.type,a.time,a.side].join("|");if(!zoneGroups.has(key))zoneGroups.set(key,[]);zoneGroups.get(key).push(a);});
- zoneGroups.forEach((items,key)=>{if(items.length<2)return;const [type,,side]=key.split("|"),vals=items.map(v=>v.price),topY=yOf(Math.max(...vals)),bottomY=yOf(Math.min(...vals)),x=xAt(items[0].time),color=type==="ob"?(side==="BUY"?"#20c997":"#ff5364"):(side==="BUY"?"#48a8ff":"#bd8cff");ctx.fillStyle=color+"22";ctx.fillRect(x,topY,Math.max(18,w-right-x),Math.max(3,bottomY-topY));ctx.strokeStyle=color;ctx.setLineDash([4,3]);ctx.strokeRect(x,topY,Math.max(18,w-right-x),Math.max(3,bottomY-topY));ctx.setLineDash([]);tag(type==="ob"?(side==="BUY"?"OB ALCISTA":"OB BAJISTA"):type.toUpperCase()+" "+side,x+3,topY-3,color);});
+ zoneGroups.forEach((items,key)=>{if(items.length<2)return;const [type,,side]=key.split("|"),vals=items.map(v=>v.price),topY=yOf(Math.max(...vals)),x=xAt(items[0].time),color=type==="ob"?(side==="BUY"?"#20c997":"#ff5364"):(side==="BUY"?"#48a8ff":"#bd8cff");if(type==="ob"){tag(side==="BUY"?"OB ALCISTA":"OB BAJISTA",x+4,Math.max(top+12,topY-5),color);return;}const bottomY=yOf(Math.min(...vals));ctx.fillStyle=color+"12";ctx.fillRect(x,topY,Math.max(18,w-right-x),Math.max(2,bottomY-topY));});
  annotations.forEach(a=>{
   if(a.type==="ob"||a.type==="fvg")return;
   const x=xAt(a.time),y=yOf(a.price);let color="#aab7c8";
@@ -145,20 +145,18 @@ function renderMarketChart(){
   ctx.strokeStyle="#48a8ff";ctx.beginPath();ctx.moveTo(x1,yEntry);ctx.lineTo(x2,yEntry);ctx.stroke();
   ctx.setLineDash([]);
   const dot=(x,y,color)=>{ctx.fillStyle=color;ctx.beginPath();ctx.arc(x,y,4,0,Math.PI*2);ctx.fill();ctx.strokeStyle="#101827";ctx.lineWidth=1;ctx.stroke();};
-  dot(x1,yEntry,"#48a8ff");dot(x1,yStop,"#ff5364");
+  dot(x1,yStop,"#ff5364");
   const label=(txt,x,y,color)=>{ctx.font="bold 10px Arial";ctx.textAlign="left";const tw=ctx.measureText(txt).width;ctx.fillStyle="rgba(8,13,22,.88)";ctx.fillRect(x,y-10,tw+8,14);ctx.fillStyle=color;ctx.fillText(txt,x+3,y);};
-  label("ENTRADA "+Number(t.entry).toPrecision(7),Math.min(w-right-150,x1+5),yEntry-5,"#70bdff");
-  label("SL "+Number(t.sl).toPrecision(7),Math.min(w-right-110,x1+5),yStop-5,"#ff7180");
+  label(t.direction==="COMPRAR"?"BUY":"SELL",Math.min(w-right-55,x1+5),yEntry-5,"#70bdff");
+  label("SL "+Number(t.sl).toPrecision(7),Math.min(w-right-110,x1+5),yStop-5,"#ff9aa3");
   const yTp2=yOf(t.tp2);
-  ctx.strokeStyle="#20c997";ctx.setLineDash([3,3]);ctx.beginPath();ctx.moveTo(x1,yTp2);ctx.lineTo(x2,yTp2);ctx.stroke();ctx.setLineDash([]);
-  dot(x1,yTp2,"#20c997");
-  label("TP2 "+Number(t.tp2).toPrecision(7),Math.min(w-right-130,x1+5),yTp2-5,"#43e0b0");
+  ctx.strokeStyle="rgba(32,201,151,.48)";ctx.setLineDash([3,4]);ctx.beginPath();ctx.moveTo(x1,yTp2);ctx.lineTo(Math.max(x1+12,x2),yTp2);ctx.stroke();ctx.setLineDash([]);
+  label("TP2 "+Number(t.tp2).toPrecision(7),Math.min(w-right-130,x1+5),yTp2-5,"#8de8c8");
   const tp1=Number(t.tp1);
   if(Number.isFinite(tp1)){
    const yTp1=yOf(tp1);
-   ctx.strokeStyle="#f5c451";ctx.setLineDash([3,3]);ctx.beginPath();ctx.moveTo(x1,yTp1);ctx.lineTo(x2,yTp1);ctx.stroke();ctx.setLineDash([]);
-   dot(x1,yTp1,"#f5c451");
-   label("TP1 "+tp1.toPrecision(7),Math.min(w-right-130,x1+5),yTp1-5,"#f5c451");
+   ctx.strokeStyle="rgba(245,196,81,.42)";ctx.setLineDash([3,4]);ctx.beginPath();ctx.moveTo(x1,yTp1);ctx.lineTo(Math.max(x1+12,x2),yTp1);ctx.stroke();ctx.setLineDash([]);
+   label("TP1 "+tp1.toPrecision(7),Math.min(w-right-130,x1+5),yTp1-5,"#f5d98a");
   }
   if(t.exitTime&&Number.isFinite(exitPrice)){
    const won=t.result==="GANADA";dot(x2,yExit,won?"#20c997":"#ff5364");
