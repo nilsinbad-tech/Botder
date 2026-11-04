@@ -64,13 +64,15 @@ function lastPivot(a){return a.length?a[a.length-1]:null;}
 function activeLiquidityPools(d,end,pivots){
  const ranges=[];for(let k=Math.max(1,end-39);k<=end;k++)ranges.push(d[k].high-d[k].low);ranges.sort((a,b)=>a-b);
  const medianRange=ranges.length?ranges[Math.floor(ranges.length/2)]:0,tolerance=Math.max(medianRange*.18,Math.abs(d[end]?.close||0)*1e-7,1e-8);
- const find=(items,side)=>{const candidates=[];for(const base of items){const cluster=items.filter(p=>Math.abs(p.price-base.price)<=tolerance);if(cluster.length<2)continue;
+ const find=(items,side)=>{const candidates=[],used=new Set();for(const base of items){const cluster=items.filter(p=>Math.abs(p.price-base.price)<=tolerance);if(cluster.length<2)continue;
+  const key=cluster.map(p=>p.i).sort((a,b)=>a-b).join(",");if(used.has(key))continue;used.add(key);
   const latest=cluster.reduce((a,b)=>a.i>b.i?a:b),level=cluster.reduce((sum,p)=>sum+p.price,0)/cluster.length;let swept=false;
   for(let k=latest.i+1;k<=end;k++){if(side==="BSL"?d[k].high>level+tolerance:d[k].low<level-tolerance){swept=true;break;}}
   if(swept||(side==="BSL"?level<=d[end].close:level>=d[end].close))continue;
   candidates.push({price:level,i:latest.i,count:cluster.length,side});}
-  candidates.sort((a,b)=>side==="BSL"?a.price-b.price:b.price-a.price);return candidates[0]||null;};
- return{bsl:find(pivots.highs,"BSL"),ssl:find(pivots.lows,"SSL")};
+  candidates.sort((a,b)=>side==="BSL"?a.price-b.price:b.price-a.price);return candidates;};
+ const bslLevels=find(pivots.highs,"BSL"),sslLevels=find(pivots.lows,"SSL");
+ return{bsl:bslLevels[0]||null,ssl:sslLevels[0]||null,bslLevels,sslLevels};
 }
 function reject(c,buy){let body=Math.abs(c.close-c.open),lw=Math.min(c.open,c.close)-c.low,uw=c.high-Math.max(c.open,c.close);return buy?c.close>c.open&&lw>=Math.max(body*.35,(c.high-c.low)*.2):c.close<c.open&&uw>=Math.max(body*.35,(c.high-c.low)*.2);}
 function getZones(d,i){let ob=[],fvg=[];for(let k=Math.max(2,i-35);k<=i;k++){let c=d[k],future=d.slice(k+1,Math.min(i+1,k+5));if(k<i&&c.close<c.open&&future.some(x=>x.close>c.high))ob.push({side:"BUY",low:c.low,high:Math.max(c.open,c.close),i:k});if(k<i&&c.close>c.open&&future.some(x=>x.close<c.low))ob.push({side:"SELL",low:Math.min(c.open,c.close),high:c.high,i:k});if(d[k].low>d[k-2].high)fvg.push({side:"BUY",low:d[k-2].high,high:d[k].low,i:k});if(d[k].high<d[k-2].low)fvg.push({side:"SELL",low:d[k].high,high:d[k-2].low,i:k});}return{ob,fvg};}
@@ -88,55 +90,21 @@ function structureAt(d,i,x){
  if(pools.ssl)mark("liquidity",pools.ssl.price,"LIQUIDEZ SSL","",d[pools.ssl.i].time);
  ["BUY","SELL"].forEach(side=>{const v=z.ob.filter(v=>v.side===side).at(-1);if(v){mark("ob",v.low,"OB "+side,v.side,d[v.i].time);mark("ob",v.high,"",v.side,d[v.i].time);}});
  z.fvg.slice(-4).forEach(v=>{mark("fvg",v.low,"FVG "+v.side,v.side,d[v.i].time);mark("fvg",v.high,"",v.side,d[v.i].time);});
- let bos=null;
- if(hi&&c.close>hi.price&&prev.close<=hi.price)bos="BULL";
- if(lo&&c.close<lo.price&&prev.close>=lo.price)bos="BEAR";
- if(bos==="BEAR")mark("bos",lo.price,"BOS BEAR",bos,d[lo.i].time);
- // Buscar barridos recientes: el sweep puede ocurrir antes de la ruptura, no tiene que ser en la misma vela.
- let sweepBuy=null,sweepSell=null;
- for(let k=Math.max(65,i-12);k<i;k++){
-  const kp=pivotsAt(d,k-2),kl=lastPivot(kp.lows),kh=lastPivot(kp.highs),bar=d[k];
-  if(kl&&bar.low<kl.price&&bar.close>kl.price)sweepBuy={index:k,level:kl.price,time:bar.time};
-  if(kh&&bar.high>kh.price&&bar.close<kh.price)sweepSell={index:k,level:kh.price,time:bar.time};
+ // Estrategia: OB válido + cruce EMA 9/20 en la vela M1 actual.
+ const crossBuy=x.e9[i]>x.e20[i]&&x.e9[i-1]<=x.e20[i-1],crossSell=x.e9[i]<x.e20[i]&&x.e9[i-1]>=x.e20[i-1];
+ const obBuy=z.ob.filter(v=>v.side==="BUY"&&c.low<=v.high&&c.close>=v.low).at(-1),obSell=z.ob.filter(v=>v.side==="SELL"&&c.high>=v.low&&c.close<=v.high).at(-1);
+ const buy=!!obBuy&&crossBuy,sell=!!obSell&&crossSell;let signal=null;
+ if(buy||sell){const isBuy=buy,direction=isBuy?"COMPRAR":"VENDER",entry=c.close;
+  const targets=(isBuy?pools.bslLevels:pools.sslLevels).filter(p=>isBuy?p.price>entry:p.price<entry).sort((a,b)=>isBuy?a.price-b.price:b.price-a.price);
+  const stop=(isBuy?pools.sslLevels:pools.bslLevels).filter(p=>isBuy?p.price<entry:p.price>entry).sort((a,b)=>isBuy?b.price-a.price:a.price-b.price)[0];
+  const sl=stop?.price,tp1=targets[0]?.price,tp2=targets[1]?.price;
+  if(Number.isFinite(sl)&&Number.isFinite(tp1)&&Number.isFinite(tp2)&&((isBuy&&sl<entry&&tp1>entry&&tp2>tp1)||(!isBuy&&sl>entry&&tp1<entry&&tp2<tp1)))signal={direction,entry,sl,tp1,tp2,rsi:x.rsi[i],time:c.time,index:i,mode:"OB "+(isBuy?"ALCISTA":"BAJISTA")+" + cruce EMA 9/20 · TP1/TP2 liquidez · SL liquidez estructural",emaPeriods:[9,20]};
  }
- const sweptLow=!!sweepBuy&&i-sweepBuy.index<=12,sweptHigh=!!sweepSell&&i-sweepSell.index<=12;
- if(sweptLow)mark("sweep",sweepBuy.level,"SWEEP LOW","BUY",sweepBuy.time);
- if(sweptHigh)mark("sweep",sweepSell.level,"SWEEP HIGH","SELL",sweepSell.time);
- // CHoCH se confirma cuando, después del barrido, el precio rompe estructura en sentido contrario al movimiento que barrió.
- const chochBuy=sweptLow&&bos==="BULL"&&priorLo&&lo&&lo.price<priorLo.price;
- const chochSell=sweptHigh&&bos==="BEAR"&&priorHi&&hi&&hi.price>priorHi.price;
- if(chochBuy)mark("choch",hi.price,"CHoCH ALCISTA","BULL",d[hi.i].time);
- if(chochSell)mark("choch",lo.price,"CHoCH BAJISTA","BEAR",d[lo.i].time);
- const crossRecent=(side,sweepIndex)=>{
-  const from=Math.max(65,sweepIndex??i-8,i-8);
-  for(let k=from;k<=i;k++){
-   if(side==="BUY"&&x.e9[k]>x.e20[k]&&x.e9[k-1]<=x.e20[k-1])return true;
-   if(side==="SELL"&&x.e9[k]<x.e20[k]&&x.e9[k-1]>=x.e20[k-1])return true;
-  }
-  return false;
- };
- const emaBuy=x.e9[i]>x.e20[i]&&x.e20[i]>x.e50[i]&&x.e9[i]>x.e9[i-1]&&x.e20[i]>=x.e20[i-1]&&c.close>x.e50[i]&&crossRecent("BUY",sweepBuy?.index);
- const emaSell=x.e9[i]<x.e20[i]&&x.e20[i]<x.e50[i]&&x.e9[i]<x.e9[i-1]&&x.e20[i]<=x.e20[i-1]&&c.close<x.e50[i]&&crossRecent("SELL",sweepSell?.index);
- const obBuy=z.ob.some(v=>v.side==="BUY"&&c.low<=v.high&&c.close>=v.low);
- const obSell=z.ob.some(v=>v.side==="SELL"&&c.high>=v.low&&c.close<=v.high);
- const buy=sweptLow&&reject(c,true)&&chochBuy&&emaBuy&&x.rsi[i]>50&&obBuy;
- const sell=sweptHigh&&reject(c,false)&&chochSell&&emaSell&&x.rsi[i]<50&&obSell;
- let signal=null;
- if(buy||sell){
-  const direction=buy?"COMPRAR":"VENDER",entry=c.close,sl=buy?Math.min(c.low,sweepBuy.level):Math.max(c.high,sweepSell.level),risk=Math.abs(entry-sl);
-  const targets=buy?piv.highs.filter(p=>p.price>entry).map(p=>p.price).sort((a,b)=>a-b):piv.lows.filter(p=>p.price<entry).map(p=>p.price).sort((a,b)=>b-a);
-  const structuralTp1=targets.find(v=>Math.abs(v-entry)>=risk*1.2),tp1=structuralTp1||(buy?entry+risk*1.5:entry-risk*1.5);
-  const structuralTp2=targets.find(v=>Math.abs(v-entry)>=risk*2&&(buy?v>tp1:v<tp1)),tp2=structuralTp2||(buy?entry+risk*2.5:entry-risk*2.5);
-  if(risk>0&&Number.isFinite(tp1)&&Number.isFinite(tp2))signal={direction,entry,sl,tp1,tp2,rsi:x.rsi[i],time:c.time,index:i,mode:"Liquidez + OB alcista/bajista + rechazo + CHoCH/BOS + EMA 9/20/50 + RSI",emaPeriods:[9,20,50]};
- }
- let projection=null,bias=x.e9[i]>x.e20[i]&&x.e20[i]>x.e50[i]?"BUY":x.e9[i]<x.e20[i]&&x.e20[i]<x.e50[i]?"SELL":null;
- if(bias){
-  const pool=bias==="BUY"?pools.ssl:pools.bsl,zones=bias==="BUY"?z.ob.filter(v=>v.side==="BUY").concat(z.fvg.filter(v=>v.side==="BUY")):z.ob.filter(v=>v.side==="SELL").concat(z.fvg.filter(v=>v.side==="SELL"));
-  const zone=zones.at(-1);
-  if(pool&&zone){
-   const low=Math.min(zone.low,zone.high),high=Math.max(zone.low,zone.high);
-   projection={direction:bias==="BUY"?"COMPRAR":"VENDER",low,high,liquidity:pool.price,stage:c.close>=low&&c.close<=high?"PRECIO EN ZONA":"EN PREPARACIÓN",reason:"Zona OB/FVG alineada con EMA 9/20/50. Vigilar barrido, rechazo y ruptura estructural."};
-  }
+ let projection=null,bias=crossBuy?"BUY":crossSell?"SELL":x.e9[i]>x.e20[i]?"BUY":x.e9[i]<x.e20[i]?"SELL":null;
+ if(bias){const isBuy=bias==="BUY",ob=(isBuy?z.ob.filter(v=>v.side==="BUY"):z.ob.filter(v=>v.side==="SELL")).at(-1);
+  const targets=(isBuy?pools.bslLevels:pools.sslLevels).filter(p=>isBuy?p.price>c.close:p.price<c.close).sort((a,b)=>isBuy?a.price-b.price:b.price-a.price);
+  const stop=(isBuy?pools.sslLevels:pools.bslLevels).filter(p=>isBuy?p.price<c.close:p.price>c.close).sort((a,b)=>isBuy?b.price-a.price:a.price-b.price)[0];
+  if(ob&&stop&&targets.length>=2){const low=Math.min(ob.low,ob.high),high=Math.max(ob.low,ob.high);projection={direction:isBuy?"COMPRAR":"VENDER",low,high,sl:stop.price,tp1:targets[0].price,tp2:targets[1].price,stage:c.close>=low&&c.close<=high?"PRECIO EN ZONA":"EN PREPARACIÓN",reason:"OB + EMA 9/20. TP1 y TP2 en las dos próximas zonas de liquidez; SL en la liquidez estructural anterior."};}
  }
  if(signal){mark("signal",signal.entry,signal.direction,signal.direction==="COMPRAR"?"BUY":"SELL");projection={...signal,low:signal.entry,high:signal.entry,stage:"SEÑAL CONFIRMADA"};}
  return{annotations:ann,signal,projection};
@@ -144,10 +112,9 @@ function structureAt(d,i,x){
 function buildZoneOutlook(d,i,x){
  if(!d[i])return{buy:null,sell:null};
  const p=pivotsAt(d,i-2),pools=activeLiquidityPools(d,i-2,p),lo=pools.ssl,hi=pools.bsl,z=getZones(d,i);
- const make=side=>{const ob=z.ob.filter(v=>v.side===side).at(-1);if(!ob)return null;const low=Math.min(ob.low,ob.high),high=Math.max(ob.low,ob.high),buy=side==="BUY",entry=buy?high:low,stopPool=buy?lo:hi,targetPool=buy?hi:lo;
- const sl=stopPool&&((buy&&stopPool.price<entry)||(!buy&&stopPool.price>entry))?stopPool.price:(buy?low:high),risk=Math.abs(entry-sl);
- const tp=targetPool&&((buy&&targetPool.price>entry)||(!buy&&targetPool.price<entry))?targetPool.price:(buy?entry+risk*2:entry-risk*2);
- return{direction:buy?"COMPRAR":"VENDER",low,high,entry,sl,tp,source:buy?"OB ALCISTA":"OB BAJISTA",reason:buy?"Entrada en borde superior. SL en liquidez SSL inferior. TP apenas por encima de liquidez BSL.":"Entrada en borde inferior. SL en liquidez BSL superior. TP apenas por debajo de liquidez SSL."};};
+ const make=side=>{const ob=z.ob.filter(v=>v.side===side).at(-1);if(!ob)return null;const low=Math.min(ob.low,ob.high),high=Math.max(ob.low,ob.high),buy=side==="BUY",entry=buy?high:low;
+ const targets=(buy?pools.bslLevels:pools.sslLevels).filter(p=>buy?p.price>entry:p.price<entry).sort((a,b)=>buy?a.price-b.price:b.price-a.price),stop=(buy?pools.sslLevels:pools.bslLevels).filter(p=>buy?p.price<entry:p.price>entry).sort((a,b)=>buy?b.price-a.price:a.price-b.price)[0];
+ if(!stop||targets.length<2)return null;return{direction:buy?"COMPRAR":"VENDER",low,high,entry,sl:stop.price,tp1:targets[0].price,tp2:targets[1].price,source:buy?"OB ALCISTA":"OB BAJISTA",reason:"Cruce EMA 9/20 confirma. SL en liquidez de estructura anterior; TP1 y TP2 en las dos siguientes zonas de liquidez."};};
  return{buy:make("BUY"),sell:make("SELL")};
 }
 function renderProjectionCard(zones){
@@ -155,7 +122,7 @@ function renderProjectionCard(zones){
  const list=[zones?.buy,zones?.sell].filter(Boolean);
  if(!list.length){a.className="empty-state";a.textContent="Esperando un OB válido en M1.";if(s)s.textContent="ANALIZANDO";return;}
  a.className="zone-outlook-list";
- a.innerHTML=list.map(p=>{const buy=p.direction==="COMPRAR";return '<article class="projection-card '+(buy?"projection-buy":"projection-sell")+'"><div class="projection-stage '+(buy?"buy":"sell")+'">'+(buy?"OB ALCISTA · COMPRA":"OB BAJISTA · VENTA")+'</div><div class="projection-meta"><b>ENTRADA OB:</b> '+fmt(p.entry)+'<br><b>SL LIQUIDEZ:</b> '+fmt(p.sl)+'<br><b>TP LIQUIDEZ:</b> '+fmt(p.tp)+'<br><span class="zone-source">'+p.source+' · '+fmt(p.low)+' — '+fmt(p.high)+'</span><br>'+p.reason+'<br><b>CONFIRMACIÓN PENDIENTE · NO ENTRAR SOLO POR TOQUE</b></div></article>';}).join("");
+ a.innerHTML=list.map(p=>{const buy=p.direction==="COMPRAR";return '<article class="projection-card '+(buy?"projection-buy":"projection-sell")+'"><div class="projection-stage '+(buy?"buy":"sell")+'">'+(buy?"OB ALCISTA · COMPRA":"OB BAJISTA · VENTA")+'</div><div class="projection-meta"><b>ENTRADA OB:</b> '+fmt(p.entry)+'<br><b>SL LIQUIDEZ ESTRUCTURAL:</b> '+fmt(p.sl)+'<br><b>TP1 LIQUIDEZ:</b> '+fmt(p.tp1)+'<br><b>TP2 LIQUIDEZ:</b> '+fmt(p.tp2)+'<br><span class="zone-source">'+p.source+' · '+fmt(p.low)+' — '+fmt(p.high)+'</span><br>'+p.reason+'<br><b>ESPERAR CRUCE EMA 9/20</b></div></article>';}).join("");
  if(s)s.textContent="OB M1 · ENTRADA / SL / TP";
 }
 function computeTrade(d,s,i){let t={...s,entryTime:d[i].time*1000,tp1Hit:false};for(let j=i+1;j<d.length;j++){let c=d[j],stop=s.direction==="COMPRAR"?c.low<=s.sl:c.high>=s.sl,one=s.direction==="COMPRAR"?c.high>=s.tp1:c.low<=s.tp1,two=s.direction==="COMPRAR"?c.high>=s.tp2:c.low<=s.tp2;if(stop){t.result="PERDIDA";t.price=s.sl;t.exitTime=c.time*1000;return t;}if(one)t.tp1Hit=true;if(two){t.result="GANADA";t.price=s.tp2;t.exitTime=c.time*1000;return t;}}t.result="ABIERTA";return t;}
