@@ -9,7 +9,7 @@ function structurePivots(d,depth=3,deviation=3,backstep=3){
 function findDiagonalStructure(source,seconds,tf){
  if(!Array.isArray(source)||source.length<30)return null;
  const d=source.slice().sort((a,b)=>a.time-b.time),p=structurePivots(d,3,3,3),ranges=d.slice(-20).map(c=>c.high-c.low).sort((a,b)=>a-b),median=ranges[Math.floor(ranges.length/2)]||Math.abs(d.at(-1).close)*1e-7;
- const decimals=Math.max(0,...d.slice(-20).map(c=>{const s=String(c.close);return s.includes(".")?s.split(".")[1].length:0;})),tick=Math.pow(10,-Math.min(10,decimals)),tol=Math.max(2*tick,median*.10,Math.abs(d.at(-1).close)*1e-10),gap=5;
+ const decimals=Math.max(0,...d.slice(-20).map(c=>{const s=String(c.close);return s.includes(".")?s.split(".")[1].length:0;})),tick=Math.pow(10,-Math.min(10,decimals)),tol=Math.max(2*tick,median*.10,Math.abs(d.at(-1).close)*1e-10),gap=6;
  const find=(side,pts,opps,sign)=>{let best=null;const points=pts.slice(-16),other=opps.slice(-80);
   for(let a=0;a<points.length-1;a++)for(let b=a+1;b<points.length;b++){const p1=points[a],p2=points[b],dx=p2.i-p1.i;if(dx<gap)continue;const slope=(p2.price-p1.price)/dx;if(Math.sign(slope)!==sign||Math.abs(p2.price-p1.price)<median*.15)continue;const base=i=>p1.price+slope*(i-p1.i),touches=[];let last=-Infinity,left=true;
    for(let k=p1.i;k<d.length;k++){const c=d[k],line=base(k),prev=d[k-1],prevLine=k?base(k-1):line;if(k>last&&prev&&(side==="BUY"?prev.close>prevLine+tol*2:prev.close<prevLine-tol*2))left=true;const wick=side==="BUY"?c.low<=line+tol&&c.high>=line-tol:c.high>=line-tol&&c.low<=line+tol,away=side==="BUY"?c.close>line+tol*.15:c.close<line-tol*.15;if(wick&&away&&left&&k-last>=gap){touches.push({i:k,time:c.time,price:side==="BUY"?c.low:c.high});last=k;left=false;}}
@@ -80,3 +80,5 @@ function renderStrategyJournal(){
  if(typeof setChartBacktestTrades==="function")setChartBacktestTrades([...(backtestTradeData||[]),...strategyJournal.map(t=>({...t,tp1:t.tp1,tp2:t.tp2,price:t.exitPrice,exitTime:t.exitTime||Date.now()}))]);
  area.innerHTML=strategyJournal.length?strategyJournal.map(t=>'<article class="history-row"><div><strong>'+safe(t.market||t.symbol)+' · '+safe(t.direction)+' · '+safe(t.timeframe)+'</strong><small>'+new Date(t.entryTime).toLocaleString("es-PA",{dateStyle:"short",timeStyle:"short"})+' · T3 '+new Date(t.touchTime||t.entryTime).toLocaleTimeString("es-PA",{hour:"2-digit",minute:"2-digit"})+' · ENTRADA '+fmt(t.entry)+' · SL '+fmt(t.sl)+' · TP1 '+fmt(t.tp1)+' · TP2 '+fmt(t.tp2)+(t.exitPrice!=null?' · SALIDA '+fmt(t.exitPrice):'')+(t.exitReason?' · '+safe(t.exitReason):'')+'</small></div><span class="history-result '+t.result+'">'+(t.result==="ABIERTA"?"EN CURSO":t.result)+'</span></article>').join(""):'<div class="empty-state">Aún no hay señales confirmadas registradas.</div>';
 }
+
+if(typeof renderStrategyJournal==="function")renderStrategyJournal();
