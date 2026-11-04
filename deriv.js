@@ -62,8 +62,13 @@ function connectDeriv() {
       showChartMessage("Historial · " + (selectedGranularity === 30 ? "30 segundos" : (selectedGranularity/60) + " min") + " · " + candleBuffer.length + " velas");
     }
     if (data.msg_type === "candles" && responseSymbol(data) === selectedSymbol && data.req_id === 12) {
-      const historical = (data.candles || []).map(c => ({ time: Number(c.epoch), open: Number(c.open), high: Number(c.high), low: Number(c.low), close: Number(c.close) }));
+      const historical = (data.candles || []).map(c => ({ time: Number(c.epoch), open: Number(c.open), high: Number(c.high), low: Number(c.low), close: Number(c.close) })).filter(c => [c.time,c.open,c.high,c.low,c.close].every(Number.isFinite));
+      candleBuffer = historical;
       if (typeof setBacktestHistory === "function") setBacktestHistory(selectedSymbol, selectedMarketName(), historical);
+      if (typeof updateCandles === "function") updateCandles(candleBuffer);
+      if (typeof analyzeCandles === "function") analyzeCandles(selectedSymbol, selectedMarketName(), candleBuffer);
+      showChartMessage(historical.length ? "Historial M1 cargado · " + historical.length + " velas reales de Deriv." : "Deriv respondió sin velas para este instrumento. Cambia de mercado o vuelve a seleccionarlo.");
+      if (!historical.length) showApiDiagnostic("La conexión funciona, pero Deriv no devolvió velas históricas para " + selectedSymbol + ".");
     }
     if (data.msg_type === "candles" && responseSymbol(data) === selectedSymbol && data.req_id !== 12) {
       candleBuffer = (data.candles || []).map(c => ({ time: Number(c.epoch), open: Number(c.open), high: Number(c.high), low: Number(c.low), close: Number(c.close) }));
