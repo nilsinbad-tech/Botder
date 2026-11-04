@@ -269,7 +269,10 @@ function buildStructuralPlan(m1,displayTf){
  if(h4s)push(h4s);if(activeTf){active=findDiagonalStructure(candlesAtTf(m1,activeTf),activeTf,"M"+activeTf/60);if(active)push(active);}
  const candidate=active||h4s,dir=candidate?.side,last=m1.at(-1),buy=detectOrderBlocks(m1,"BUY"),sell=detectOrderBlocks(m1,"SELL"),targetSeconds=activeTf?1800:3600,targetTf=targetSeconds===1800?"M30":"H1",confirmationTf=activeTf?"M30":"H4",confirmationBias=activeTf?bias30:bias4;
  const targetData=(getHigherTimeframeHistory(targetSeconds)||[]).length?getHigherTimeframeHistory(targetSeconds):candlesAtTf(m1,targetSeconds);
- const getTarget=(side,entry)=>{const end=targetData.length-2;if(end<6)return null;const piv=pivotsAt(targetData,end,2),levels=side==="BUY"?piv.highs:piv.lows;for(let k=levels.length-1;k>=0;k--){const level=levels[k];if(Number.isFinite(level.price)&&(side==="BUY"?level.price>entry:level.price<entry))return{price:level.price,time:targetData[level.i]?.time};}return null;};
+ const getTarget=(side,entry)=>{
+  const search=data=>{const end=data.length-2;if(end<6)return null;const piv=pivotsAt(data,end,2),levels=(side==="BUY"?piv.highs:piv.lows).slice().sort((a,b)=>side==="BUY"?a.price-b.price:b.price-a.price);return levels.find(level=>Number.isFinite(level.price)&&(side==="BUY"?level.price>entry:level.price<entry))?{price:levels.find(level=>Number.isFinite(level.price)&&(side==="BUY"?level.price>entry:level.price<entry)).price,time:data[levels.find(level=>Number.isFinite(level.price)&&(side==="BUY"?level.price>entry:level.price<entry)).i]?.time}:null;};
+  return search(targetData)||search(m1);
+ };
  const expectedPrice=candidate?.projectPrice1,zoneCenter=Number(expectedPrice),zoneLow=zoneCenter-(candidate?.tolerance||0),zoneHigh=zoneCenter+(candidate?.tolerance||0),target=getTarget(dir,zoneCenter),sl=candidate?.firstStop;
  const expectedTime=candidate?.projectTime,referenceTime=candidate?.third?.time??expectedTime,obSet=dir==="BUY"?buy:sell,near=obSet.filter(o=>Math.abs((o.low+o.high)/2-zoneCenter)<=Math.max(candidate?.tolerance||0,1e-9)*2&&Math.abs(o.time-referenceTime)<=Math.max(900,(candidate?.seconds||60)*2)).slice(-3);
  const third=candidate?.third||null,inZone=!!third&&last&&last.close>=third.price-(candidate.tolerance*1.5)&&last.close<=third.price+(candidate.tolerance*1.5),validLevels=!!candidate&&Number.isFinite(sl)&&!!target&&(dir==="BUY"?sl<zoneCenter&&target.price>zoneCenter:sl>zoneCenter&&target.price<zoneCenter);
@@ -278,9 +281,18 @@ function buildStructuralPlan(m1,displayTf){
  const lastThree=entryCandles.slice(Math.max(0,entryEnd-2),entryEnd+1),threeFavorable=lastThree.length===3&&lastThree.every(c=>dir==="BUY"?c.close>c.open:c.close<c.open);
  const confirmed=!!candidate&&!!third&&near.length>=3&&trend===dir&&confirmationBias===dir&&inZone&&validLevels&&emaCross&&threeFavorable;
  const m30Latest=[...detectOrderBlocks(m30,"BUY"),...detectOrderBlocks(m30,"SELL")].sort((x,y)=>x.time-y.time).at(-1),h4Latest=[...detectOrderBlocks(h4,"BUY"),...detectOrderBlocks(h4,"SELL")].sort((x,y)=>x.time-y.time).at(-1),m30Class=m30Latest?(m30Latest.side===bias4?"A FAVOR":"EN CONTRA"):"SIN OB",h4Class=h4Latest?(h4Latest.side===bias4?"A FAVOR":"EN CONTRA"):"SIN OB";
- const h4buy=detectOrderBlocks(h4,"BUY").slice(-1),h4sell=detectOrderBlocks(h4,"SELL").slice(-1);
- [...h4buy,...h4sell].forEach(o=>{const favorable=o.side===bias4;items.push({type:"ob",price:o.low,label:"OB H4 "+(favorable?"A FAVOR":"EN CONTRA"),side:o.side,time:o.time,active:favorable},{type:"ob",price:o.high,label:"",side:o.side,time:o.time,active:favorable});});
- near.forEach(o=>items.push({type:"ob",price:o.low,label:"OB M1",side:o.side,time:o.time,active:true},{type:"ob",price:o.high,label:"",side:o.side,time:o.time,active:true}));
+ const addObPair=(o,label,active)=>items.push(
+  {type:"ob",price:o.low,label,side:o.side,time:o.time,active:!!active},
+  {type:"ob",price:o.high,label:"",side:o.side,time:o.time,active:!!active}
+ );
+ // Mantiene visibles los bloques recientes aunque todavía no exista un tercer toque.
+ const h4Blocks=[...detectOrderBlocks(h4,"BUY"),...detectOrderBlocks(h4,"SELL")].sort((a,b)=>a.time-b.time).slice(-2);
+ const m30Blocks=[...detectOrderBlocks(m30,"BUY"),...detectOrderBlocks(m30,"SELL")].sort((a,b)=>a.time-b.time).slice(-2);
+ h4Blocks.forEach(o=>addObPair(o,"OB H4 · "+(o.side===bias4?"A FAVOR":"EN CONTRA"),o.side===bias4));
+ m30Blocks.forEach(o=>addObPair(o,"OB M30 · "+(o.side===bias4?"A FAVOR":"EN CONTRA"),o.side===bias4));
+ const displayObSet=trend==="BUY"?buy:trend==="SELL"?sell:[...buy,...sell].sort((a,b)=>a.time-b.time);
+ const displayM1=near.length?near:displayObSet.slice(-3);
+ displayM1.forEach(o=>addObPair(o,"OB M1 · "+(o.side===trend?"A FAVOR":"EN CONTRA"),o.side===trend));
  const status=!bias4?"ESPERANDO CONTEXTO H4":activeTf&&!bias30?"ESPERANDO CONFIRMACIÓN M30":activeTf&&bias30!==bias4?"M30 EN CONTRA DE H4 · ESPERAR":!candidate?"BUSCANDO CANAL · ZIGZAG 5/3/3":trend!==dir?"FORMACIÓN CONTRA H4 · NO OPERAR":!validLevels?"ESPERANDO TP ESTRUCTURAL "+targetTf:!third?"TERCER TOQUE PROYECTADO":near.length<3?"TERCER TOQUE · ESPERANDO 3 OB M1":!inZone?"ESPERANDO RESPETO DE LA ZONA":!emaCross?"ESPERANDO CRUCE EMA 9/20":!threeFavorable?"ESPERANDO 3 VELAS A FAVOR":dir==="BUY"?"COMPRA CONFIRMADA":"VENTA CONFIRMADA";
  let projection=null;if(candidate&&trend===dir&&(!activeTf||bias30===dir)&&validLevels){projection={direction:dir==="BUY"?"COMPRAR":"VENDER",low:zoneLow,high:zoneHigh,zoneLow,zoneHigh,entry:third?third.price:zoneCenter,sl,tp:target.price,targetTf,projectTime:third?last.time+candidate.seconds:expectedTime,expiresAt:(third?last.time:expectedTime)+candidate.seconds*5,stage:status,reason:"3 toques · H4 "+(activeTf?"confirmación M30":"dirección principal")+" · TP "+targetTf+" anterior",timeframe:candidate.tf,confirmed};}
  const signal=confirmed?{direction:dir==="BUY"?"COMPRAR":"VENDER",entry:last.close,sl,tp1:target.price,tp2:target.price,singleTarget:true,rsi:50,time:last.time,index:m1.length-1,mode:"ZIGZAG 5/3/3 + 3 TOQUES + 3 OB M1 + EMA 9/20 + 3 VELAS",timeframe:candidate.tf,emaPeriods:[9,20]}:null;
@@ -297,18 +309,20 @@ function renderProjection(plan){
 function analyzeCandles(symbol,market,candles){
  if(!Array.isArray(candles)||candles.length<100)return;
  const d=candles.slice().sort((x,y)=>x.time-y.time),i=d.length-2;if(i<65)return;
- const closed=d[i],plan=buildStructuralPlan(d.slice(0,i+1),Number(document.getElementById("timeframe")?.value)||60);
+ const closed=d[i],tf=Number(document.getElementById("timeframe")?.value)||60,plan=buildStructuralPlan(d.slice(0,i+1),tf);
  evaluateOpenOperations(symbol,closed);evaluateStrategyJournal(symbol,closed);
  lastProjection=plan.projection;setText("side-analysis-status","● "+plan.status);
- setText("structure-diagnostic","H4 "+(plan.bias4||"—")+" · M30 "+(plan.bias30||"—")+" · OB H4 "+plan.h4Class+" · OB M30 "+plan.m30Class+" · OB M1 "+plan.near.length+"/3");
+ setText("structure-diagnostic","H4 "+(plan.bias4||"—")+" · M30 "+(plan.bias30||"—")+" · OB H4 "+plan.h4Class+" · OB M30 "+plan.m30Class+" · OB M1 "+plan.near.length+"/3 · ZIGZAG 5/3/3");
  renderProjection(plan);
  if(typeof setStructureOverlay==="function")setStructureOverlay({items:plan.items,lines:plan.lines,projection:plan.projection});
+ if(plan.projection&&typeof drawTradeLevels==="function")drawTradeLevels({entry:plan.projection.entry,sl:plan.projection.sl,tp1:plan.projection.tp,tp2:plan.projection.tp,time:closed.time,direction:plan.projection.direction},false);
+ else if(typeof clearTradeLevels==="function")clearTradeLevels();
  if(plan.signal){const key=symbol+":"+plan.signal.time+":"+plan.signal.direction;if(key!==lastSignalKey){lastSignalKey=key;addSignal({...plan.signal,symbol,market,candleTime:plan.signal.time});recordStrategyTrade({...plan.signal,symbol,market});notifyBot("BOTDER · "+plan.signal.direction,"Tercer toque respetado y tres OB M1 confirmados.");}}
  if(typeof drawRsiPanel==="function")drawRsiPanel(makeIndicators(d).rsi,d);
 }
 function analyzeLiveStructure(symbol,candles){
  if(!Array.isArray(candles)||candles.length<100||symbol!==selectedMarket?.symbol)return;
- const closed=candles.length>1?candles.slice(0,-1):candles,plan=buildStructuralPlan(closed,Number(document.getElementById("timeframe")?.value)||60);
+ const closed=candles.length>1?candles.slice(0,-1):candles,tf=Number(document.getElementById("timeframe")?.value)||60,plan=buildStructuralPlan(closed,tf);
  if(typeof setStructureOverlay==="function")setStructureOverlay({items:plan.items,lines:plan.lines,projection:plan.projection});
 }
 /* Registro general de señales confirmadas: independiente de marcar ENTRÉ. */
