@@ -1,19 +1,71 @@
-<!DOCTYPE html>
-<html lang="es"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="theme-color" content="#080d16"><title>BOTDER Signals Pro</title><link rel="stylesheet" href="style.css?v=chart-double-height-20261103"></head>
-<body><div class="container">
-<header class="topbar"><div><h1>BOTDER <span>SIGNALS</span></h1><p>ANALIZADOR DE MERCADO EN VIVO</p></div><div id="connection" class="connection offline">● DESCONECTADO</div></header>
-<details class="section market-drawer"><summary><span>INSTRUMENTOS</span><span class="muted" id="market-count">0 instrumentos</span></summary><div class="market-drawer-content"><div id="api-diagnostic" class="muted market-diagnostic">Esperando respuesta de Deriv...</div><div id="markets" class="market-grid"><div class="empty-state">Conectando con Deriv...</div></div></div></details>
-<div class="trading-workspace">
-<section class="section chart-panel"><div class="section-heading"><div><span class="muted">DERIV · ANÁLISIS MULTITEMPORAL</span><h2 id="chart-title">Selecciona un mercado</h2></div></div>
-<div id="chart-area" style="display:block;position:relative;width:100%;height:500px;min-height:420px;background:#07111f;border:1px solid #1d3047;border-radius:10px;overflow:hidden"></div><div class="chart-configuration"><div class="chart-controls"><label class="muted" for="timeframe">GRÁFICO</label><select id="timeframe"><option value="60" selected>M1</option><option value="300">M5</option><option value="600">M10</option><option value="900">M15</option><option value="3600">H1</option><option value="14400">H4</option></select><label class="muted" for="candle-style">VELAS</label><select id="candle-style"><option value="normal" selected>NORMALES</option><option value="heikin">HEIKIN ASHI</option></select></div><div class="chart-toolbar tf-settings"><label>OB APOYO <select id="ob-timeframe"><option value="60">M1</option><option value="120">M2</option><option value="180">M3</option><option value="240">M4</option><option value="300" selected>M5</option><option value="900">M15</option><option value="3600">H1</option><option value="14400">H4</option></select></label><label>LIQUIDEZ TP <select id="liquidity-timeframe"><option value="60">M1</option><option value="120">M2</option><option value="180">M3</option><option value="300" selected>M5</option><option value="900">M15</option><option value="3600">H1</option><option value="14400">H4</option></select></label><label class="ema-toggle"><input type="checkbox" id="show-ema9" checked><i class="dot ema9"></i> EMA 9</label><label class="ema-toggle"><input type="checkbox" id="show-ema20" checked><i class="dot ema20"></i> EMA 20</label><label class="ema-toggle"><input type="checkbox" id="show-ema50" checked><i class="dot ema50"></i> EMA 50</label><span class="toolbar-note">GRÁFICO / BACKTEST M1</span></div><div class="price-bar price-bar-top"><span class="muted">PRECIO ACTUAL</span><strong id="current-price">---</strong></div><div class="top-signal-wrap"><div class="indicator-heading"><strong>SEÑAL ACTUAL</strong></div><div id="signals-top"><div class="empty-state">Sin señal confirmada.</div></div></div>
-<div class="chart-legend"><span>BSL / SSL liquidez</span><span>BOS estructura</span><span>OB zonas</span></div><div id="structure-diagnostic" class="muted">Esperando estructura M1...</div>
-<div id="chart-message" class="muted">Selecciona un instrumento para consultar su gráfico.</div></section>
-<aside class="bot-sidebar">
-<div class="side-card"><div class="side-eyebrow">BOTDER · SMC</div><h2>Panel de análisis</h2><div class="side-status" id="side-analysis-status">● Esperando mercado</div></div>
-<div class="side-card"><div class="side-title">PRÓXIMA OPORTUNIDAD</div><div id="projection-status" class="side-status">ANALIZANDO</div><div id="projection-card" class="empty-state">Esperando zonas M1...</div><button type="button" class="alert-button" onclick="activateAlerts()">ACTIVAR ALERTAS</button><span id="alert-status" class="muted">Avisos de precio</span></div>
-</aside>
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#080f1b">
+<title>BOTDER · STRUCTURE</title>
+<link rel="stylesheet" href="style.css?v=structure-ui-20261104">
+</head>
+<body>
+<div class="app-shell">
+<header class="topbar">
+  <a class="brand" href="#" aria-label="BOTDER inicio"><span class="brand-mark">B</span><span><strong>BOTDER<span class="brand-accent">.</span></strong><small>STRUCTURE</small></span></a>
+  <div class="topbar-right"><span class="live-indicator"><i></i> MERCADO EN VIVO</span><div id="connection" class="connection offline">DESCONECTADO</div></div>
+</header>
+
+<details class="market-drawer">
+  <summary><span class="summary-icon">⌕</span><span>MERCADOS</span><span id="market-count" class="market-count">0 instrumentos</span></summary>
+  <div class="market-drawer-content"><div id="api-diagnostic" class="api-diagnostic">Conectando con Deriv...</div><div id="markets" class="market-grid"><div class="empty-state">Cargando instrumentos...</div></div></div>
+</details>
+
+<main class="main-content">
+  <section class="chart-card">
+    <div class="chart-heading">
+      <div><div class="eyebrow">ANÁLISIS ESTRUCTURAL</div><h1 id="chart-title">Selecciona un mercado</h1></div>
+      <div class="price-chip"><span>PRECIO ACTUAL</span><strong id="current-price">---</strong></div>
+    </div>
+    <div id="chart-area"></div>
+    <div class="chart-configuration">
+      <div class="chart-controls">
+        <label>GRÁFICO<select id="timeframe"><option value="60" selected>M1</option><option value="300">M5</option><option value="600">M10</option><option value="900">M15</option><option value="3600">H1</option><option value="14400">H4</option></select></label>
+        <label>VELAS<select id="candle-style"><option value="normal" selected>Normales</option><option value="heikin">Heikin Ashi</option></select></label>
+        <div class="ema-switches"><label><input type="checkbox" id="show-ema9" checked><i class="ema-dot e9"></i> EMA 9</label><label><input type="checkbox" id="show-ema20" checked><i class="ema-dot e20"></i> EMA 20</label><label><input type="checkbox" id="show-ema50" checked><i class="ema-dot e50"></i> EMA 50</label></div>
+      </div>
+      <details class="advanced-settings"><summary>AJUSTES DE ESTRUCTURA</summary><label>OB DE APOYO<select id="ob-timeframe"><option value="60">M1</option><option value="120">M2</option><option value="180">M3</option><option value="240">M4</option><option value="300" selected>M5</option><option value="900">M15</option><option value="3600">H1</option><option value="14400">H4</option></select></label></details>
+    </div>
+    <div class="chart-foot"><span id="side-analysis-status">Esperando mercado</span><span id="structure-diagnostic">Esperando estructura H1 / H4</span></div>
+    <div id="chart-message" class="chart-message">Selecciona un instrumento para cargar el historial.</div>
+  </section>
+
+  <section class="opportunity-card">
+    <div class="section-topline"><div><div class="eyebrow">PROYECCIÓN EN EL GRÁFICO</div><h2>Próxima oportunidad</h2></div><span id="projection-status" class="status-pill">ANALIZANDO</span></div>
+    <div id="projection-card" class="projection-empty">Buscando dos toques válidos para proyectar el tercero...</div>
+  </section>
+
+  <section class="signals-section">
+    <div class="section-topline"><div><div class="eyebrow">CONFIRMACIÓN</div><h2>Señales disponibles</h2></div><span id="signal-count" class="count-pill">0</span></div>
+    <div id="signals-top"><div class="empty-state">Todavía no hay señales confirmadas.</div></div>
+  </section>
+
+  <section class="stats-card">
+    <div class="section-topline"><div><div class="eyebrow">RENDIMIENTO DE LA ESTRATEGIA</div><h2>Historial general</h2></div><span class="history-live">REGISTRO AUTOMÁTICO</span></div>
+    <div class="stats-grid">
+      <div class="stat win"><strong id="bt-wins">0</strong><span>GANADAS</span></div>
+      <div class="stat loss"><strong id="bt-losses">0</strong><span>PERDIDAS</span></div>
+      <div class="stat rate"><strong id="bt-rate">0%</strong><span>ACIERTOS</span></div>
+      <div class="stat total"><strong id="bt-total">0</strong><span>OPERACIONES</span></div>
+    </div>
+    <div class="open-count">EN CURSO <strong id="bt-open">0</strong></div>
+    <div id="history" class="history-list"><div class="empty-state">El historial aparecerá cuando se confirmen entradas.</div></div>
+  </section>
+
+  <details class="manual-operations"><summary>OPERACIONES MARCADAS COMO ENTRÉ <span id="operation-count">0</span></summary><div id="operations"><div class="empty-state">No hay operaciones manuales abiertas.</div></div></details>
+</main>
+<footer><span>BOTDER STRUCTURE</span><span>ANÁLISIS Y SEÑALES · EJECUCIÓN MANUAL</span></footer>
 </div>
-<section class="section stats-panel backtest-panel"><div class="section-heading"><h2>ESTADÍSTICAS HISTÓRICAS · REGLAS ANTERIORES</h2><span class="muted">REFERENCIA · NO ES EL BACKTEST DE LA NUEVA ESTRATEGIA</span></div><div class="stats-grid"><div><strong id="bt-wins">0</strong><span>GANADAS</span></div><div><strong id="bt-losses">0</strong><span>PERDIDAS</span></div><div><strong id="bt-rate">0%</strong><span>ACIERTOS</span></div><div><strong id="bt-total">0</strong><span>OPERACIONES</span></div></div><div class="muted" style="padding:8px 2px">Abiertas: <b id="bt-open">0</b></div></section>
-<section class="account-panel"><div><span class="muted">MODO DE FUNCIONAMIENTO</span><h2>SEÑALES MANUALES</h2></div><span class="status-tag">SIN AUTOTRADING</span></section>
-<footer>BOTDER SIGNALS PRO · Herramienta de análisis. Las señales no ejecutan operaciones automáticamente.</footer></div>
-<script src="charts.js?v=structure-engine-pan-20261104"></script><script src="app.js?v=structure-engine-pan-20261104"></script><script src="deriv.js?v=structure-engine-pan-20261104"></script></body></html>
+<script src="charts.js?v=structure-ui-20261104"></script>
+<script src="app.js?v=structure-ui-20261104"></script>
+<script src="deriv.js?v=structure-ui-20261104"></script>
+</body>
+</html>
