@@ -259,7 +259,7 @@ function detectOrderBlocks(source,side){const found=[];for(let i=Math.max(1,sour
 function latestObBias(source){const all=[...detectOrderBlocks(source,"BUY"),...detectOrderBlocks(source,"SELL")].sort((a,b)=>a.time-b.time);return all.length?all.at(-1).side:null;}
 function buildStructuralPlan(m1,displayTf,historyContext=null){
  const cutoff=Number(m1.at(-1)?.time)||Infinity;
- const closedHistory=(rows,seconds)=>(Array.isArray(rows)?rows:[]).filter(c=>Number(c.time)+seconds<=cutoff);
+ const closedHistory=(rows,seconds)=>(Array.isArray(rows)?rows:[]).filter(c=>Number(c.time)+seconds<=cutoff+60),aggregateClosed=seconds=>candlesAtTf(m1,seconds).filter(c=>Number(c.time)+seconds<=cutoff+60);
  const rawH4=historyContext?.h4||getHigherTimeframeHistory(14400)||[],rawM30=historyContext?.m30||getHigherTimeframeHistory(1800)||[];
  const h4Closed=closedHistory(rawH4,14400),m30Closed=closedHistory(rawM30,1800);
  const h4=h4Closed.length>=22?h4Closed:rawH4,m30=m30Closed.length>=22?m30Closed:rawM30;
@@ -267,8 +267,8 @@ function buildStructuralPlan(m1,displayTf,historyContext=null){
  const lines=[],items=[],activeTf=Number(displayTf)||60;
  // Cada gráfico usa su propio historial cerrado; los TF menores se agregan desde M1.
  const h1Raw=historyContext?.h1||getHigherTimeframeHistory(3600)||[],h1Closed=closedHistory(h1Raw,3600);
- const m30Source=m30Closed.length>=22?m30Closed:candlesAtTf(m1,1800);
- const activeSource=activeTf===14400?h4:activeTf===3600?(h1Closed.length>=22?h1Closed:candlesAtTf(m1,3600)):activeTf===1800?m30Source:candlesAtTf(m1,activeTf);
+ const m30Source=m30Closed.length>=22?m30Closed:aggregateClosed(1800);
+ const activeSource=activeTf===14400?h4:activeTf===3600?(h1Closed.length>=22?h1Closed:aggregateClosed(3600)):activeTf===1800?m30Source:aggregateClosed(activeTf);
  const tfLabel=activeTf>=3600?"H"+activeTf/3600:"M"+activeTf/60;
  const candidate=findDiagonalStructure(activeSource,activeTf,tfLabel);
  const push=s=>{if(!s)return;for(const [n,l] of [s.line1,s.line2].entries())lines.push({...l,side:s.side,primary:n===0,label:n===0?s.tf+" · "+(s.side==="BUY"?"SOPORTE / COMPRA":"RESISTENCIA / VENTA"):"",touches:(l.touches||[]).map(t=>n===0?{...t}:{time:t.time,price:t.price}),projectPrice1:n===0?s.projectPrice1:s.projectPrice2,projectPrice2:n===0?s.projectPrice1:s.projectPrice2,projectTime:s.projectTime});};
