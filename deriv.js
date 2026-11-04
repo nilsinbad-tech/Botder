@@ -49,7 +49,7 @@ function connectDeriv() {
       showApiDiagnostic("Deriv respondió: " + received.length + " símbolos. Buscando índices Volatility...");
       renderMarkets(received);
     }
-    if (data.msg_type === "history" && responseSymbol(data) === selectedSymbol && data.history && Array.isArray(data.history.times)) {
+    if (data.msg_type === "history" && responseSymbol(data) === selectedSymbol && data.history && Array.isArray(data.history.times) && data.req_id === 12) {
       const historicalTicks = aggregateTicks(data.history.times, data.history.prices, selectedGranularity);
       if (data.req_id === 12) {
         candleBuffer = historicalTicks;
@@ -161,7 +161,7 @@ function loadMarketHistory(symbol, granularity = selectedGranularity) {
     showChartMessage("Construyendo velas de 30 segundos desde ticks de Deriv...");
   } else {
     sendDeriv({ ticks_history: symbol, count: 5000, end: "latest", style: "candles", granularity: selectedGranularity, req_id: 12 });
-    sendDeriv({ ticks_history: symbol, count: 500, end: "latest", style: "candles", granularity: selectedGranularity, subscribe: 1, req_id: 10 });
+    // El historial M1 de 5000 velas se carga en una sola respuesta; los ticks actualizan la vela viva sin reemplazarlo por un bloque corto.
     showChartMessage("Cargando historial · " + (selectedGranularity/60) + " min...");
   }
 }
