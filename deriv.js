@@ -66,9 +66,9 @@ function connectDeriv() {
         const newerLive=[...liveByTime.values()].filter(c=>c.time>lastHistoryTime).sort((a,b)=>a.time-b.time);
         candleBuffer=[...historical,...newerLive];
         if (typeof setBacktestHistory === "function") setBacktestHistory(selectedSymbol, selectedMarketName(), historical);
-        if (typeof updateCandles === "function") updateCandles(candleBuffer);
+        if (typeof updateCandles === "function") updateCandles(aggregateForDisplay(candleBuffer,selectedGranularity));
         if (typeof analyzeCandles === "function") analyzeCandles(selectedSymbol, selectedMarketName(), candleBuffer);
-        showChartMessage("Historial M1 cargado · " + historical.length + " velas reales de Deriv.");
+        showChartMessage("Historial base M1 · "+historical.length+" velas · vista "+(selectedGranularity===3600?"H1":selectedGranularity===14400?"H4":"M"+(selectedGranularity/60))+".");
         showApiDiagnostic("Deriv entregó " + historical.length + " velas para " + selectedSymbol + ".");
       } else {
         showChartMessage("Deriv respondió, pero no entregó velas en el historial. Esperando ticks para construirlas...");
@@ -85,7 +85,7 @@ function connectDeriv() {
       const o = data.ohlc, candle = { time: Number(o.open_time), open: Number(o.open), high: Number(o.high), low: Number(o.low), close: Number(o.close) };
       if (candleBuffer.length && candleBuffer[candleBuffer.length - 1].time === candle.time) candleBuffer[candleBuffer.length - 1] = candle;
       else candleBuffer.push(candle);
-      if (typeof addCandle === "function") addCandle(candle);
+      if(selectedGranularity===60){if(typeof addCandle==="function")addCandle(candle);}else if(typeof updateCandles==="function")updateCandles(aggregateForDisplay(candleBuffer,selectedGranularity));
       // El precio visible lo controla exclusivamente el flujo tick; no permitir que una vela histórica lo retrase.
       if (typeof analyzeCandles === "function") analyzeCandles(selectedSymbol, selectedMarketName(), candleBuffer);
     }
@@ -112,7 +112,7 @@ function connectDeriv() {
           candleBuffer[candleBuffer.length - 1] = live;
         }
         // Actualiza la vela visible con cada tick; el dibujo se agrupa en requestAnimationFrame.
-        if (typeof addCandle === "function") addCandle(live);
+        if(selectedGranularity===60){if(typeof addCandle==="function")addCandle(live);}else if(typeof updateCandles==="function")updateCandles(aggregateForDisplay(candleBuffer,selectedGranularity));
         // Previsualiza OB en cada tick mientras la vela M1 se está formando; no espera al cierre.
         if (typeof analyzeLiveStructure === "function") analyzeLiveStructure(selectedSymbol, candleBuffer);
         // Recalcula la estructura/backtest solo cuando comienza una vela nueva (la anterior cerró).
@@ -165,6 +165,7 @@ function renderMarkets(all) {
  showApiDiagnostic("Correcto: "+availableSymbols.length+" índices Volatility organizados por categoría.");
  if(!selectedSymbol)selectMarket(symbolName(availableSymbols[0]),symbolCode(availableSymbols[0]));
 }
+function aggregateForDisplay(candles,seconds){if(seconds<=60)return candles.slice();const m=new Map();for(const c of candles){const t=Math.floor(c.time/seconds)*seconds;let v=m.get(t);if(!v)m.set(t,{time:t,open:c.open,high:c.high,low:c.low,close:c.close});else{v.high=Math.max(v.high,c.high);v.low=Math.min(v.low,c.low);v.close=c.close;}}return [...m.values()].sort((a,b)=>a.time-b.time);}
 function aggregateTicks(times, prices, seconds) {
   const candles = new Map();
   (times || []).forEach((time, i) => {
@@ -190,7 +191,7 @@ function loadMarketHistory(symbol, granularity = selectedGranularity) {
     sendDeriv({ ticks_history: symbol, count: 5000, end: "latest", style: "ticks", req_id: 12 });
     showChartMessage("Construyendo velas de 30 segundos desde ticks de Deriv...");
   } else {
-    sendDeriv({ ticks_history: symbol, count: 5000, end: "latest", style: "candles", granularity: selectedGranularity, req_id: 12 });
+    sendDeriv({ ticks_history: symbol, count: 5000, end: "latest", style: "candles", granularity: 60, req_id: 12 });
     // El historial M1 de 5000 velas se carga en una sola respuesta; los ticks actualizan la vela viva sin reemplazarlo por un bloque corto.
     showChartMessage("Cargando historial · " + (selectedGranularity/60) + " min...");
   }
@@ -211,7 +212,7 @@ function getAvailableSymbols() { return availableSymbols; }
 function isDerivConnected() { return derivSocket && derivSocket.readyState === WebSocket.OPEN; }
 document.addEventListener("DOMContentLoaded", () => {
   const tf = document.getElementById("timeframe");
-  if (tf) { tf.value = "60"; tf.disabled = false; tf.addEventListener("change", () => { const n=60;tf.value="60";selectedGranularity=60;if(selectedSymbol)loadMarketHistory(selectedSymbol,60); }); }
+  if(tf){tf.value="60";tf.disabled=false;tf.addEventListener("change",()=>{selectedGranularity=Number(tf.value)||60;if(typeof setChartGranularity==="function")setChartGranularity(selectedGranularity);if(selectedSymbol&&candleBuffer.length&&typeof updateCandles==="function")updateCandles(aggregateForDisplay(candleBuffer,selectedGranularity));});}
   const style=document.getElementById("candle-style");if(style)style.addEventListener("change",()=>{if(typeof setCandleStyle==="function")setCandleStyle(style.value);});
 });
 connectDeriv();
