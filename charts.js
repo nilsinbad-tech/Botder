@@ -11,7 +11,7 @@ function createMarketChart(containerId="chart-area"){
  chartCanvas.addEventListener("pointerdown",e=>{
   activePointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
   chartCanvas.setPointerCapture(e.pointerId);
-  if(activePointers.size===1){dragX=e.clientX;dragEnd=viewEnd;chartCanvas.style.cursor="grabbing";}
+  if(activePointers.size===1){dragX=e.clientX;dragEnd=Math.max(0,Math.min(candleData.length,viewEnd||candleData.length));viewEnd=dragEnd;chartCanvas.style.cursor="grabbing";}
   if(activePointers.size===2){const p=[...activePointers.values()];pinchStart=Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y);pinchCount=viewCount;const rect=chartCanvas.getBoundingClientRect(),mid=(p[0].x+p[1].x)/2;pinchAnchorRatio=Math.max(0,Math.min(1,(mid-rect.left-10)/Math.max(1,rect.width-76)));const end=Math.max(0,Math.min(candleData.length,viewEnd||candleData.length));const visibleCount=Math.min(viewCount,end);pinchAnchorIndex=Math.max(0,end-visibleCount)+pinchAnchorRatio*visibleCount;dragX=null;}
  });
  chartCanvas.addEventListener("pointermove",e=>{
@@ -29,7 +29,7 @@ function createMarketChart(containerId="chart-area"){
  });
  const endDrag=e=>{activePointers.delete(e.pointerId);if(activePointers.size<2)pinchStart=0;if(activePointers.size===1){const p=[...activePointers.values()][0];dragX=p.x;dragEnd=viewEnd;}else{dragX=null;chartCanvas.style.cursor="grab";}};
  chartCanvas.addEventListener("pointerup",endDrag);chartCanvas.addEventListener("pointercancel",endDrag);
- chartCanvas.addEventListener("wheel",e=>{e.preventDefault();viewCount=Math.max(15,Math.min(5000,Math.round(viewCount*(e.deltaY>0?1.2:.82))));viewEnd=candleData.length;drawMarketChart();},{passive:false});
+ chartCanvas.addEventListener("wheel",e=>{e.preventDefault();const rect=chartCanvas.getBoundingClientRect(),ratio=Math.max(0,Math.min(1,(e.clientX-rect.left-10)/Math.max(1,rect.width-76))),end=Math.max(0,Math.min(candleData.length,viewEnd||candleData.length)),oldCount=Math.min(viewCount,end),anchor=Math.max(0,end-oldCount)+ratio*oldCount;viewCount=Math.max(15,Math.min(5000,Math.round(viewCount*(e.deltaY>0?1.2:.82))));const next=Math.min(viewCount,candleData.length);viewEnd=Math.max(next,Math.min(candleData.length,Math.round(anchor+(1-ratio)*next)));drawMarketChart();},{passive:false});
  resizeMarketChart();drawMarketChart();return true;
 }
 function resizeMarketChart(){if(!chartCanvas||!chartContext)return;const host=chartCanvas.parentElement;if(!host)return;const r=host.getBoundingClientRect(),dpr=Math.min(devicePixelRatio||1,2);chartCanvas.width=Math.max(1,Math.floor(r.width*dpr));chartCanvas.height=Math.max(1,Math.floor(r.height*dpr));chartContext.setTransform(dpr,0,0,dpr,0,0);drawMarketChart();}
@@ -62,7 +62,7 @@ function renderMarketChart(){
  if(!candleData.length){ctx.fillStyle="#8495aa";ctx.textAlign="center";ctx.font="12px Arial";ctx.fillText("Esperando datos reales del mercado...",w/2,h/2);return;}
  const end=Math.max(0,Math.min(candleData.length,viewEnd||candleData.length)),start=Math.max(0,end-viewCount),raw=candleData.slice(0,end),data=(candleStyle==="heikin"?toHeikinAshi(raw):raw).slice(start,end);
  if(!data.length)return;const windowKey=start+":"+end+":"+viewCount;let lows=data.map(c=>c.low),highs=data.map(c=>c.high);const visibleStart=data[0].time,visibleEnd=data[data.length-1].time;const visibleTrades=backtestTradeData.filter(t=>{const et=Number(t.entryTime)/1000,xt=Number(t.exitTime||Date.now())/1000;return Number.isFinite(et)&&et<=visibleEnd&&xt>=visibleStart;});visibleTrades.forEach(t=>[t.entry,t.sl,t.tp1,t.tp2,t.price].forEach(v=>{v=Number(v);if(Number.isFinite(v)){lows.push(v);highs.push(v);}}));const candleMin=Math.min(...data.map(c=>c.low)),candleMax=Math.max(...data.map(c=>c.high));tradeLevels.forEach(x=>{if(Number.isFinite(x.value)&&x.value>=candleMin-(candleMax-candleMin)*.25&&x.value<=candleMax+(candleMax-candleMin)*.25){lows.push(x.value);highs.push(x.value);}});
- const rawMin=Math.min(...lows),rawMax=Math.max(...highs);
+ const visibleAnnotationsForScale=(structureOverlay.items||[]).filter(a=>Number.isFinite(a.price)&&a.time<=visibleEnd&&(a.time>=visibleStart||a.type==="ob"||a.type==="fvg"));visibleAnnotationsForScale.forEach(a=>{lows.push(a.price);highs.push(a.price);});const rawMin=Math.min(...lows),rawMax=Math.max(...highs);
  if(scaleWindow!==windowKey||scaleMin===null||scaleMax===null){const pad=(rawMax-rawMin)*.08||Math.abs(rawMax)*.0001||1;scaleMin=rawMin-pad;scaleMax=rawMax+pad;scaleWindow=windowKey;}else{const span=scaleMax-scaleMin,pad=span*.08;if(rawMin<scaleMin+pad)scaleMin=rawMin-pad;if(rawMax>scaleMax-pad)scaleMax=rawMax+pad;}
  const min=scaleMin,max=scaleMax;
  const yOf=v=>top+(max-v)/(max-min)*ph;
@@ -80,7 +80,7 @@ function renderMarketChart(){
  const annotations=[
   ...recent("pivot",2,"").filter(a=>a.label!=="PIVOTE ALTO"),...recent("liquidity",2,""),
   ...recent("bos",2).filter(a=>a.side!=="BULL"),...recent("choch",2),...recent("sweep",2),...visibleAnnotations.filter(a=>a.type==="signal"),
-  ...["BUY","SELL"].flatMap(side=>{const a=allAnnotations.filter(v=>v.type==="ob"&&v.side===side).sort((u,v)=>u.time-v.time),groups=new Map();a.forEach(v=>{if(!groups.has(v.time))groups.set(v.time,[]);groups.get(v.time).push(v);});const valid=[...groups.values()].filter(g=>g.length>=2);return valid.length?valid[valid.length-1]:[];})
+  ...["BUY","SELL"].flatMap(side=>{const a=allAnnotations.filter(v=>v.type==="ob"&&v.side===side).sort((u,v)=>u.time-v.time),groups=new Map();a.forEach(v=>{if(!groups.has(v.time))groups.set(v.time,[]);groups.get(v.time).push(v);});const valid=[...groups.values()].filter(g=>g.length>=2);return valid.filter(g=>g[0].time<=visibleEnd).slice(-12).flat();})
  ];
  const xAt=time=>{const ix=data.findIndex(v=>v.time>=time);return left+(Math.max(0,ix)+.5)*step;};
  const zoneGroups=new Map();
