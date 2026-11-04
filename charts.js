@@ -108,7 +108,7 @@ function toHeikinAshi(candles){
  });
 }
 function drawTradeLevels(signal,mark=true){if(!signal)return;tradeLevels=[{value:Number(signal.entry),label:"ENTRADA",color:"#61b7ff"},{value:Number(signal.sl),label:"SL",color:"#ff6579"},{value:Number(signal.tp1),label:"TP1",color:"#ffd166"},{value:Number(signal.tp2),label:"TP2",color:"#39e6a0"}].filter(x=>Number.isFinite(x.value));signalMarker=mark&&Number.isFinite(Number(signal.time))?{time:Number(signal.time),direction:signal.direction}:null;drawMarketChart();}
-function clearTradeLevels(){tradeLevels=[];drawMarketChart();}
+function clearTradeLevels(){tradeLevels=[];signalMarker=null;drawMarketChart();}
 function getActiveChartSymbol(){return chartSymbol;}
 function drawMarketChart(){if(chartFrame!==null)return;chartFrame=requestAnimationFrame(()=>{chartFrame=null;renderMarketChart();});}
 function renderMarketChart(){
