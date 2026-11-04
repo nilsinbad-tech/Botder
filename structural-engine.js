@@ -54,7 +54,7 @@ function runStructuralBacktest(symbol,market,candles,displayTf){
   for(let j=i+1;j<d.length;j++){const bar=d[j],stop=s.direction==="COMPRAR"?bar.low<=s.sl:bar.high>=s.sl,one=s.direction==="COMPRAR"?bar.high>=s.tp1:bar.low<=s.tp1,two=s.direction==="COMPRAR"?bar.high>=s.tp2:bar.low<=s.tp2;if(stop){result="PERDIDA";price=s.sl;exitTime=bar.time*1000;exitReason="SL";break;}if(two){result="GANADA";price=s.tp2;exitTime=bar.time*1000;exitReason="TP2";break;}if(one){result="GANADA";price=s.tp1;exitTime=bar.time*1000;exitReason="TP1";break;}}
   trades.push({...s,id:"BT-"+symbol+"-"+s.time,symbol,market,price,entryTime:s.time*1000,exitTime,result,exitReason,structureKey:key});
  }
- backtestTradeData=trades;if(typeof setChartBacktestTrades==="function")setChartBacktestTrades(trades);if(typeof drawMarketChart==="function")drawMarketChart();return trades;
+ backtestTrades.splice(0,backtestTrades.length,...trades);setBacktestTrades(trades);backtestSymbol=symbol;backtestReady=true;if(typeof updateDailyPanel==="function")updateDailyPanel();setText("chart-message","BACKTEST "+(sec>=3600?"H"+sec/3600:"M"+sec/60)+" · últimas 70 velas · "+trades.length+" señales.");return trades;
 }
 function analyzeCandles(symbol,market,candles){
  if(!Array.isArray(candles)||candles.length<100)return;const d=candles.slice().sort((a,b)=>a.time-b.time),i=d.length-2;if(i<65)return;const closed=d[i],tf=Number(document.getElementById("timeframe")?.value)||60,plan=buildStructuralPlan(d.slice(0,i+1),tf);
