@@ -468,3 +468,60 @@ body{background:#050b14}
 .price-bar-top{display:flex;justify-content:space-between;align-items:center;margin:5px 0 10px;padding:10px 12px;background:#0d1a2a;border:1px solid #20344a;border-radius:8px}.price-bar-top strong{font-size:19px;font-variant-numeric:tabular-nums}.top-signal-wrap{margin:0 0 10px}.top-signal-wrap .signal-card{padding:8px 10px;margin:0}.top-signal-wrap .signal-card h3{font-size:14px;margin:3px 0}.top-signal-wrap .signal-card .levels{margin:6px 0;gap:5px}.top-signal-wrap .signal-card .level{padding:6px}.top-signal-wrap .signal-card .action-row{margin-top:6px}#rsi-area{height:150px!important;min-height:135px!important}@media(max-width:560px){#rsi-area{height:155px!important;min-height:140px!important}.price-bar-top{padding:8px 10px}.price-bar-top strong{font-size:17px}}
 
 @media(max-width:560px){.container{width:100%;max-width:100%;padding:8px;gap:9px}.trading-workspace{display:flex!important;flex-direction:column!important;gap:10px}.chart-panel{width:100%;min-width:0;padding:9px}.bot-sidebar{width:100%;display:grid;grid-template-columns:1fr;gap:8px}.side-card{padding:10px}.chart-panel .section-heading{gap:6px;align-items:flex-start}.chart-controls{gap:4px;flex-wrap:wrap}.chart-toolbar{gap:7px;flex-wrap:wrap;font-size:9px}.toolbar-note{width:100%}#chart-area{height:clamp(440px,62vh,620px)!important;min-height:440px!important;width:100%!important}.chart-legend{gap:6px;flex-wrap:wrap;font-size:9px}.chart-panel #rsi-area{height:165px!important;min-height:150px!important}.backtest-panel{padding:10px}.stats-grid{gap:6px}.stats-grid>div{min-width:0}.stats-grid strong{font-size:18px}}@media(max-width:380px){#chart-area{height:60vh!important;min-height:420px!important}.chart-controls select{max-width:78px;font-size:10px}}
+
+
+/* Samsung Galaxy A06: mobile layout final pass */
+html{width:100%;max-width:100%;overflow-x:hidden;-webkit-text-size-adjust:100%}
+body{width:100%;max-width:100%;min-width:0;overflow-x:hidden;padding-bottom:env(safe-area-inset-bottom)}
+button,select,input,summary{touch-action:manipulation}
+button,.market,summary{min-height:42px}
+.container{width:100%;max-width:100%;min-width:0;margin:0 auto;padding:8px}
+.topbar,.account-panel,.section,.trading-workspace,.chart-panel,.bot-sidebar,.side-card{min-width:0;max-width:100%}
+.topbar{gap:7px;flex-wrap:wrap}
+.topbar>div{min-width:0}
+.connection{flex-shrink:0}
+.account-panel{padding:10px;gap:8px;flex-wrap:wrap}
+.section{padding:10px;margin-top:9px;border-radius:10px}
+.section-heading{gap:7px;flex-wrap:wrap}
+.section-heading h2{font-size:14px}
+.trading-workspace{display:flex!important;flex-direction:column!important;gap:9px!important}
+.chart-panel{order:0!important;width:100%;margin:0;padding:8px}
+.bot-sidebar{order:1!important;width:100%;display:grid!important;grid-template-columns:minmax(0,1fr)!important;gap:8px;margin:0}
+.bot-sidebar .side-card,.bot-sidebar .side-card:first-child,.bot-sidebar .side-card:nth-child(n){grid-column:1!important;width:100%;min-width:0;padding:10px}
+#chart-area{width:100%!important;height:clamp(390px,58svh,540px)!important;min-height:390px!important;overflow:hidden}
+.chart-toolbar{gap:7px;line-height:1.5}
+.chart-controls{width:100%;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
+.chart-controls select{width:100%;max-width:none;min-width:0;min-height:40px;font-size:12px}
+.instrument-list{grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
+.instrument-list .market{min-width:0;min-height:56px;padding:8px}
+.instrument-list .market strong{font-size:10px;overflow-wrap:anywhere}
+.instrument-list .market span{font-size:9px;overflow-wrap:anywhere}
+.stats-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+.stats-grid>div{min-width:0;padding:10px 5px}
+.stats-grid strong{font-size:19px}
+.levels{grid-template-columns:repeat(2,minmax(0,1fr))}
+.level{min-width:0}
+.level strong{overflow-wrap:anywhere}
+.action-row{flex-wrap:wrap}
+.action-row button{min-width:0;min-height:42px}
+.strategy-settings,.rsi-settings{grid-template-columns:repeat(2,minmax(0,1fr))}
+.strategy-settings label,.rsi-settings label{min-width:0}
+.strategy-settings input,.rsi-settings input,.strategy-settings select,.rsi-settings select{min-width:0;width:100%}
+.backtest-compare-grid{grid-template-columns:1fr}
+#rsi-area{width:100%;height:165px!important;min-height:150px!important}
+#adx-area{width:100%;max-width:100%;overflow:hidden}
+footer{padding:16px 6px;font-size:9px}
+@media(max-width:380px){
+ .container{padding:6px}
+ .topbar h1{font-size:17px}
+ .account-panel h2{font-size:14px}
+ #chart-area{height:410px!important;min-height:410px!important}
+ .instrument-list{grid-template-columns:1fr}
+ .chart-controls{grid-template-columns:1fr 1fr}
+ .stats-grid strong{font-size:17px}
+ .projection-card strong{font-size:15px}
+}
+@media(min-width:561px) and (max-width:900px){
+ .trading-workspace{grid-template-columns:minmax(0,1fr)!important}
+ .bot-sidebar{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}
+}
