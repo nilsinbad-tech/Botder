@@ -86,8 +86,8 @@ function structureAt(d,i,x){
  piv.highs.slice(-8).forEach(p=>mark("pivot",p.price,"PIVOTE ALTO","",d[p.i].time));
  piv.lows.slice(-8).forEach(p=>mark("pivot",p.price,"PIVOTE BAJO","",d[p.i].time));
  const pools=activeLiquidityPools(d,i-2,piv);
- if(pools.bsl)mark("liquidity",pools.bsl.price,"LIQUIDEZ BSL","",d[pools.bsl.i].time);
- if(pools.ssl)mark("liquidity",pools.ssl.price,"LIQUIDEZ SSL","",d[pools.ssl.i].time);
+ pools.bslLevels.forEach((p,n)=>mark("liquidity",p.price,"LIQUIDEZ BSL "+(n+1),"",d[p.i].time));
+ pools.sslLevels.forEach((p,n)=>mark("liquidity",p.price,"LIQUIDEZ SSL "+(n+1),"",d[p.i].time));
  ["BUY","SELL"].forEach(side=>{const v=z.ob.filter(v=>v.side===side).at(-1);if(v){mark("ob",v.low,"OB "+side,v.side,d[v.i].time);mark("ob",v.high,"",v.side,d[v.i].time);}});
  z.fvg.slice(-4).forEach(v=>{mark("fvg",v.low,"FVG "+v.side,v.side,d[v.i].time);mark("fvg",v.high,"",v.side,d[v.i].time);});
  // Estrategia: OB válido + cruce EMA 9/20 en la vela M1 actual.
@@ -146,6 +146,8 @@ function analyzeCandles(symbol,market,candles){
  }
  const unique=[...new Map(structureItems.map(v=>[v.type+"|"+v.time+"|"+v.price+"|"+v.label,v])).values()];
  lastProjection=structureProjection;renderProjectionCard(zoneOutlook);
+ const trendBuy=x.e9[i]>x.e20[i],trendSell=x.e9[i]<x.e20[i],tradePlan=trendBuy?zoneOutlook?.buy:trendSell?zoneOutlook?.sell:null;
+ if(typeof drawTradeLevels==="function"){if(r.signal)drawTradeLevels(r.signal);else if(tradePlan)drawTradeLevels({entry:tradePlan.entry,sl:tradePlan.sl,tp1:tradePlan.tp1,tp2:tradePlan.tp2,time:d[i].time,direction:tradePlan.direction});else if(typeof clearTradeLevels==="function")clearTradeLevels();}
  const counts={pivot:unique.filter(a=>a.type==="pivot").length,liquidity:unique.filter(a=>a.type==="liquidity").length,bos:unique.filter(a=>a.type==="bos").length,choch:unique.filter(a=>a.type==="choch").length,ob:unique.filter(a=>a.type==="ob").length/2,fvg:unique.filter(a=>a.type==="fvg").length/2};
  setText("structure-diagnostic","Estructura M1 · "+counts.pivot+" pivotes · "+counts.liquidity+" liquidez · "+counts.bos+" BOS · "+counts.choch+" CHoCH · "+counts.ob+" OB · "+counts.fvg+" FVG");
  setText("side-analysis-status","● Estructura M1 · Entrada M1");
