@@ -1,6 +1,6 @@
 const DERIV_CONFIG = { endpoint: "wss://api.derivws.com/trading/v1/options/ws/public" };
 let derivSocket = null, availableSymbols = [], selectedSymbol = null;
-let candleBuffer = [], higherTfBuffers={600:[],1800:[],3600:[],14400:[],86400:[]}, tickSubId = null, candleSubId = null, reconnectTimer = null, symbolsTimer = null, selectedGranularity = 60, lastTickAt = 0, lastTickResubscribeAt = 0;
+let candleBuffer = [], higherTfBuffers={300:[],600:[],900:[],1800:[],3600:[],14400:[],86400:[]}, tickSubId = null, candleSubId = null, reconnectTimer = null, symbolsTimer = null, selectedGranularity = 60, lastTickAt = 0, lastTickResubscribeAt = 0;
 
 function getHigherTimeframeHistory(seconds){const raw=higherTfBuffers[Number(seconds)]||[];if(!raw.length||!candleBuffer.length)return raw;const live=aggregateForDisplay(candleBuffer,Number(seconds)).at(-1);if(!live)return raw;const merged=raw.filter(c=>c.time!==live.time);merged.push(live);return merged.sort((a,b)=>a.time-b.time);}
 function getDisplayCandles(seconds){const base=aggregateForDisplay(candleBuffer,seconds);if(seconds<3600)return base;const history=getHigherTimeframeHistory(seconds);if(!history.length)return base;const live=base.at(-1);if(!live)return history.slice();const out=history.filter(c=>c.time!==live.time);out.push(live);return out.sort((a,b)=>a.time-b.time);}
