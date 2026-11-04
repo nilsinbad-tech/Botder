@@ -182,25 +182,82 @@ document.addEventListener("DOMContentLoaded",()=>{[9,20,50].forEach(period=>{con
 
 /* MULTI-TIMEFRAME STRUCTURE ENGINE */
 function candlesAtTf(source,seconds){const out=[];for(const c of source){const time=Math.floor(c.time/seconds)*seconds,last=out[out.length-1];if(last&&last.time===time){last.high=Math.max(last.high,c.high);last.low=Math.min(last.low,c.low);last.close=c.close;}else out.push({time,open:c.open,high:c.high,low:c.low,close:c.close});}return out;}
-function structurePivots(d,depth=2){const highs=[],lows=[];for(let i=depth;i<d.length-depth;i++){let hi=true,lo=true;for(let k=1;k<=depth;k++){if(d[i].high<d[i-k].high||d[i].high<=d[i+k].high)hi=false;if(d[i].low>d[i-k].low||d[i].low>=d[i+k].low)lo=false;}if(hi)highs.push({i,time:d[i].time,price:d[i].high});if(lo)lows.push({i,time:d[i].time,price:d[i].low});}return{highs,lows};}
-function findDiagonalStructure(source,seconds,tf){
- if(!Array.isArray(source)||source.length<12)return null;
- const d=source.slice(-300),p=structurePivots(d),ranges=d.slice(-35).map(c=>c.high-c.low).sort((x,y)=>x-y),median=ranges[Math.floor(ranges.length/2)]||Math.abs(d.at(-1).close)*.0001,tol=Math.max(median*.38,Math.abs(d.at(-1).close)*.000015);
- const find=(side,points,sign)=>{let best=null;const pts=points.slice(-24);for(let ai=0;ai<pts.length-1;ai++)for(let bi=ai+1;bi<pts.length;bi++){
-  const p1=pts[ai],p2=pts[bi],dx=p2.i-p1.i;if(dx<4)continue;const slope=(p2.price-p1.price)/dx;
-  if(Math.sign(slope)!==sign||Math.abs(p2.price-p1.price)<median*.25)continue;
-  const touches=pts.filter(p=>Math.abs(p.price-(p1.price+slope*(p.i-p1.i)))<=tol).sort((x,y)=>x.i-y.i);if(touches.length<2)continue;
-  const last=touches.at(-1),prev=touches.at(-2),gap=Math.max(4,Math.min(40,last.i-prev.i)),actualThird=touches[2]||null,expectedIndex=actualThird?actualThird.i:last.i+gap;
-  if(!actualThird&&d.length-1>expectedIndex+5)continue;if(actualThird&&d.length-1>actualThird.i+5&&Math.abs(d.at(-1).close-actualThird.price)>tol*1.5)continue;
-  let broken=false;for(let k=last.i+1;k<d.length;k++){const projected=p1.price+slope*(k-p1.i);if(side==="BUY"?d[k].high>projected+tol*1.8:d[k].low<projected-tol*1.8){broken=true;break;}}if(broken)continue;
-  const score=touches.length*10-(d.length-1-last.i),candidate={side,p1,p2,slope,touches,score,gap,expectedIndex,third:actualThird};if(!best||score>best.score)best=candidate;
- }return best;};
- const buy=find("BUY",p.highs,1),sell=find("SELL",p.lows,-1),v=[buy,sell].filter(Boolean).sort((x,y)=>y.score-x.score)[0];if(!v)return null;
- const opp=v.side==="BUY"?p.lows:p.highs;let offsets=opp.map(q=>q.price-(v.p1.price+v.slope*(q.i-v.p1.i))).filter(x=>v.side==="BUY"?x<0:x>0);
- if(!offsets.length)offsets=d.map((q,i)=>(v.side==="BUY"?q.low:q.high)-(v.p1.price+v.slope*(i-v.p1.i))).filter(x=>v.side==="BUY"?x<0:x>0);
- if(!offsets.length)return null;offsets.sort((x,y)=>x-y);const offset=offsets[Math.floor(offsets.length/2)],projectedIndex=v.expectedIndex,projectedTime=d[0].time+projectedIndex*seconds,baseAt=i=>v.p1.price+v.slope*(i-v.p1.i),first=v.touches[0],firstCandle=d[first.i];
- return{side:v.side,tf,seconds,d,first,second:v.touches[1],third:v.third,firstStop:v.side==="BUY"?firstCandle.low:firstCandle.high,touches:v.touches.slice(0,3).map((t,i)=>({...t,n:i+1})),line1:{time1:d[v.p1.i].time,time2:d[v.p2.i].time,price1:v.p1.price,price2:v.p2.price},line2:{time1:d[v.p1.i].time,time2:d[v.p2.i].time,price1:v.p1.price+offset,price2:v.p2.price+offset},projectTime:projectedTime,projectPrice1:baseAt(projectedIndex),projectPrice2:baseAt(projectedIndex)+offset,tolerance:tol,expectedIndex:projectedIndex,gap:v.gap};
+// ZigZag 5/3/3: profundidad 5, desviación adaptativa equivalente a 3 fracciones del rango medio y backstep 3.
+function structurePivots(d,depth=5,deviation=3,backstep=3){
+ const candidates=[];
+ if(!Array.isArray(d)||d.length<depth*2+3)return{highs:[],lows:[]};
+ const ranges=d.slice(-Math.min(80,d.length)).map(c=>Math.max(0,c.high-c.low)).sort((a,b)=>a-b);
+ const median=ranges[Math.floor(ranges.length/2)]||Math.abs(d.at(-1).close)*1e-7;
+ const minMove=Math.max(median*(deviation/10),Math.abs(d.at(-1).close)*1e-8,1e-10);
+ for(let i=depth;i<d.length-depth;i++){
+  let hi=true,lo=true;
+  for(let k=1;k<=depth;k++){
+   if(d[i].high<d[i-k].high||d[i].high<=d[i+k].high)hi=false;
+   if(d[i].low>d[i-k].low||d[i].low>=d[i+k].low)lo=false;
+  }
+  if(hi)candidates.push({i,time:d[i].time,price:d[i].high,type:"high"});
+  if(lo)candidates.push({i,time:d[i].time,price:d[i].low,type:"low"});
+ }
+ candidates.sort((a,b)=>a.i-b.i||(a.type==="high"?-1:1));
+ const zig=[];
+ for(const p of candidates){
+  const last=zig.at(-1);
+  if(!last){zig.push(p);continue;}
+  if(p.type===last.type){
+   const moreExtreme=p.type==="high"?p.price>last.price:p.price<last.price;
+   if(p.i-last.i<=backstep){if(moreExtreme)zig[zig.length-1]=p;continue;}
+   if(moreExtreme){zig[zig.length-1]=p;continue;}
+   continue;
+  }
+  if(Math.abs(p.price-last.price)<minMove)continue;
+  zig.push(p);
+ }
+ // Backstep pass: remove a weak pivot when a more extreme same-side pivot occurs within 3 bars.
+ for(let i=1;i<zig.length;i++){
+  const p=zig[i],prev=zig[i-1];
+  if(p.type===prev.type&&p.i-prev.i<=backstep){
+   const extreme=p.type==="high"?p.price>prev.price:p.price<prev.price;
+   if(extreme)zig[i-1]=p;
+   zig.splice(i,1);i=Math.max(0,i-2);
+  }
+ }
+ return{highs:zig.filter(p=>p.type==="high"),lows:zig.filter(p=>p.type==="low"),zigzag:zig,settings:{depth,deviation,backstep,minMove}};
 }
+function findDiagonalStructure(source,seconds,tf){
+ if(!Array.isArray(source)||source.length<depthSafe(5)*2+12)return null;
+ const d=source.slice(-500),p=structurePivots(d,5,3,3),ranges=d.slice(-50).map(c=>c.high-c.low).sort((x,y)=>x-y),median=ranges[Math.floor(ranges.length/2)]||Math.abs(d.at(-1).close)*.0001,tol=Math.max(median*.32,Math.abs(d.at(-1).close)*.00001);
+ const find=(side,points,sign)=>{
+  let best=null;const pts=points.slice(-30);
+  for(let ai=0;ai<pts.length-2;ai++)for(let bi=ai+1;bi<pts.length-1;bi++){
+   const p1=pts[ai],p2=pts[bi],dx=p2.i-p1.i;if(dx<Math.max(5,backstepSafe(3)*2))continue;
+   const slope=(p2.price-p1.price)/dx;
+   if(Math.sign(slope)!==sign||Math.abs(p2.price-p1.price)<median*.18)continue;
+   const aligned=pts.filter(q=>Math.abs(q.price-(p1.price+slope*(q.i-p1.i)))<=tol).sort((a,b)=>a.i-b.i);
+   const touches=[];
+   for(const q of aligned){const prev=touches.at(-1);if(!prev||q.i-prev.i>=5)touches.push(q);else if(Math.abs(q.price-(p1.price+slope*(q.i-p1.i)))<Math.abs(prev.price-(p1.price+slope*(prev.i-p1.i))))touches[touches.length-1]=q;}
+   if(touches.length<2)continue;
+   const actualThird=touches[2]||null,last=touches.at(-1),prev=touches.at(-2),gap=Math.max(5,Math.min(40,last.i-prev.i)),expectedIndex=actualThird?actualThird.i:last.i+gap;
+   if(!actualThird&&d.length-1>expectedIndex+5)continue;
+   if(actualThird&&d.length-1>actualThird.i+5&&Math.abs(d.at(-1).close-actualThird.price)>tol*1.5)continue;
+   let broken=false;
+   for(let k=p2.i+1;k<d.length;k++){const projected=p1.price+slope*(k-p1.i);if(side==="BUY"?d[k].high>projected+tol*1.8:d[k].low<projected-tol*1.8){broken=true;break;}}
+   if(broken)continue;
+   const score=Math.min(touches.length,3)*100-(d.length-1-last.i),candidate={side,p1,p2,slope,touches:touches.slice(0,3),score,gap,expectedIndex,third:actualThird};
+   if(!best||score>best.score)best=candidate;
+  }
+  return best;
+ };
+ const buy=find("BUY",p.highs,1),sell=find("SELL",p.lows,-1),v=[buy,sell].filter(Boolean).sort((x,y)=>y.score-x.score)[0];
+ if(!v)return null;
+ const opp=v.side==="BUY"?p.lows:p.highs;
+ let offsets=opp.map(q=>q.price-(v.p1.price+v.slope*(q.i-v.p1.i))).filter(x=>v.side==="BUY"?x<0:x>0);
+ if(!offsets.length)offsets=d.map((q,i)=>(v.side==="BUY"?q.low:q.high)-(v.p1.price+v.slope*(i-v.p1.i))).filter(x=>v.side==="BUY"?x<0:x>0);
+ if(!offsets.length)return null;
+ offsets.sort((x,y)=>x-y);const offset=offsets[Math.floor(offsets.length/2)],projectedIndex=v.expectedIndex,projectedTime=d[0].time+projectedIndex*seconds,baseAt=i=>v.p1.price+v.slope*(i-v.p1.i),first=v.touches[0],firstCandle=d[first.i];
+ return{side:v.side,tf,seconds,d,first,second:v.touches[1],third:v.third,firstStop:v.side==="BUY"?firstCandle.low:firstCandle.high,touches:v.touches.map((t,i)=>({...t,n:i+1})),line1:{time1:d[v.p1.i].time,time2:d[v.p2.i].time,price1:v.p1.price,price2:v.p2.price},line2:{time1:d[v.p1.i].time,time2:d[v.p2.i].time,price1:v.p1.price+offset,price2:v.p2.price+offset},projectTime:projectedTime,projectPrice1:baseAt(projectedIndex),projectPrice2:baseAt(projectedIndex)+offset,tolerance:tol,expectedIndex:projectedIndex,gap:v.gap,zigzagSettings:"5/3/3"};
+}
+function depthSafe(v){return v;}
+function backstepSafe(v){return v;}
 function detectOrderBlocks(source,side){const found=[];for(let i=Math.max(1,source.length-180);i<source.length-1;i++){const c=source[i],next=source.slice(i+1,Math.min(source.length,i+5));if(side==="BUY"&&c.close<c.open&&next.some(n=>n.close>c.high)&&next.some(n=>n.close>n.open))found.push({side,low:c.low,high:Math.max(c.open,c.close),time:c.time});if(side==="SELL"&&c.close>c.open&&next.some(n=>n.close<c.low)&&next.some(n=>n.close<n.open))found.push({side,low:Math.min(c.open,c.close),high:c.high,time:c.time});}return found.filter((z,i,a)=>a.findIndex(v=>v.time===z.time)===i);}
 function latestObBias(source){const all=[...detectOrderBlocks(source,"BUY"),...detectOrderBlocks(source,"SELL")].sort((a,b)=>a.time-b.time).slice(-5);if(all.length<2)return null;const buys=all.filter(x=>x.side==="BUY").length,sells=all.length-buys;if(buys>=3&&buys-sells>=2)return"BUY";if(sells>=3&&sells-buys>=2)return"SELL";return null;}
 function buildStructuralPlan(m1,displayTf){
