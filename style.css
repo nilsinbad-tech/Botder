@@ -270,3 +270,11 @@ footer{padding:18px 3px 6px}
 .ob-toggle.active{border-color:#c18cff;background:rgba(193,140,255,.13);color:#d8baff}
 .ob-toggle:focus-visible,.timeframe-button:focus-visible{outline:2px solid #61b7ff;outline-offset:2px}
 @media(max-width:430px){.timeframe-bar{gap:4px}.timeframe-control{gap:2px}.timeframe-control .timeframe-button{padding:7px 7px;min-width:34px}.ob-toggle{padding:4px 5px;min-height:28px}}
+
+/* Pantalla completa y legibilidad del gráfico BOTDER */
+#chart-area:fullscreen,#chart-area.chart-fullscreen-fallback{width:100vw!important;height:100dvh!important;min-height:100dvh!important;max-height:100dvh!important;border:0!important;border-radius:0!important;background:#070e19!important;z-index:9999!important}
+#chart-area:fullscreen canvas,#chart-area.chart-fullscreen-fallback canvas{width:100%!important;height:100%!important}
+.chart-fullscreen-btn{position:absolute;z-index:20;top:8px;right:8px;width:36px;height:36px;display:grid;place-items:center;border:1px solid #6b8aaa;border-radius:9px;background:rgba(8,19,33,.94);color:#fff;font-size:23px;font-weight:800;line-height:1;box-shadow:0 2px 12px rgba(0,0,0,.45);touch-action:manipulation}
+.chart-fullscreen-btn:active{transform:scale(.94)}
+#chart-area:fullscreen .chart-fullscreen-btn{top:max(10px,env(safe-area-inset-top));right:max(10px,env(safe-area-inset-right))}
+@media(max-width:700px){.chart-fullscreen-btn{width:40px;height:40px;font-size:25px}}
