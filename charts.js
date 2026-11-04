@@ -17,7 +17,7 @@ function createMarketChart(containerId="chart-area"){
    if(drawingMode==="line"||drawingMode==="zone"){const p=chartPoint(e);if(p){if(drawingMode==="line")userDrawings.push({type:"line",price:p.price});else pendingDrawing={type:"zone",x1:p.index,x2:p.index,p1:p.price,p2:p.price};}drawMarketChart();return;}
    followLive=false;
    dragX=e.clientX;
-   dragEnd=Math.max(0,Math.min(candleData.length,viewEnd||candleData.length));
+   dragEnd=Math.max(Math.min(viewCount,candleData.length),Math.min(candleData.length+viewCount-1,viewEnd||candleData.length+futureSpace));
    viewEnd=dragEnd;
    chartCanvas.style.cursor="grabbing";
   }else if(activePointers.size===2){
@@ -26,7 +26,7 @@ function createMarketChart(containerId="chart-area"){
    pinchCount=viewCount;
    const rect=chartCanvas.getBoundingClientRect(),mid=(p[0].x+p[1].x)/2;
    pinchAnchorRatio=Math.max(0,Math.min(1,(mid-rect.left-10)/Math.max(1,rect.width-76)));
-   const end=Math.max(0,Math.min(candleData.length,viewEnd||candleData.length));
+   const end=Math.max(0,Math.min(candleData.length+viewCount-1,viewEnd||candleData.length+futureSpace));
    const visibleCount=Math.min(viewCount,end);
    pinchAnchorIndex=Math.max(0,end-visibleCount)+pinchAnchorRatio*visibleCount;
    dragX=null;
