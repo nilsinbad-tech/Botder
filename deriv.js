@@ -112,6 +112,8 @@ function connectDeriv() {
         }
         // Actualiza la vela visible con cada tick; el dibujo se agrupa en requestAnimationFrame.
         if (typeof addCandle === "function") addCandle(live);
+        // Previsualiza OB en cada tick mientras la vela M1 se está formando; no espera al cierre.
+        if (typeof analyzeLiveStructure === "function") analyzeLiveStructure(selectedSymbol, candleBuffer);
         // Recalcula la estructura/backtest solo cuando comienza una vela nueva (la anterior cerró).
         if (candleClosed) {
           if (typeof analyzeCandles === "function" && candleBuffer.length >= 100)
