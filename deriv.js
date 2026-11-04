@@ -93,10 +93,11 @@ function connectDeriv() {
       const price = Number(data.tick.quote), epoch = Number(data.tick.epoch), tickSymbol = data.tick.symbol || responseSymbol(data);
       if (!selectedSymbol || (tickSymbol && tickSymbol !== selectedSymbol)) return;
       const el = document.getElementById("current-price");
-      if (el && Number.isFinite(price)) {
+      if (Number.isFinite(price)) {
         const decimals = Number.isInteger(Number(data.tick.pip_size)) ? Number(data.tick.pip_size) : (String(data.tick.quote).split(".")[1] || "").length;
-        el.textContent = price.toFixed(Math.max(0,Math.min(8,decimals)));
-        el.dataset.updatedAt = String(epoch); el.dataset.receivedAt = String(Date.now()); lastTickAt = Date.now(); tickSubId = data.subscription?.id || tickSubId; if (typeof setLiveChartPrice === "function") setLiveChartPrice(price);
+        if (el) { el.textContent = price.toFixed(Math.max(0,Math.min(8,decimals))); el.dataset.updatedAt = String(epoch); el.dataset.receivedAt = String(Date.now()); }
+        lastTickAt = Date.now(); tickSubId = data.subscription?.id || tickSubId;
+        if (typeof setLiveChartPrice === "function") setLiveChartPrice(price);
       }
       if (Number.isFinite(price) && Number.isFinite(epoch) && selectedSymbol) {
         updateOperationPrice(selectedSymbol, price);
