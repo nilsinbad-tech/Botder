@@ -133,3 +133,11 @@ function renderProjection(plan){
  el.innerHTML='<div class="projection-stage '+(buy?"":"sell")+'">'+(buy?"COMPRA · CANAL ALCISTA":"VENTA · CANAL BAJISTA")+'</div><div class="projection-meta">'+p.stage+' · TERCER TOQUE '+p.timeframe+' · TP2 '+(p.targetTf||"ESTRUCTURAL")+'</div><div class="projection-levels"><div class="projection-level"><span>ENTRADA</span><strong>'+price(p.entry)+'</strong></div><div class="projection-level"><span>SL · T1 + MARGEN</span><strong>'+price(p.sl)+'</strong></div><div class="projection-level"><span>TP1 · LÍNEA OPUESTA</span><strong>'+price(p.tp1)+'</strong></div><div class="projection-level"><span>TP2 · PIVOTE</span><strong>'+price(p.tp2)+'</strong></div></div><div class="projection-meta">Confirmación: rechazo en T3 y tres velas cerradas consecutivas a favor.<br><b>CONTEXTO H4:</b> '+(plan.recommendation||"SOLO INFORMATIVO")+' · no bloquea la señal.</div>';
  if(status)status.textContent=p.stage;
 }
+
+function renderSignals(){
+ const active=signals.filter(s=>s.status==="ACTIVE");setText("signal-count",active.length);
+ const safe=v=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+ const price=v=>Number.isFinite(Number(v))?fmt(v):"—";
+ const markup=active.length?active.map(s=>'<article class="signal-card"><div class="muted">'+safe(s.id)+' · '+safe(s.market)+'</div><h3 class="'+(s.direction==="COMPRAR"?"buy":"sell")+'">'+safe(s.direction)+'</h3><div class="levels"><div class="level"><span>ENTRADA</span><strong>'+price(s.entry)+'</strong></div><div class="level"><span>SL · T1</span><strong>'+price(s.sl)+'</strong></div><div class="level"><span>TP1</span><strong>'+price(s.tp1)+'</strong></div><div class="level"><span>TP2</span><strong>'+price(s.tp2)+'</strong></div></div><div class="muted">'+safe(s.mode||"Canal de tres toques")+' · '+safe(s.timeframe||"")+'</div><div class="action-row"><button class="enter-button" onclick="markEntered(\''+safe(s.id)+'\')">ENTRÉ</button><button class="ignore-button" onclick="markIgnored(\''+safe(s.id)+'\')">NO ENTRÉ</button></div></article>').join(""):'<div class="empty-state">Todavía no hay señales confirmadas.</div>';
+ ["signals-top","signals-sidebar","signals"].forEach(id=>{const area=document.getElementById(id);if(area)area.innerHTML=markup;});
+}
