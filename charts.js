@@ -109,7 +109,7 @@ function renderMarketChart(){
  const recent=(type,n,side)=>visibleAnnotations.filter(a=>a.type===type&&(!side||a.side===side)).sort((a,b)=>a.time-b.time);
  const annotations=[
   ...(()=>{const pools=visibleAnnotations.filter(a=>a.type==="liquidity").sort((a,b)=>b.time-a.time);const chosen=[];for(const side of ["BSL","SSL"]){const candidates=pools.filter(a=>String(a.label).includes(side));if(!candidates.length)continue;const newest=candidates[0],sameLevel=candidates.filter(a=>Math.abs(a.price-newest.price)<=Math.abs(newest.price)*0.0005);chosen.push(sameLevel[0]||newest);}return chosen;})(),
-  ...recent("bos",2).filter(a=>a.side!=="BULL"),...visibleAnnotations.filter(a=>a.type==="signal"),
+  ...recent("bos",2).filter(a=>a.side==="BULL"),...visibleAnnotations.filter(a=>a.type==="signal"),
   ...(()=>{const a=allAnnotations.filter(v=>v.type==="ob"&&v.time>=visibleStart&&v.time<=visibleEnd).sort((u,v)=>v.time-u.time),groups=new Map();a.forEach(v=>{if(!groups.has(v.time+"|"+v.side))groups.set(v.time+"|"+v.side,[]);groups.get(v.time+"|"+v.side).push(v);});const candidates=[...groups.values()].filter(g=>g.length>=2).map(g=>({items:g,hi:Math.max(...g.map(v=>v.price)),lo:Math.min(...g.map(v=>v.price)),time:g[0].time})).sort((u,v)=>v.time-u.time),kept=[];for(const z of candidates){if(kept.some(k=>z.lo<=k.hi&&z.hi>=k.lo))continue;kept.push(z);}return kept.flatMap(z=>z.items);})()
  ];
  const xAt=time=>{const ix=data.findIndex(v=>v.time>=time);return left+(Math.max(0,ix)+.5)*step;};
