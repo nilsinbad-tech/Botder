@@ -109,7 +109,7 @@ function connectDeriv() {
         // Recalcula la estructura/backtest solo cuando comienza una vela nueva (la anterior cerró).
         if (candleClosed) {
           if (typeof analyzeCandles === "function" && candleBuffer.length >= 100)
-            analyzeCandles(selectedSymbol, selectedMarketName(), candleBuffer.slice(0, -1));
+            analyzeCandles(selectedSymbol, selectedMarketName(), candleBuffer);
           if (typeof updateBacktestTick === "function") updateBacktestTick(epoch, price);
         }
       }
