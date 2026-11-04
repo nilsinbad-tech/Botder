@@ -67,7 +67,7 @@ function setChartSymbol(s){chartSymbol=s;candleData=[];tradeLevels=[];signalMark
 function setChartGranularity(seconds){chartGranularity=Number(seconds)||60;scaleMin=null;scaleMax=null;scaleWindow="";drawMarketChart();}
 function updateCandles(c){if(!Array.isArray(c))return;const oldLength=candleData.length,wasFollowing=followLive,distanceFromEnd=Math.max(0,oldLength-viewEnd);candleData=c.filter(x=>[x.time,x.open,x.high,x.low,x.close].every(Number.isFinite)).sort((a,b)=>a.time-b.time).slice();viewEnd=wasFollowing?candleData.length:Math.max(Math.min(viewCount,candleData.length),Math.min(candleData.length,viewEnd));scaleMin=null;scaleMax=null;scaleWindow="";drawMarketChart();}
 function addCandle(c){if(!c||![c.time,c.open,c.high,c.low,c.close].every(Number.isFinite))return;const last=candleData[candleData.length-1];if(last&&last.time===c.time)candleData[candleData.length-1]=c;else{candleData.push(c);}if(followLive)viewEnd=candleData.length;else viewEnd=Math.min(viewEnd,candleData.length);drawMarketChart();}
-function setBacktestTrades(trades){backtestTradeData=Array.isArray(trades)?trades.slice():[];drawMarketChart();}
+function setChartBacktestTrades(trades){backtestTradeData=Array.isArray(trades)?trades.slice():[];drawMarketChart();}
 function setStructureOverlay(data){structureOverlay=data||{items:[],projection:null};drawMarketChart();}
 function toHeikinAshi(candles){
  let previousOpen=null,previousClose=null;
@@ -138,8 +138,6 @@ function renderMarketChart(){
   const ix=idx<0?data.length-1:idx,ex=endIdx<0?data.length-1:endIdx;
   const x1=left+step*(ix+.5),x2=left+step*(Math.max(ix,ex)+.5);
   const yEntry=yOf(t.entry),yStop=yOf(t.sl),exitPrice=Number(t.price),yExit=Number.isFinite(exitPrice)?yOf(exitPrice):yOf(t.tp2);
-  ctx.fillStyle="rgba(255,83,100,.14)";ctx.fillRect(x1,Math.min(yEntry,yStop),Math.max(3,x2-x1),Math.abs(yEntry-yStop));
-  if(t.result==="GANADA"){ctx.fillStyle="rgba(32,201,151,.14)";ctx.fillRect(x1,Math.min(yEntry,yExit),Math.max(3,x2-x1),Math.abs(yEntry-yExit));}
   ctx.lineWidth=1.3;ctx.setLineDash([4,3]);
   ctx.strokeStyle="#ff5364";ctx.beginPath();ctx.moveTo(x1,yStop);ctx.lineTo(x2,yStop);ctx.stroke();
   ctx.strokeStyle="#48a8ff";ctx.beginPath();ctx.moveTo(x1,yEntry);ctx.lineTo(x2,yEntry);ctx.stroke();
@@ -155,8 +153,8 @@ function renderMarketChart(){
   const tp1=Number(t.tp1);
   if(Number.isFinite(tp1)){
    const yTp1=yOf(tp1);
-   ctx.strokeStyle="rgba(245,196,81,.42)";ctx.setLineDash([3,4]);ctx.beginPath();ctx.moveTo(x1,yTp1);ctx.lineTo(Math.max(x1+12,x2),yTp1);ctx.stroke();ctx.setLineDash([]);
-   label("TP1 "+tp1.toPrecision(7),Math.min(w-right-130,x1+5),yTp1-5,"#f5d98a");
+   ctx.strokeStyle="rgba(32,201,151,.48)";ctx.setLineDash([3,4]);ctx.beginPath();ctx.moveTo(x1,yTp1);ctx.lineTo(Math.max(x1+12,x2),yTp1);ctx.stroke();ctx.setLineDash([]);
+   label("TP1 "+tp1.toPrecision(7),Math.min(w-right-130,x1+5),yTp1-5,"#8de8c8");
   }
   if(t.exitTime&&Number.isFinite(exitPrice)){
    const won=t.result==="GANADA";dot(x2,yExit,won?"#20c997":"#ff5364");
