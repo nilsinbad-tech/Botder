@@ -87,9 +87,9 @@ function structureAt(d,i,x){
  const op=pivotsAt(od.candles,oi-2),lp=pivotsAt(ld.candles,li-2),z=getZones(od.candles,oi),pools=activeLiquidityPools(ld.candles,li-2,lp),piv=pivotsAt(d,i-2),ann=[];
  const mark=(type,price,label,side,time=c.time)=>{if(Number.isFinite(price))ann.push({type,price,label,side,time});};
  piv.highs.slice(-8).forEach(p=>mark("pivot",p.price,"PIVOTE ALTO","",d[p.i].time));piv.lows.slice(-8).forEach(p=>mark("pivot",p.price,"PIVOTE BAJO","",d[p.i].time));
- op.highs.slice(-6).forEach(p=>mark("pivot",p.price,"PIVOTE OB ALTO","",od.candles[p.i].time));op.lows.slice(-6).forEach(p=>mark("pivot",p.price,"PIVOTE OB BAJO","",od.candles[p.i].time));
- pools.bslLevels.forEach((p,n)=>mark("liquidity",p.price,"LIQUIDEZ BSL "+(n+1),"",ld.candles[p.i].time));pools.sslLevels.forEach((p,n)=>mark("liquidity",p.price,"LIQUIDEZ SSL "+(n+1),"",ld.candles[p.i].time));
- ["BUY","SELL"].forEach(side=>{const v=z.ob.filter(v=>v.side===side).at(-1);if(v){mark("ob",v.low,"OB "+side,v.side,od.candles[v.i].time);mark("ob",v.high,"",v.side,od.candles[v.i].time);}});
+ op.highs.slice(-6).forEach(p=>mark("pivot",p.price,"PIVOTE OB ALTO","",d[od.map[p.i]]?.time??c.time));op.lows.slice(-6).forEach(p=>mark("pivot",p.price,"PIVOTE OB BAJO","",d[od.map[p.i]]?.time??c.time));
+ pools.bslLevels.forEach((p,n)=>mark("liquidity",p.price,"LIQUIDEZ BSL "+(n+1),"",d[ld.map[p.i]]?.time??c.time));pools.sslLevels.forEach((p,n)=>mark("liquidity",p.price,"LIQUIDEZ SSL "+(n+1),"",d[ld.map[p.i]]?.time??c.time));
+ ["BUY","SELL"].forEach(side=>{const v=z.ob.filter(v=>v.side===side).at(-1);if(v){const time=d[od.map[v.i]]?.time??c.time;mark("ob",v.low,"OB "+side,v.side,time);mark("ob",v.high,"",v.side,time);}});
  const crossBuy=x.e9[i]>x.e20[i]&&x.e9[i-1]<=x.e20[i-1],crossSell=x.e9[i]<x.e20[i]&&x.e9[i-1]>=x.e20[i-1];
  const obBuy=z.ob.filter(v=>v.side==="BUY"&&c.low<=v.high&&c.close>=v.low).at(-1),obSell=z.ob.filter(v=>v.side==="SELL"&&c.high>=v.low&&c.close<=v.high).at(-1),buy=!!obBuy&&crossBuy,sell=!!obSell&&crossSell;let signal=null;
  if(buy||sell){const isBuy=buy,direction=isBuy?"COMPRAR":"VENDER",entry=c.close,targets=(isBuy?pools.bslLevels:pools.sslLevels).filter(p=>isBuy?p.price>entry:p.price<entry).sort((a,b)=>isBuy?a.price-b.price:b.price-a.price),stop=(isBuy?pools.sslLevels:pools.bslLevels).filter(p=>isBuy?p.price<entry:p.price>entry).sort((a,b)=>isBuy?b.price-a.price:a.price-b.price)[0],sl=stop?.price,tp1=targets[0]?.price,tp2=targets[1]?.price;
@@ -154,3 +154,6 @@ function setAnalysisGranularity(){analysisGranularity=60;}
 function setBacktestHistory(symbol,market,candles){if(!candles?.length)return;m1Candles=candles.slice();runBacktest(symbol,market,m1Candles);}
 function updateBacktestTick(epoch,price){if(!Number.isFinite(epoch)||!Number.isFinite(price)||!m1Candles.length)return;let bucket=Math.floor(epoch/60)*60,last=m1Candles.at(-1);if(last&&last.time===bucket)m1Candles[m1Candles.length-1]={...last,high:Math.max(last.high,price),low:Math.min(last.low,price),close:price};else if(!last||bucket>last.time){m1Candles.push({time:bucket,open:price,high:price,low:price,close:price});runBacktest(backtestSymbol||selectedMarket?.symbol,selectedMarket?.name||"",m1Candles);}}
 document.addEventListener("DOMContentLoaded",()=>{if(typeof createMarketChart==="function")createMarketChart();updateDailyPanel();setInterval(updateDailyPanel,1000);});
+
+// EMA display switches redraw immediately; calculations and signals remain active.
+document.addEventListener("DOMContentLoaded",()=>{[9,20,50].forEach(period=>{const el=document.getElementById("show-ema"+period);if(el)el.addEventListener("change",()=>{if(typeof drawMarketChart==="function")drawMarketChart();});});});
