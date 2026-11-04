@@ -39,14 +39,14 @@ function createMarketChart(containerId="chart-area"){
    if(pinchStart>0){
     viewCount=Math.max(15,Math.min(5000,Math.round(pinchCount*pinchStart/Math.max(1,dist))));
     const visible=Math.min(viewCount,candleData.length);
-    viewEnd=Math.max(visible,Math.min(candleData.length,Math.round(pinchAnchorIndex+(1-pinchAnchorRatio)*visible)));
+    viewEnd=Math.max(visible,Math.min(candleData.length+viewCount-1,Math.round(pinchAnchorIndex+(1-pinchAnchorRatio)*visible)));
    }
    drawMarketChart();return;
   }
   if(dragX===null)return;
   const step=(chartCanvas.parentElement.clientWidth-76)/Math.max(1,Math.min(viewCount,candleData.length));
   const shift=Math.round((dragX-e.clientX)/Math.max(1,step));
-  viewEnd=Math.max(Math.min(viewCount,candleData.length),Math.min(candleData.length,dragEnd+shift));
+  viewEnd=Math.max(Math.min(viewCount,candleData.length),Math.min(candleData.length+viewCount-1,dragEnd+shift));
   drawMarketChart();
  });
  const endDrag=e=>{
@@ -59,14 +59,14 @@ function createMarketChart(containerId="chart-area"){
  chartCanvas.addEventListener("pointerup",endDrag);
  chartCanvas.addEventListener("pointercancel",endDrag);
  chartCanvas.addEventListener("lostpointercapture",endDrag);
- chartCanvas.addEventListener("wheel",e=>{e.preventDefault();const rect=chartCanvas.getBoundingClientRect(),ratio=Math.max(0,Math.min(1,(e.clientX-rect.left-10)/Math.max(1,rect.width-76))),end=Math.max(0,Math.min(candleData.length,viewEnd||candleData.length)),oldCount=Math.min(viewCount,end),anchor=Math.max(0,end-oldCount)+ratio*oldCount;viewCount=Math.max(15,Math.min(5000,Math.round(viewCount*(e.deltaY>0?1.2:.82))));const next=Math.min(viewCount,candleData.length);viewEnd=Math.max(next,Math.min(candleData.length,Math.round(anchor+(1-ratio)*next)));drawMarketChart();},{passive:false});
+ chartCanvas.addEventListener("wheel",e=>{e.preventDefault();const rect=chartCanvas.getBoundingClientRect(),ratio=Math.max(0,Math.min(1,(e.clientX-rect.left-10)/Math.max(1,rect.width-76))),end=Math.max(0,Math.min(candleData.length+viewCount-1,viewEnd||candleData.length)),oldCount=Math.min(viewCount,candleData.length),anchor=Math.max(0,end-oldCount)+ratio*oldCount;viewCount=Math.max(15,Math.min(5000,Math.round(viewCount*(e.deltaY>0?1.2:.82))));const next=Math.min(viewCount,candleData.length);viewEnd=Math.max(next,Math.min(candleData.length+viewCount-1,Math.round(anchor+(1-ratio)*next)));drawMarketChart();},{passive:false});
  resizeMarketChart();drawMarketChart();return true;
 }
 function resizeMarketChart(){if(!chartCanvas||!chartContext)return;const host=chartCanvas.parentElement;if(!host)return;const r=host.getBoundingClientRect(),dpr=Math.min(devicePixelRatio||1,2);chartCanvas.width=Math.max(1,Math.floor(r.width*dpr));chartCanvas.height=Math.max(1,Math.floor(r.height*dpr));chartContext.setTransform(dpr,0,0,dpr,0,0);drawMarketChart();}
 function setChartSymbol(s){chartSymbol=s;candleData=[];tradeLevels=[];signalMarker=null;followLive=true;viewEnd=0;viewCount=100;scaleMin=null;scaleMax=null;scaleWindow="";drawMarketChart();}
 function setChartGranularity(seconds){chartGranularity=Number(seconds)||60;scaleMin=null;scaleMax=null;scaleWindow="";drawMarketChart();}
-function updateCandles(c){if(!Array.isArray(c))return;const oldLength=candleData.length,wasFollowing=followLive,distanceFromEnd=Math.max(0,oldLength-viewEnd);candleData=c.filter(x=>[x.time,x.open,x.high,x.low,x.close].every(Number.isFinite)).sort((a,b)=>a.time-b.time).slice();viewEnd=wasFollowing?candleData.length:Math.max(Math.min(viewCount,candleData.length),Math.min(candleData.length,viewEnd));scaleMin=null;scaleMax=null;scaleWindow="";drawMarketChart();}
-function addCandle(c){if(!c||![c.time,c.open,c.high,c.low,c.close].every(Number.isFinite))return;const last=candleData[candleData.length-1];if(last&&last.time===c.time)candleData[candleData.length-1]=c;else{candleData.push(c);}if(followLive)viewEnd=candleData.length;else viewEnd=Math.min(viewEnd,candleData.length);drawMarketChart();}
+function updateCandles(c){if(!Array.isArray(c))return;const oldLength=candleData.length,wasFollowing=followLive,distanceFromEnd=Math.max(0,oldLength-viewEnd);candleData=c.filter(x=>[x.time,x.open,x.high,x.low,x.close].every(Number.isFinite)).sort((a,b)=>a.time-b.time).slice();viewEnd=wasFollowing?candleData.length:Math.max(Math.min(viewCount,candleData.length),Math.min(candleData.length+viewCount-1,viewEnd));scaleMin=null;scaleMax=null;scaleWindow="";drawMarketChart();}
+function addCandle(c){if(!c||![c.time,c.open,c.high,c.low,c.close].every(Number.isFinite))return;const oldLength=candleData.length,last=candleData[oldLength-1];if(last&&last.time===c.time)candleData[oldLength-1]=c;else candleData.push(c);if(followLive)viewEnd=candleData.length;else if(candleData.length>oldLength)viewEnd=Math.min(candleData.length+viewCount-1,viewEnd+1);drawMarketChart();}
 function setChartBacktestTrades(trades){backtestTradeData=Array.isArray(trades)?trades.slice():[];drawMarketChart();}
 function setStructureOverlay(data){const hiddenTypes=new Set(["choch","pivot","sweep"]);structureOverlay={...(data||{}),items:Array.isArray(data?.items)?data.items.filter(a=>{const type=String(a.type||"").toLowerCase(),side=String(a.side||"").toUpperCase(),label=String(a.label||"").toUpperCase();return !hiddenTypes.has(type)&&!(type==="bos"&&(side==="BEAR"||label.includes("BEAR")));}):[],projection:data?.projection||null};drawMarketChart();}
 function toHeikinAshi(candles){
@@ -90,7 +90,7 @@ function renderMarketChart(){
  ctx.font="10px Arial";ctx.strokeStyle="#26364b";ctx.lineWidth=1;
  for(let i=0;i<=4;i++){let y=top+ph*i/4;ctx.beginPath();ctx.moveTo(left,y);ctx.lineTo(w-right,y);ctx.stroke();}
  if(!candleData.length){ctx.fillStyle="#8495aa";ctx.textAlign="center";ctx.font="12px Arial";ctx.fillText("Esperando datos reales del mercado...",w/2,h/2);return;}
- const end=Math.max(0,Math.min(candleData.length,viewEnd||candleData.length)),start=Math.max(0,end-viewCount),raw=candleData.slice(0,end),data=(candleStyle==="heikin"?toHeikinAshi(raw):raw).slice(start,end);
+ const end=Math.max(0,Math.min(candleData.length+viewCount-1,viewEnd||candleData.length)),start=Math.max(0,end-viewCount),raw=candleData.slice(0,Math.min(candleData.length,end)),data=(candleStyle==="heikin"?toHeikinAshi(raw):raw).slice(start,end);
  if(!data.length)return;const windowKey=start+":"+end+":"+viewCount;let lows=data.map(c=>c.low),highs=data.map(c=>c.high);const visibleStart=data[0].time,visibleEnd=data[data.length-1].time;const visibleTrades=backtestTradeData.filter(t=>{const et=Number(t.entryTime)/1000,xt=Number(t.exitTime||Date.now())/1000;return Number.isFinite(et)&&et<=visibleEnd&&xt>=visibleStart;});visibleTrades.forEach(t=>[t.entry,t.sl,t.tp1,t.tp2,t.price].forEach(v=>{v=Number(v);if(Number.isFinite(v)){lows.push(v);highs.push(v);}}));const candleMin=Math.min(...data.map(c=>c.low)),candleMax=Math.max(...data.map(c=>c.high));tradeLevels.forEach(x=>{if(Number.isFinite(x.value)&&x.value>=candleMin-(candleMax-candleMin)*.25&&x.value<=candleMax+(candleMax-candleMin)*.25){lows.push(x.value);highs.push(x.value);}});
  const scaleItems=(structureOverlay.items||[]).filter(a=>Number.isFinite(a.price)&&a.time<=visibleEnd),scaleZones=new Map();scaleItems.filter(a=>a.type==="ob"||a.type==="fvg").forEach(a=>{const k=a.type+"|"+a.time+"|"+a.side;if(!scaleZones.has(k))scaleZones.set(k,[]);scaleZones.get(k).push(a);});const recentScaleZones=[...scaleZones.values()].filter(g=>g.length>=2).sort((a,b)=>a[0].time-b[0].time).slice(-24).flat();const visibleAnnotationsForScale=scaleItems.filter(a=>a.time>=visibleStart&&a.type!=="ob"&&a.type!=="fvg").concat(recentScaleZones);visibleAnnotationsForScale.forEach(a=>{lows.push(a.price);highs.push(a.price);});const rawMin=Math.min(...lows),rawMax=Math.max(...highs);
  if(scaleWindow!==windowKey||scaleMin===null||scaleMax===null){const pad=(rawMax-rawMin)*.08||Math.abs(rawMax)*.0001||1;scaleMin=rawMin-pad;scaleMax=rawMax+pad;scaleWindow=windowKey;}else{const span=scaleMax-scaleMin,pad=span*.08;if(rawMin<scaleMin+pad)scaleMin=rawMin-pad;if(rawMax>scaleMax-pad)scaleMax=rawMax+pad;}
