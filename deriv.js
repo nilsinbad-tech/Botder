@@ -1,6 +1,6 @@
 const DERIV_CONFIG = { endpoint: "wss://api.derivws.com/trading/v1/options/ws/public" };
 let derivSocket = null, availableSymbols = [], selectedSymbol = null;
-let candleBuffer = [], higherTfBuffers={3600:[],14400:[],86400:[]}, tickSubId = null, candleSubId = null, reconnectTimer = null, symbolsTimer = null, selectedGranularity = 60, lastTickAt = 0, lastTickResubscribeAt = 0;
+let candleBuffer = [], higherTfBuffers={1800:[],3600:[],14400:[],86400:[]}, tickSubId = null, candleSubId = null, reconnectTimer = null, symbolsTimer = null, selectedGranularity = 60, lastTickAt = 0, lastTickResubscribeAt = 0;
 
 function getHigherTimeframeHistory(seconds){return higherTfBuffers[Number(seconds)]||[];}
 function getDisplayCandles(seconds){const base=aggregateForDisplay(candleBuffer,seconds);if(seconds<3600)return base;const history=higherTfBuffers[seconds]||[];if(!history.length)return base;const live=base.at(-1);if(!live)return history.slice();const out=history.filter(c=>c.time!==live.time);out.push(live);return out.sort((a,b)=>a.time-b.time);}
@@ -51,7 +51,7 @@ function connectDeriv() {
       showApiDiagnostic("Deriv respondió: " + received.length + " símbolos. Buscando índices Volatility...");
       renderMarkets(received);
     }
-    if([13,14,15].includes(data.req_id)&&selectedSymbol&&responseSymbol(data)===selectedSymbol&&(data.msg_type==="history"||data.msg_type==="candles")){const seconds=data.req_id===13?3600:data.req_id===14?14400:86400,rows=data.candles||data.history?.candles||[],parsed=rows.map(c=>({time:Number(c.epoch??c.open_time),open:Number(c.open),high:Number(c.high),low:Number(c.low),close:Number(c.close)})).filter(c=>[c.time,c.open,c.high,c.low,c.close].every(Number.isFinite));if(parsed.length){higherTfBuffers[seconds]=parsed.sort((a,b)=>a.time-b.time);if(selectedGranularity===seconds&&typeof updateCandles==="function")updateCandles(getDisplayCandles(seconds));if(typeof analyzeCandles==="function"&&candleBuffer.length>=100)analyzeCandles(selectedSymbol,selectedMarketName(),candleBuffer);showApiDiagnostic("Historial HTF cargado · "+(seconds===3600?"H1":seconds===14400?"H4":"D1")+" · "+parsed.length+" velas.");}}
+    if([13,14,15,16].includes(data.req_id)&&selectedSymbol&&responseSymbol(data)===selectedSymbol&&(data.msg_type==="history"||data.msg_type==="candles")){const seconds=({13:3600,14:14400,15:86400,16:1800})[data.req_id],rows=data.candles||data.history?.candles||[],parsed=rows.map(c=>({time:Number(c.epoch??c.open_time),open:Number(c.open),high:Number(c.high),low:Number(c.low),close:Number(c.close)})).filter(c=>[c.time,c.open,c.high,c.low,c.close].every(Number.isFinite));if(parsed.length){higherTfBuffers[seconds]=parsed.sort((a,b)=>a.time-b.time);if(selectedGranularity===seconds&&typeof updateCandles==="function")updateCandles(getDisplayCandles(seconds));if(typeof analyzeCandles==="function"&&candleBuffer.length>=100)analyzeCandles(selectedSymbol,selectedMarketName(),candleBuffer);showApiDiagnostic("Historial HTF cargado · "+(seconds===1800?"M30":seconds===3600?"H1":seconds===14400?"H4":"D1")+" · "+parsed.length+" velas.");}}
     if (data.req_id === 12 && selectedSymbol && responseSymbol(data)===selectedSymbol && (data.msg_type === "history" || data.msg_type === "candles")) {
       const history = data.history || {};
       let historical = [];
@@ -78,7 +78,7 @@ function connectDeriv() {
         showApiDiagnostic("Respuesta de historial recibida sin datos de velas. Tipo: " + data.msg_type + ".");
       }
     }
-    if (data.msg_type === "candles" && responseSymbol(data) === selectedSymbol && ![12,13,14,15].includes(data.req_id)) {
+    if (data.msg_type === "candles" && responseSymbol(data) === selectedSymbol && ![12,13,14,15,16].includes(data.req_id)) {
       candleBuffer = (data.candles || []).map(c => ({ time: Number(c.epoch), open: Number(c.open), high: Number(c.high), low: Number(c.low), close: Number(c.close) }));
       if (typeof updateCandles === "function") updateCandles(candleBuffer);
       if (typeof analyzeCandles === "function") analyzeCandles(selectedSymbol, selectedMarketName(), candleBuffer);
@@ -194,7 +194,7 @@ function loadMarketHistory(symbol, granularity = selectedGranularity) {
     sendDeriv({ ticks_history: symbol, count: 5000, end: "latest", style: "ticks", req_id: 12 });
     showChartMessage("Construyendo velas de 30 segundos desde ticks de Deriv...");
   } else {
-    sendDeriv({ ticks_history: symbol, count: 5000, end: "latest", style: "candles", granularity: 60, req_id: 12 });sendDeriv({ticks_history:symbol,count:5000,end:"latest",style:"candles",granularity:3600,req_id:13});sendDeriv({ticks_history:symbol,count:5000,end:"latest",style:"candles",granularity:14400,req_id:14});sendDeriv({ticks_history:symbol,count:1000,end:"latest",style:"candles",granularity:86400,req_id:15});
+    sendDeriv({ticks_history:symbol,count:5000,end:"latest",style:"candles",granularity:60,req_id:12});sendDeriv({ticks_history:symbol,count:5000,end:"latest",style:"candles",granularity:1800,req_id:16});sendDeriv({ticks_history:symbol,count:5000,end:"latest",style:"candles",granularity:3600,req_id:13});sendDeriv({ticks_history:symbol,count:5000,end:"latest",style:"candles",granularity:14400,req_id:14});sendDeriv({ticks_history:symbol,count:1000,end:"latest",style:"candles",granularity:86400,req_id:15});
     // El historial M1 de 5000 velas se carga en una sola respuesta; los ticks actualizan la vela viva sin reemplazarlo por un bloque corto.
     showChartMessage("Cargando historial · " + (selectedGranularity/60) + " min...");
   }
@@ -202,7 +202,7 @@ function loadMarketHistory(symbol, granularity = selectedGranularity) {
 function openMarket(symbol) {
   if (!symbol || !sendDeriv({ forget_all: "ticks" })) { /* socket may still be connecting */ }
   if (!derivSocket || derivSocket.readyState !== WebSocket.OPEN) return;
-  selectedSymbol = symbol; candleBuffer = []; higherTfBuffers={3600:[],14400:[],86400:[]}; tickSubId = null; candleSubId = null; lastTickAt = 0; lastTickResubscribeAt = 0;
+  selectedSymbol = symbol; candleBuffer = []; higherTfBuffers={1800:[],3600:[],14400:[],86400:[]}; tickSubId = null; candleSubId = null; lastTickAt = 0; lastTickResubscribeAt = 0;
   sendDeriv({ forget_all: "candles" });
   sendDeriv({ forget_all: "ticks" });
   if (typeof setChartSymbol === "function") setChartSymbol(symbol);
