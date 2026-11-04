@@ -122,14 +122,14 @@ function setBacktestTrades(trades){backtestTradeData=Array.isArray(trades)?trade
 function runStructuralBacktest(symbol,market,candles,displayTf){
  if(!Array.isArray(candles)||candles.length<180)return[];
  const d=candles.slice().sort((x,y)=>x.time-y.time),from=Math.max(150,d.length-2880),trades=[];let nextFree=from;
- const stride=2;
+ const stride=1;
  for(let i=from;i<d.length-4;i+=stride){
   if(i<nextFree)continue;
   const prefix=d.slice(Math.max(0,i-499),i+1),cutoff=prefix.at(-1).time;
   const before=seconds=>((higherTfBuffers&&higherTfBuffers[seconds])||[]).filter(v=>v.time<=cutoff);
   const h4=before(14400).length?before(14400):candlesAtTf(prefix,14400),m30=before(1800).length?before(1800):candlesAtTf(prefix,1800),h1=before(3600).length?before(3600):candlesAtTf(prefix,3600),d1=before(86400);
   const target=Number(displayTf)>=300&&Number(displayTf)<1800?m30:h1;
-  const plan=buildStructuralPlan(prefix,displayTf,{h4,m30,d1,target});
+  const plan=buildStructuralPlan(prefix,displayTf,{h4,m30,h1,d1,target});
   if(!plan.signal)continue;
   const s=plan.signal;let result="ABIERTA",price=s.entry,exitTime=null,exitIndex=-1;
   for(let j=i+1;j<d.length;j++){
@@ -258,12 +258,17 @@ function backstepSafe(v){return v;}
 function detectOrderBlocks(source,side){const found=[];for(let i=Math.max(1,source.length-180);i<source.length-1;i++){const c=source[i],next=source.slice(i+1,Math.min(source.length,i+5));if(side==="BUY"&&c.close<c.open&&next.some(n=>n.close>c.high)&&next.some(n=>n.close>n.open))found.push({side,low:c.low,high:Math.max(c.open,c.close),time:c.time});if(side==="SELL"&&c.close>c.open&&next.some(n=>n.close<c.low)&&next.some(n=>n.close<n.open))found.push({side,low:Math.min(c.open,c.close),high:c.high,time:c.time});}return found.filter((z,i,a)=>a.findIndex(v=>v.time===z.time)===i);}
 function latestObBias(source){const all=[...detectOrderBlocks(source,"BUY"),...detectOrderBlocks(source,"SELL")].sort((a,b)=>a.time-b.time);return all.length?all.at(-1).side:null;}
 function buildStructuralPlan(m1,displayTf,historyContext=null){
- const h4=historyContext?.h4||((getHigherTimeframeHistory(14400)||[]).length?getHigherTimeframeHistory(14400):candlesAtTf(m1,14400));
- const m30=historyContext?.m30||((getHigherTimeframeHistory(1800)||[]).length?getHigherTimeframeHistory(1800):candlesAtTf(m1,1800));
+ const cutoff=Number(m1.at(-1)?.time)||Infinity;
+ const closedHistory=(rows,seconds)=>(Array.isArray(rows)?rows:[]).filter(c=>Number(c.time)+seconds<=cutoff);
+ const rawH4=historyContext?.h4||getHigherTimeframeHistory(14400)||[],rawM30=historyContext?.m30||getHigherTimeframeHistory(1800)||[];
+ const h4Closed=closedHistory(rawH4,14400),m30Closed=closedHistory(rawM30,1800);
+ const h4=h4Closed.length>=22?h4Closed:rawH4,m30=m30Closed.length>=22?m30Closed:rawM30;
  const d1=historyContext?.d1||getHigherTimeframeHistory(86400)||[],biasD1=latestObBias(d1),bias4=latestObBias(h4),bias30=latestObBias(m30);
  const lines=[],items=[],activeTf=Number(displayTf)||60;
- // La estructura del gráfico se calcula exclusivamente con velas de su propia temporalidad.
- const activeSource=activeTf===14400?h4:activeTf===3600?((getHigherTimeframeHistory(3600)||[]).length?getHigherTimeframeHistory(3600):candlesAtTf(m1,3600)):candlesAtTf(m1,activeTf);
+ // Cada gráfico usa su propio historial cerrado; los TF menores se agregan desde M1.
+ const h1Raw=historyContext?.h1||getHigherTimeframeHistory(3600)||[],h1Closed=closedHistory(h1Raw,3600);
+ const m30Source=m30Closed.length>=22?m30Closed:candlesAtTf(m1,1800);
+ const activeSource=activeTf===14400?h4:activeTf===3600?(h1Closed.length>=22?h1Closed:candlesAtTf(m1,3600)):activeTf===1800?m30Source:candlesAtTf(m1,activeTf);
  const tfLabel=activeTf>=3600?"H"+activeTf/3600:"M"+activeTf/60;
  const candidate=findDiagonalStructure(activeSource,activeTf,tfLabel);
  const push=s=>{if(!s)return;for(const [n,l] of [s.line1,s.line2].entries())lines.push({...l,side:s.side,primary:n===0,label:n===0?s.tf+" · "+(s.side==="BUY"?"SOPORTE / COMPRA":"RESISTENCIA / VENTA"):"",touches:(l.touches||[]).map(t=>n===0?{...t}:{time:t.time,price:t.price}),projectPrice1:n===0?s.projectPrice1:s.projectPrice2,projectPrice2:n===0?s.projectPrice1:s.projectPrice2,projectTime:s.projectTime});};
