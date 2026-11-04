@@ -1,6 +1,6 @@
 const DERIV_CONFIG = { endpoint: "wss://api.derivws.com/trading/v1/options/ws/public" };
 let derivSocket = null, availableSymbols = [], selectedSymbol = null;
-let candleBuffer = [], tickSubId = null, candleSubId = null, reconnectTimer = null, symbolsTimer = null, selectedGranularity = 60;
+let candleBuffer = [], tickSubId = null, candleSubId = null, reconnectTimer = null, symbolsTimer = null, selectedGranularity = 60, lastTickAt = 0, lastTickResubscribeAt = 0;
 
 function responseSymbol(data) { const q=data && data.echo_req || {}; const value=q.ticks_history||q.ticks||q.symbol||data?.tick?.symbol||data?.ohlc?.symbol||null; return Array.isArray(value)?value[0]:value; }
 function sendDeriv(data) {
@@ -86,17 +86,17 @@ function connectDeriv() {
       if (candleBuffer.length && candleBuffer[candleBuffer.length - 1].time === candle.time) candleBuffer[candleBuffer.length - 1] = candle;
       else candleBuffer.push(candle);
       if (typeof addCandle === "function") addCandle(candle);
-      const priceEl = document.getElementById("current-price"); if (priceEl) priceEl.textContent = candle.close.toFixed(4);
+      // El precio visible lo controla exclusivamente el flujo tick; no permitir que una vela histórica lo retrase.
       if (typeof analyzeCandles === "function") analyzeCandles(selectedSymbol, selectedMarketName(), candleBuffer);
     }
     if (data.msg_type === "tick" && data.tick) {
       const price = Number(data.tick.quote), epoch = Number(data.tick.epoch), tickSymbol = data.tick.symbol || responseSymbol(data);
-      if (tickSymbol && tickSymbol !== selectedSymbol) return;
+      if (!selectedSymbol || (tickSymbol && tickSymbol !== selectedSymbol)) return;
       const el = document.getElementById("current-price");
       if (el && Number.isFinite(price)) {
         const decimals = Number.isInteger(Number(data.tick.pip_size)) ? Number(data.tick.pip_size) : (String(data.tick.quote).split(".")[1] || "").length;
         el.textContent = price.toFixed(Math.max(0,Math.min(8,decimals)));
-        el.dataset.updatedAt = String(epoch);
+        el.dataset.updatedAt = String(epoch); el.dataset.receivedAt = String(Date.now()); lastTickAt = Date.now(); tickSubId = data.subscription?.id || tickSubId; if (typeof setLiveChartPrice === "function") setLiveChartPrice(price);
       }
       if (Number.isFinite(price) && Number.isFinite(epoch) && selectedSymbol) {
         updateOperationPrice(selectedSymbol, price);
@@ -195,13 +195,13 @@ function loadMarketHistory(symbol, granularity = selectedGranularity) {
 function openMarket(symbol) {
   if (!symbol || !sendDeriv({ forget_all: "ticks" })) { /* socket may still be connecting */ }
   if (!derivSocket || derivSocket.readyState !== WebSocket.OPEN) return;
-  selectedSymbol = symbol; candleBuffer = []; tickSubId = null; candleSubId = null;
+  selectedSymbol = symbol; candleBuffer = []; tickSubId = null; candleSubId = null; lastTickAt = 0; lastTickResubscribeAt = 0;
   sendDeriv({ forget_all: "candles" });
   sendDeriv({ forget_all: "ticks" });
   if (typeof setChartSymbol === "function") setChartSymbol(symbol);
   const price = document.getElementById("current-price"); if (price) price.textContent = "---";
   loadMarketHistory(symbol, selectedGranularity);
-  sendDeriv({ ticks: symbol, subscribe: 1, req_id: 11 });
+  sendDeriv({ ticks: symbol, subscribe: 1, req_id: 11 }); lastTickResubscribeAt = Date.now();
   showChartMessage("Solicitando gráfico y precio en vivo...");
 }
 function getAvailableSymbols() { return availableSymbols; }
@@ -212,3 +212,6 @@ document.addEventListener("DOMContentLoaded", () => {
   const style=document.getElementById("candle-style");if(style)style.addEventListener("change",()=>{if(typeof setCandleStyle==="function")setCandleStyle(style.value);});
 });
 connectDeriv();
+
+// Vigila la suscripción: si dejan de llegar ticks, la renueva sin recargar la página.
+setInterval(() => { if (!selectedSymbol || !derivSocket || derivSocket.readyState !== WebSocket.OPEN) return; const now=Date.now(); if (lastTickAt && now-lastTickAt<9000) return; if (now-lastTickResubscribeAt<9000) return; sendDeriv({ forget_all: "ticks" }); sendDeriv({ ticks: selectedSymbol, subscribe: 1, req_id: 11 }); lastTickResubscribeAt=now; showApiDiagnostic("Reactivando el flujo de precio en vivo…"); }, 3000);
