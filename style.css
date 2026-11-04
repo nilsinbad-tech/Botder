@@ -156,8 +156,8 @@ h1 span {
 
 #chart-area {
   width: 100%;
-  height: 340px;
-  min-height: 340px;
+  height: 680px;
+  min-height: 680px;
   position: relative;
   overflow: hidden;
 }
@@ -445,7 +445,7 @@ body{background:#050b14}
  .tf-caption{font-size:8px}
  .chart-toolbar{font-size:8px;gap:7px;padding:5px 2px}
  .chart-toolbar .dot{width:6px;height:6px}
- #chart-area{height:340px;min-height:300px}
+ #chart-area{height:680px;min-height:620px}
  .chart-legend{font-size:8px;gap:4px;padding:6px 0}
  .chart-legend span{padding:3px 5px}
  #structure-diagnostic{font-size:8px}
