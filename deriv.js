@@ -89,15 +89,16 @@ function connectDeriv() {
       const priceEl = document.getElementById("current-price"); if (priceEl) priceEl.textContent = candle.close.toFixed(4);
       if (typeof analyzeCandles === "function") analyzeCandles(selectedSymbol, selectedMarketName(), candleBuffer);
     }
-    if (data.msg_type === "tick" && responseSymbol(data) === selectedSymbol && data.tick) {
+    if (data.msg_type === "tick" && data.tick) {
       const price = Number(data.tick.quote), epoch = Number(data.tick.epoch), tickSymbol = data.tick.symbol || responseSymbol(data);
+      if (tickSymbol && tickSymbol !== selectedSymbol) return;
       const el = document.getElementById("current-price");
       if (el && Number.isFinite(price)) {
-        const decimals = (String(data.tick.quote).split(".")[1] || "").length;
-        el.textContent = price.toFixed(Math.min(8, decimals));
+        const decimals = Number.isInteger(Number(data.tick.pip_size)) ? Number(data.tick.pip_size) : (String(data.tick.quote).split(".")[1] || "").length;
+        el.textContent = price.toFixed(Math.max(0,Math.min(8,decimals)));
         el.dataset.updatedAt = String(epoch);
       }
-      if (Number.isFinite(price) && Number.isFinite(epoch) && selectedSymbol && (!tickSymbol || tickSymbol === selectedSymbol)) {
+      if (Number.isFinite(price) && Number.isFinite(epoch) && selectedSymbol) {
         updateOperationPrice(selectedSymbol, price);
         const interval = selectedGranularity, bucket = Math.floor(epoch / interval) * interval;
         let live = candleBuffer[candleBuffer.length - 1], candleClosed = false;
