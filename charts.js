@@ -108,7 +108,7 @@ function renderMarketChart(){
  const allAnnotations=(structureOverlay.items||[]).filter(a=>Number.isFinite(a.price)&&a.time<=visibleEnd);const visibleAnnotations=allAnnotations.filter(a=>a.time>=visibleStart);
  const recent=(type,n,side)=>visibleAnnotations.filter(a=>a.type===type&&(!side||a.side===side)).sort((a,b)=>a.time-b.time);
  const annotations=[
-  ...recent("pivot",2,"").filter(a=>a.label!=="PIVOTE ALTO"),...recent("liquidity",2,""),
+  ...recent("liquidity",2,""),
   ...recent("bos",2).filter(a=>a.side!=="BULL"),...recent("choch",2),...recent("sweep",2),...visibleAnnotations.filter(a=>a.type==="signal"),
   ...["BUY","SELL"].flatMap(side=>{const a=allAnnotations.filter(v=>v.type==="ob"&&v.side===side&&v.time>=visibleStart&&v.time<=visibleEnd).sort((u,v)=>u.time-v.time),groups=new Map();a.forEach(v=>{if(!groups.has(v.time))groups.set(v.time,[]);groups.get(v.time).push(v);});const valid=[...groups.values()].filter(g=>g.length>=2);return valid.slice(-2).flat();})
  ];
