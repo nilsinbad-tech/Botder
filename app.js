@@ -253,7 +253,7 @@ function analyzeLiveStructure(symbol,candles){
 /* Registro general de señales confirmadas: independiente de marcar ENTRÉ. */
 let strategyJournal=[];
 function saveStrategyJournal(){try{localStorage.setItem("botder-structure-journal",JSON.stringify(strategyJournal.slice(0,2000)));}catch(e){}}
-function loadStrategyJournal(){try{const v=JSON.parse(localStorage.getItem("botder-structure-journal")||"[]");if(Array.isArray(v))strategyJournal=v.slice(0,500);}catch(e){strategyJournal=[];}renderStrategyJournal();}
+function loadStrategyJournal(){try{const v=JSON.parse(localStorage.getItem("botder-structure-journal")||"[]");if(Array.isArray(v))strategyJournal=v.slice(0,2000);}catch(e){strategyJournal=[];}renderStrategyJournal();}
 function recordStrategyTrade(signal){
  if(!signal||strategyJournal.some(t=>t.symbol===signal.symbol&&t.entryTime===Number(signal.time)*1000&&t.direction===signal.direction))return;
  strategyJournal.unshift({id:"STR-"+Date.now().toString(36).toUpperCase(),symbol:signal.symbol,market:signal.market,direction:signal.direction,entry:Number(signal.entry),sl:Number(signal.sl),tp:Number(signal.tp1),timeframe:signal.timeframe||"",entryTime:Number(signal.time)*1000,result:"ABIERTA"});
