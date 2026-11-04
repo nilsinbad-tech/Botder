@@ -96,7 +96,7 @@ function setChartGranularity(seconds){const next=Number(seconds)||60;if(next!==c
 function updateCandles(c){if(!Array.isArray(c))return;const oldLength=candleData.length,wasFollowing=followLive,distanceFromEnd=Math.max(0,oldLength-viewEnd);candleData=c.filter(x=>[x.time,x.open,x.high,x.low,x.close].every(Number.isFinite)).sort((a,b)=>a.time-b.time).slice();viewEnd=wasFollowing||viewEnd<=0?candleData.length+futureSpace:Math.max(Math.min(viewCount,candleData.length),Math.min(candleData.length+viewCount-1,viewEnd));drawMarketChart();}
 function addCandle(c){if(!c||![c.time,c.open,c.high,c.low,c.close].every(Number.isFinite))return;const oldLength=candleData.length,last=candleData[oldLength-1];if(last&&last.time===c.time)candleData[oldLength-1]=c;else candleData.push(c);if(followLive)viewEnd=candleData.length+futureSpace;drawMarketChart();}
 function setChartBacktestTrades(trades){backtestTradeData=Array.isArray(trades)?trades.slice():[];drawMarketChart();}
-function setStructureOverlay(data){const hiddenTypes=new Set(["choch","sweep"]);structureOverlay={...(data||{}),items:Array.isArray(data?.items)?data.items.filter(a=>{const type=String(a.type||"").toLowerCase(),side=String(a.side||"").toUpperCase(),label=String(a.label||"").toUpperCase();return !hiddenTypes.has(type)&&!(type==="bos"&&(side==="BEAR"||label.includes("BEAR")))&&!(type==="ob"&&window.botderObVisibility?.[Number(a.tf)]===false);}):[],lines:Array.isArray(data?.lines)?data.lines:[],projection:data?.projection||null};drawMarketChart();}
+function setStructureOverlay(data){const hiddenTypes=new Set(["choch","sweep"]);structureOverlay={...(data||{}),items:Array.isArray(data?.items)?data.items.filter(a=>{const type=String(a.type||"").toLowerCase(),side=String(a.side||"").toUpperCase(),label=String(a.label||"").toUpperCase();return !hiddenTypes.has(type)&&!(type==="bos"&&(side==="BEAR"||label.includes("BEAR")));}):[],lines:Array.isArray(data?.lines)?data.lines:[],projection:data?.projection||null};drawMarketChart();}
 function toHeikinAshi(candles){
  let previousOpen=null,previousClose=null;
  return candles.map(c=>{
@@ -122,7 +122,7 @@ function renderMarketChart(){
  // Suaviza visualmente el movimiento de la vela abierta entre ticks reales, sin modificar el OHLC guardado.
  if(data.length&&Number.isFinite(liveVisualPrice)&&data[data.length-1].time===candleData[candleData.length-1]?.time){const last=data[data.length-1];data[data.length-1]={...last,close:liveVisualPrice,high:Math.max(last.high,liveVisualPrice),low:Math.min(last.low,liveVisualPrice)};}
  if(!data.length)return;const windowKey=start+":"+end+":"+viewCount;let lows=data.map(c=>c.low),highs=data.map(c=>c.high);const visibleStart=data[0].time,visibleEnd=data[data.length-1].time;const candleMin=Math.min(...data.map(c=>c.low)),candleMax=Math.max(...data.map(c=>c.high)),candleSpan=Math.max(candleMax-candleMin,Math.abs(candleMax)*1e-8),scaleRelevant=v=>Number.isFinite(Number(v))&&Number(v)>=candleMin-candleSpan*.15&&Number(v)<=candleMax+candleSpan*.15;const visibleTrades=backtestTradeData.filter(t=>{const et=Number(t.entryTime)/1000,xt=Number(t.exitTime||Date.now())/1000;return Number.isFinite(et)&&et<=visibleEnd&&xt>=visibleStart;});visibleTrades.forEach(t=>[t.entry,t.sl,t.tp1,t.tp2,t.price].filter(scaleRelevant).forEach(v=>{v=Number(v);lows.push(v);highs.push(v);}));if(Number.isFinite(liveChartPrice)){lows.push(liveChartPrice);highs.push(liveChartPrice);}tradeLevels.forEach(v=>{lows.push(v.value);highs.push(v.value);});
- const scaleItems=(structureOverlay.items||[]).filter(a=>Number.isFinite(a.price)&&a.time<=visibleEnd),scaleZones=new Map();scaleItems.filter(a=>a.type==="ob"||a.type==="fvg").forEach(a=>{const k=a.type+"|"+a.time+"|"+a.side;if(!scaleZones.has(k))scaleZones.set(k,[]);scaleZones.get(k).push(a);});const recentScaleZones=[...scaleZones.values()].filter(g=>g.length>=2&&g.some(v=>scaleRelevant(v.price))).sort((a,b)=>a[0].time-b[0].time).slice(-24).flat();const visibleAnnotationsForScale=scaleItems.filter(a=>a.time>=visibleStart&&a.type!=="ob"&&a.type!=="fvg").concat(recentScaleZones);visibleAnnotationsForScale.forEach(a=>{lows.push(a.price);highs.push(a.price);});const pp=structureOverlay.projection;if(pp){[pp.zoneLow,pp.zoneHigh,pp.entry,pp.tp1,pp.tp2,pp.sl].filter(scaleRelevant).forEach(v=>{lows.push(Number(v));highs.push(Number(v));});}const rawMin=Math.min(...lows),rawMax=Math.max(...highs);
+ const scaleItems=(structureOverlay.items||[]).filter(a=>Number.isFinite(a.price)&&a.time<=visibleEnd&&!(String(a.type).toLowerCase()==="ob"&&window.botderObVisibility?.[Number(a.tf)]===false)),scaleZones=new Map();scaleItems.filter(a=>a.type==="ob"||a.type==="fvg").forEach(a=>{const k=a.type+"|"+a.time+"|"+a.side;if(!scaleZones.has(k))scaleZones.set(k,[]);scaleZones.get(k).push(a);});const recentScaleZones=[...scaleZones.values()].filter(g=>g.length>=2&&g.some(v=>scaleRelevant(v.price))).sort((a,b)=>a[0].time-b[0].time).slice(-24).flat();const visibleAnnotationsForScale=scaleItems.filter(a=>a.time>=visibleStart&&a.type!=="ob"&&a.type!=="fvg").concat(recentScaleZones);visibleAnnotationsForScale.forEach(a=>{lows.push(a.price);highs.push(a.price);});const pp=structureOverlay.projection;if(pp){[pp.zoneLow,pp.zoneHigh,pp.entry,pp.tp1,pp.tp2,pp.sl].filter(scaleRelevant).forEach(v=>{lows.push(Number(v));highs.push(Number(v));});}const rawMin=Math.min(...lows),rawMax=Math.max(...highs);
  if(scaleMin===null||scaleMax===null||(scaleWindow!==windowKey&&scaleWindow!=="manual-pan")){const pad=(rawMax-rawMin)*.08||Math.abs(rawMax)*.0001||1;scaleMin=rawMin-pad;scaleMax=rawMax+pad;scaleWindow=windowKey;}else if(scaleWindow!=="manual-pan"){const span=scaleMax-scaleMin,pad=span*.08;if(rawMin<scaleMin+pad)scaleMin=rawMin-pad;if(rawMax>scaleMax-pad)scaleMax=rawMax+pad;}
  const min=scaleMin,max=scaleMax;
  const yOf=v=>top+(max-v)/(max-min)*ph;
@@ -132,7 +132,7 @@ function renderMarketChart(){
  // SMC overlays: pivots, liquidity, BOS/CHoCH, OB/FVG and projected zone.
 
  const tag=(txt,x,y,color)=>{if(!txt)return;ctx.font="7px Arial";ctx.textAlign="left";let tw=ctx.measureText(txt).width,tx=Math.max(left,Math.min(w-right-tw-8,x)),ty=Math.max(top+12,Math.min(h-bottom-2,y));ctx.fillStyle="rgba(8,13,22,.94)";ctx.fillRect(tx,ty-11,tw+8,15);ctx.fillStyle=color;ctx.fillText(txt,tx+4,ty);};
- const allAnnotations=(structureOverlay.items||[]).filter(a=>{const type=String(a.type||"").toLowerCase(),side=String(a.side||"").toUpperCase(),label=String(a.label||"").toUpperCase();return !["choch","sweep"].includes(type)&&!(type==="bos"&&(side==="BEAR"||label.includes("BEAR")))&&Number.isFinite(a.price)&&a.time<=visibleEnd;});const visibleAnnotations=allAnnotations.filter(a=>a.time>=visibleStart);
+ const allAnnotations=(structureOverlay.items||[]).filter(a=>{const type=String(a.type||"").toLowerCase(),side=String(a.side||"").toUpperCase(),label=String(a.label||"").toUpperCase();return !["choch","sweep"].includes(type)&&!(type==="bos"&&(side==="BEAR"||label.includes("BEAR")))&&Number.isFinite(a.price)&&a.time<=visibleEnd&&!(type==="ob"&&window.botderObVisibility?.[Number(a.tf)]===false);});const visibleAnnotations=allAnnotations.filter(a=>a.time>=visibleStart);
  const recent=(type,n,side)=>visibleAnnotations.filter(a=>a.type===type&&(!side||a.side===side)).sort((a,b)=>a.time-b.time);
  const annotations=[
   ...(()=>{const pools=visibleAnnotations.filter(a=>a.type==="liquidity"),chosen=[];for(const side of ["BSL","SSL"]){const candidates=pools.filter(a=>String(a.label).includes(side)).sort((a,b)=>b.time-a.time);const levels=[];for(const p of candidates){if(levels.every(q=>Math.abs(q.price-p.price)>Math.max(Math.abs(p.price)*0.00005,1e-8)))levels.push(p);if(levels.length>=5)break;}chosen.push(...levels);}return chosen;})(),
@@ -230,3 +230,18 @@ setInterval(()=>{if(candleData.length)drawMarketChart();},1000);
 if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",createMarketChart);else createMarketChart();
 
 document.addEventListener("DOMContentLoaded",()=>{[9,20,50].forEach(p=>{const el=document.getElementById("show-ema"+p);if(el)el.addEventListener("change",()=>drawMarketChart());});});
+
+document.addEventListener("DOMContentLoaded",()=>{
+ document.querySelectorAll(".ob-toggle").forEach(button=>{
+  const tf=Number(button.dataset.obTf);
+  button.classList.toggle("active",window.botderObVisibility[tf]!==false);
+  button.setAttribute("aria-pressed",String(window.botderObVisibility[tf]!==false));
+  button.addEventListener("click",()=>{
+   const show=window.botderObVisibility[tf]===false;
+   window.botderObVisibility[tf]=show;
+   button.classList.toggle("active",show);
+   button.setAttribute("aria-pressed",String(show));
+   drawMarketChart();
+  });
+ });
+});
