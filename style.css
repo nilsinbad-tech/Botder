@@ -527,3 +527,6 @@ footer{padding:16px 6px;font-size:9px}
 }
 
 .tf-settings{display:flex;flex-wrap:wrap;align-items:center;gap:10px;padding:9px 0}.tf-settings label{display:flex;align-items:center;gap:5px;color:#a8b5c6;font-size:10px;font-weight:700}.tf-settings select{background:#111b2a;color:#f1f5f9;border:1px solid #35465d;border-radius:6px;padding:7px;font-size:11px}.tf-settings .ema-toggle{cursor:pointer}.tf-settings input{accent-color:#48a8ff;width:15px;height:15px}
+
+/* BOTDER: herramientas compactas arriba a la derecha y anotaciones discretas */
+#chart-area{position:relative}.chart-legend{font-size:8px}.chart-legend span{padding:2px 4px}
