@@ -122,7 +122,7 @@ function setBacktestTrades(trades){backtestTradeData=Array.isArray(trades)?trade
 function runStructuralBacktest(symbol,market,candles,displayTf){
  if(!Array.isArray(candles)||candles.length<180)return[];
  const d=candles.slice().sort((x,y)=>x.time-y.time),from=Math.max(150,d.length-1000),trades=[];let nextFree=from;
- const stride=Math.max(3,Math.ceil((d.length-from)/160));
+ const stride=Math.max(3,Math.ceil((d.length-from)/120));
  for(let i=from;i<d.length-4;i+=stride){
   if(i<nextFree)continue;
   const prefix=d.slice(Math.max(0,i-499),i+1),cutoff=prefix.at(-1).time;
