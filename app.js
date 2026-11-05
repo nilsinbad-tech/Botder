@@ -90,7 +90,8 @@ function buildSetups(c,liquidityCandles=c,pivotCandles=liquidityCandles,obStruct
  const primaryCandles=aggregate(targetRawCandles,primaryTf),previousCandles=aggregate(targetRawCandles,previousTf);
  for(let i=55;i<c.length;i++){
   const x=c[i];
-  for(const side of (trendSide?[trendSide]:[])){
+  const sideAtTime=typeof trendSide==='function'?trendSide(x.time):trendSide;
+  for(const side of (sideAtTime?[sideAtTime]:[])){
    // Filtro RSI para ventas: entre 60 y 70 (incluidos) no se permiten entradas SELL.
    if(side==='SELL'&&Number.isFinite(rv[i])&&rv[i]>=60&&rv[i]<=70)continue;
    const primary=findValidOBAtTime(primaryCandles,x.time,side,primaryTf,structurePv,structureCandles,targetRawCandles);
@@ -369,6 +370,17 @@ function getHourlyBias(raw){
  const ob=side?findOB(h1,h1.length,side):null;
  return{trend,side,ob,h1};
 }
+function buildHourlyBiasTimeline(raw){
+ const h1=aggregate(raw,60),close=h1.map(x=>x.close),fast=ema(close,3),slow=ema(close,13);
+ return time=>{
+  let lo=0,hi=h1.length-1,best=-1;
+  while(lo<=hi){const mid=(lo+hi)>>1;if(h1[mid].time+3600<=time){best=mid;lo=mid+1;}else hi=mid-1;}
+  if(best<3)return null;
+  const up=fast[best]>slow[best]&&slow[best]>slow[best-2];
+  const down=fast[best]<slow[best]&&slow[best]<slow[best-2];
+  return up?'BUY':down?'SELL':null;
+ };
+}
 function showLatest(calc,trades,c,raw=state.rawCandles){
  const t=trades.filter(x=>x.result==='PENDIENTE').slice(-1)[0]||trades.slice(-1)[0],rv=calc.rv[calc.rv.length-1];
  const hourly=getHourlyBias(raw),trend=hourly.trend;
@@ -399,7 +411,7 @@ async function runUniverseBacktest(refresh=false){
  });
  await Promise.all(workers);
  const allTrades=[],shortHistory=[];
- for(const item of state.symbols){const source=state.rawBySymbol.get(item.symbol)||[];if(!source.length)continue;const cutoff=Math.floor(Date.now()/1000)-172800;const raw=source.filter(v=>v.time>=cutoff);if(raw.length<HISTORY_CANDLES)shortHistory.push(item.name+' ('+raw.length+' velas/48h)');const candles=aggregate(raw,2);if(candles.length<70)continue;const hourly=getHourlyBias(raw),obCandles=raw,pivotCandles=aggregate(raw,state.pivotTf),calc=buildSetups(candles,obCandles,pivotCandles,pivotCandles,hourly.side,raw),setups=hourly.side?calc.setups.filter(x=>x.side===hourly.side):[],trades=simulate(candles,setups);allTrades.push(...trades.map(t=>({...t,symbol:item.symbol})));}
+ for(const item of state.symbols){const source=state.rawBySymbol.get(item.symbol)||[];if(!source.length)continue;const cutoff=Math.floor(Date.now()/1000)-172800;const raw=source.filter(v=>v.time>=cutoff);if(raw.length<HISTORY_CANDLES)shortHistory.push(item.name+' ('+raw.length+' velas/48h)');const candles=aggregate(raw,2);if(candles.length<70)continue;const historicalBias=buildHourlyBiasTimeline(raw),obCandles=raw,pivotCandles=aggregate(raw,state.pivotTf),calc=buildSetups(candles,obCandles,pivotCandles,pivotCandles,historicalBias,raw),trades=simulate(candles,calc.setups);allTrades.push(...trades.map(t=>({...t,symbol:item.symbol})));}
  state.marketBacktests=mergeTrades(state.marketBacktests,allTrades,2000);
  state.savedChartTrades=mergeTrades(state.savedChartTrades,allTrades,2000);
  state.trades=state.savedChartTrades.filter(t=>t.symbol===state.selected);
