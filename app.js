@@ -33,33 +33,23 @@ function request(payload){return new Promise((resolve,reject)=>{if(!state.ws||st
 async function loadSymbols(){
  await connect();const r=await request({active_symbols:'brief'});
  const all=r.active_symbols||[];
- // La API nueva de Deriv renombró symbol/display_name a underlying_symbol/underlying_symbol_name.
+ // El panel siempre muestra los 25 instrumentos configurados; solo los activos se pueden seleccionar.
  const codeOf=s=>s.underlying_symbol||s.symbol||'';
  const nameOf=s=>s.underlying_symbol_name||s.display_name||'';
  const byCode=new Map(all.map(s=>[codeOf(s),s]));
- const chosen=CANDIDATES.map(([code,label])=>{const s=byCode.get(code);return s?{symbol:codeOf(s),name:nameOf(s)||label,market:s.market,submarket:s.submarket}:null;}).filter(Boolean);
- // Completa con los sintéticos activos reconocidos por su nombre en la API nueva o antigua.
- const extras=all.filter(s=>/volatility|crash|boom|step index|jump/i.test(nameOf(s)))
-   .filter(s=>!chosen.some(x=>x.symbol===codeOf(s)))
-   .sort((a,b)=>{
-     const an=nameOf(a),bn=nameOf(b);
-     const rank=n=>/step index/i.test(n)?0:/crash 300|boom 300/i.test(n)?1:/volatility/i.test(n)?2:/crash|boom/i.test(n)?3:4;
-     const num=n=>parseInt((n.match(/\d+/)||['9999'])[0],10);return rank(an)-rank(bn)||num(an)-num(bn)||an.localeCompare(bn);
-   }).map(s=>({symbol:codeOf(s),name:nameOf(s)||codeOf(s),market:s.market,submarket:s.submarket}));
- // Prioriza Step Index y los Crash/Boom con el número más bajo disponible.
- const ordered=[...chosen].sort((a,b)=>{
-   const rank=n=>/step index/i.test(n)?0:/crash 300|boom 300/i.test(n)?1:/volatility/i.test(n)?2:/crash|boom/i.test(n)?3:4;
-   return rank(a.name)-rank(b.name);
+ state.instrumentPanel=CANDIDATES.map(([code,label])=>{
+  const s=byCode.get(code);
+  return {symbol:code,name:s?(nameOf(s)||label):label,active:!!s,market:s?.market,submarket:s?.submarket};
  });
- state.symbols=[...ordered,...extras].slice(0,25);
+ state.symbols=state.instrumentPanel.filter(s=>s.active);
  if(!state.symbols.length){
   const sample=all.slice(0,12).map(x=>(nameOf(x)||'sin nombre')+' ['+(codeOf(x)||'?')+']').join(', ');
-  throw new Error('Deriv respondió '+all.length+' símbolos, pero ninguno coincidió con los filtros. Muestra: '+(sample||'catálogo vacío'));
+  throw new Error('Deriv respondió '+all.length+' símbolos, pero ninguno coincidió con los 25 configurados. Muestra: '+(sample||'catálogo vacío'));
  }
- $('instrumentCount').textContent=state.symbols.length+' / 25 instrumentos activos';
+ $('instrumentCount').textContent=state.symbols.length+' activos / 25 configurados';
  state.selected=state.symbols[0].symbol;
- $('instrumentList').innerHTML=state.symbols.map(s=>'<button type="button" class="instrument-chip'+(s.symbol===state.selected?' selected':'')+'" data-symbol="'+esc(s.symbol)+'">'+esc(s.name)+'</button>').join('');
- $('symbolSelect').innerHTML=state.symbols.map(s=>'<option value="'+esc(s.symbol)+'">'+esc(s.name)+'</option>').join('');
+ $('instrumentList').innerHTML=state.instrumentPanel.map(s=>'<button type="button" class="instrument-chip'+(s.symbol===state.selected?' selected':'')+'" data-symbol="'+esc(s.symbol)+'"'+(s.active?'':' disabled title="No disponible en esta cuenta de Deriv"')+'>'+esc(s.name)+(s.active?'':' · no disponible')+'</button>').join('');
+ $('symbolSelect').innerHTML=state.instrumentPanel.map(s=>'<option value="'+esc(s.symbol)+'"'+(s.active?'':' disabled')+'>'+esc(s.name)+(s.active?'':' · no disponible')+'</option>').join('');
 }
 
 function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
