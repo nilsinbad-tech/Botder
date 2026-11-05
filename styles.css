@@ -338,3 +338,7 @@ html,body{width:100%;max-width:100%;min-width:0;overflow-x:clip}
  .stats-row small{letter-spacing:0;font-size:7px!important}
  .stats-row b{font-size:13px!important}
 }
+
+/* Estado visual de entrada: posible antes del toque y confirmada después. */
+.chart-overlay .price-label.possible-entry-line{color:#f1c45b!important;border-style:dashed!important;border-width:1px!important;background:#211a0dee!important}
+.chart-overlay .price-label.confirmed-entry-line{color:#20d69a!important;border-style:solid!important;border-width:2px!important;background:#06251fee!important}
