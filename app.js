@@ -152,14 +152,18 @@ function findOB(c,i,side){for(let j=i-1;j>=Math.max(0,i-9);j--){const q=c[j],opp
 function simulate(c,setups){
  const trades=[];
  for(const s of setups){
-  let entered=false,result='PENDIENTE',entryIndex=-1,entryTime=null,exitTime=null,exitPrice=null;
+  let entered=false,result='PENDIENTE',entryIndex=-1,entryTime=null,exitTime=null,exitPrice=null,oppositeCandles=0,cancelReason=null;
   for(let j=s.index+1;j<c.length;j++){
    const k=c[j];
    if(!entered){
+    // Antes de entrar, dos velas consecutivas contra la dirección invalidan la señal.
+    const opposite=s.side==='BUY'?k.close<k.open:k.close>k.open;
+    oppositeCandles=opposite?oppositeCandles+1:0;
+    if(oppositeCandles>=2){result='CANCELADA';exitTime=k.time;cancelReason='DOS_VELAS_CONTRARIAS';break;}
     const entryHit=k.low<=s.entry&&k.high>=s.entry;
     if(!entryHit){
-     if((s.side==='BUY'&&k.low<s.sl)||(s.side==='SELL'&&k.high>s.sl)){result='CANCELADA';exitTime=k.time;break;}
-     if(j-s.index>=5){result='CANCELADA';exitTime=k.time;break;}
+     if((s.side==='BUY'&&k.low<s.sl)||(s.side==='SELL'&&k.high>s.sl)){result='CANCELADA';exitTime=k.time;cancelReason='SL_ANTES_DE_ENTRADA';break;}
+     if(j-s.index>=5){result='CANCELADA';exitTime=k.time;cancelReason='EXPIRADA';break;}
      continue;
     }
     entered=true;entryIndex=j;entryTime=k.time;
@@ -173,7 +177,7 @@ function simulate(c,setups){
    if(tp1Hit){result='GANADA';exitPrice=s.tp1;exitTime=k.time;break;}
   }
   const points=exitPrice==null?null:(s.side==='BUY'?exitPrice-s.entry:s.entry-exitPrice);
-  trades.push({...s,result,entryIndex,entryTime,exitTime,exitPrice,points});
+  trades.push({...s,result,entryIndex,entryTime,exitTime,exitPrice,points,cancelReason});
  }
  return trades;
 }
