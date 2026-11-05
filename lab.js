@@ -66,27 +66,27 @@ function contextSignal(id,i,d,f){
  return 0;
 }
 function entryConfirm(dir,d30,i){const c=d30[i],p=d30[i-1];if(!c||!p)return false;const body=Math.abs(c.close-c.open),range=c.high-c.low||1,solid=body/range>=.45;if(dir>0)return c.close>c.open&&c.close>p.high&&solid;return c.close<c.open&&c.close<p.low&&solid}
-function buildTrades(m1,m30,strat){
- const f=features(m1),a30=atr(m30),trades=[],entries=[],m1Index=Array(m30.length).fill(-1);let k=0;
- for(let i=0;i<m30.length;i++){while(k+1<m1.length&&m1[k+1].time+60<=m30[i].time)k++;m1Index[i]=k}
+function buildTrades(m2,m1,strat){
+ const f=features(m2),a1=atr(m1),trades=[],entries=[],contextIndex=Array(m1.length).fill(-1);let k=0;
+ for(let i=0;i<m1.length;i++){while(k+1<m2.length&&m2[k+1].time+120<=m1[i].time)k++;contextIndex[i]=k}
  let next=60;
- for(let i=60;i<m30.length-1;i++){
-  if(i<next)continue;const mi=m1Index[i];if(mi<55)continue;const dir=contextSignal(strat.id,mi,m1,f);if(!dir||!entryConfirm(dir,m30,i))continue;
-  const entry=m30[i+1].open,zone=latestOB(f,mi,dir),pad=(a30[i]||Math.abs(entry)*.0002)*.12;
-  const look=m1.slice(Math.max(0,mi-8),mi+1),swing=dir>0?min(look.map(x=>x.low)):max(look.map(x=>x.high));
+ for(let i=60;i<m1.length-1;i++){
+  if(i<next)continue;const mi=contextIndex[i];if(mi<55)continue;const dir=contextSignal(strat.id,mi,m2,f);if(!dir||!entryConfirm(dir,m1,i))continue;
+  const entry=m1[i+1].open,zone=latestOB(f,mi,dir),pad=(a1[i]||Math.abs(entry)*.0002)*.12;
+  const look=m2.slice(Math.max(0,mi-8),mi+1),swing=dir>0?min(look.map(x=>x.low)):max(look.map(x=>x.high));
   let sl=zone?(dir>0?zone.low-pad:zone.high+pad):(dir>0?swing-pad:swing+pad);
   let risk=Math.abs(entry-sl);if(!Number.isFinite(risk)||risk<=0||risk>Math.max(a30[i]||0,Math.abs(entry)*.00001)*4)continue;
   const targetR=1.25;let tp=entry+dir*risk*targetR,tp2=entry+dir*risk*2;
-  const liquidity=dir>0?min(m1.slice(Math.max(0,mi-15),mi+1).map(x=>x.high).filter(v=>v>entry)):max(m1.slice(Math.max(0,mi-15),mi+1).map(x=>x.low).filter(v=>v<entry));
+  const liquidity=dir>0?min(m2.slice(Math.max(0,mi-15),mi+1).map(x=>x.high).filter(v=>v>entry)):max(m2.slice(Math.max(0,mi-15),mi+1).map(x=>x.low).filter(v=>v<entry));
   if(liquidity!=null&&Math.abs(liquidity-entry)>=risk*.75&&Math.abs(liquidity-entry)<Math.abs(tp-entry))tp=liquidity;
   let result="ABIERTA",exitIndex=-1,exitPrice=null;
-  for(let j=i+1;j<Math.min(m30.length,i+41);j++){const c=m30[j],stop=dir>0?c.low<=sl:c.high>=sl,target=dir>0?c.high>=tp:c.low<=tp;if(stop){result="PERDIDA";exitIndex=j;exitPrice=sl;break}if(target){result="GANADA";exitIndex=j;exitPrice=tp;break}}
-  if(exitIndex<0&&i+40<m30.length){exitIndex=i+40;exitPrice=m30[exitIndex].close;result=(dir>0?exitPrice>entry:exitPrice<entry)?"GANADA":"PERDIDA"}
-  const t={result,signalIndex:i,entryIndex:i+1,exitIndex,signalTime:m30[i].time,entryTime:m30[i+1].time,exitTime:exitIndex>=0?m30[exitIndex].time:null,direction:dir>0?"BUY":"SELL",entry,sl,tp,tp2,exitPrice,risk,ruleText:strat.rules,m1Index:mi};
+  for(let j=i+1;j<Math.min(m1.length,i+41);j++){const c=m1[j],stop=dir>0?c.low<=sl:c.high>=sl,target=dir>0?c.high>=tp:c.low<=tp;if(stop){result="PERDIDA";exitIndex=j;exitPrice=sl;break}if(target){result="GANADA";exitIndex=j;exitPrice=tp;break}}
+  if(exitIndex<0&&i+40<m1.length){exitIndex=i+40;exitPrice=m1[exitIndex].close;result=(dir>0?exitPrice>entry:exitPrice<entry)?"GANADA":"PERDIDA"}
+  const t={result,signalIndex:i,entryIndex:i+1,exitIndex,signalTime:m1[i].time,entryTime:m1[i+1].time,exitTime:exitIndex>=0?m1[exitIndex].time:null,direction:dir>0?"BUY":"SELL",entry,sl,tp,tp2,exitPrice,risk,ruleText:strat.rules,m1Index:mi};
   entries.push(t);if(exitIndex>=0)trades.push(t);next=exitIndex>=0?exitIndex+1:i+1;
  }
  const wins=trades.filter(t=>t.result==="GANADA").length,losses=trades.length-wins;
- return{strategy:strat,wins,losses,total:trades.length,rate:trades.length?wins/trades.length*100:null,entries,trades,days:m30.length?(m30[m30.length-1].time-m30[0].time)/DAY:0};
+ return{strategy:strat,wins,losses,total:trades.length,rate:trades.length?wins/trades.length*100:null,entries,trades,days:m1.length?(m1[m1.length-1].time-m1[0].time)/DAY:0};
 }
 function updateTotals(){const wins=results.reduce((n,r)=>n+r.wins,0),losses=results.reduce((n,r)=>n+r.losses,0),ops=wins+losses;$("total-tested").textContent=results.length;$("total-wins").textContent=wins;$("total-losses").textContent=losses;$("total-ops").textContent=ops;$("total-markets").textContent=validInstruments+" válidos · "+failedInstruments+" con error";}
 function render(){
@@ -106,14 +106,14 @@ function rankCard(r,kind){return '<article class="rank-card"><div><b>'+esc(r.mar
 function drawChart(){
  const sym=$("chart-market").value||symbols[0]?.symbol,sid=Number($("chart-strategy").value||1),r=results.find(x=>x.symbol===sym&&x.strategy.id===sid),host=$("strategy-chart");if(!host)return;
  if(!r){host.innerHTML='<div class="empty">Selecciona un instrumento y espera los datos reales.</div>';return}
- const d=hist[sym]?.m30||[],m1=hist[sym]?.m1||[],view=d.slice(-180),offset=d.length-view.length,chosen=r.entries.slice(-1)[0];
+ const d=hist[sym]?.m1||[],m1=hist[sym]?.m1||[],view=d.slice(-180),offset=d.length-view.length,chosen=r.entries.slice(-1)[0];
  $("chart-audit").innerHTML='<div><b>'+r.total+'</b><span>Operaciones</span></div><div><b class="rate">'+r.wins+'</b><span>Ganadas</span></div><div><b class="loss">'+r.losses+'</b><span>Perdidas</span></div><div><b>'+fmt(r.rate,1)+'%</b><span>Acierto</span></div>';
  if(!view.length){host.innerHTML="Sin velas";return}
  const vals=view.flatMap(c=>[c.high,c.low]),lo=Math.min(...vals),hi=Math.max(...vals),span=hi-lo||1,X=i=>18+i*964/Math.max(1,view.length-1),Y=v=>12+(hi-v)/span*265;let svg="";
  view.forEach((c,j)=>{let x=X(j),up=c.close>=c.open,col=up?"#42dfa0":"#ff7184",top=Y(Math.max(c.open,c.close)),h=Math.max(1.2,Math.abs(Y(c.open)-Y(c.close)));svg+='<line x1="'+x+'" y1="'+Y(c.high)+'" x2="'+x+'" y2="'+Y(c.low)+'" stroke="'+col+'"/><rect x="'+(x-1.6)+'" y="'+top+'" width="3.2" height="'+h+'" fill="'+col+'"/>'});
  r.entries.forEach(t=>{let j=t.entryIndex-offset;if(j<0||j>=view.length)return;let x=X(j),y=Y(t.entry),col=t.direction==="BUY"?"#42dfa0":"#ff7184";svg+='<path d="M '+x+' '+(y-7)+' l -5 -9 h 10 z" fill="'+col+'"/>';if(t.exitIndex>=offset&&t.exitIndex<d.length)svg+='<circle cx="'+X(t.exitIndex-offset)+'" cy="'+Y(t.exitPrice)+'" r="3" fill="'+(t.result==="GANADA"?"#42dfa0":"#ff7184")+'"/>'});
  if(chosen){svg+='<line x1="18" y1="'+Y(chosen.tp)+'" x2="982" y2="'+Y(chosen.tp)+'" stroke="#42dfa0" stroke-dasharray="5 4"/><line x1="18" y1="'+Y(chosen.sl)+'" x2="982" y2="'+Y(chosen.sl)+'" stroke="#ff7184" stroke-dasharray="5 4"/>'}
- host.innerHTML='<svg class="market-chart" viewBox="0 0 1000 300" role="img" aria-label="Velas de treinta segundos con entradas y niveles TP y SL">'+svg+'</svg><div class="chart-legend"><span>🟢 BUY / TP</span><span>🔴 SELL / SL</span><span>Velas de 30 segundos · contexto y señales M1</span></div>';
+ host.innerHTML='<svg class="market-chart" viewBox="0 0 1000 300" role="img" aria-label="Velas de treinta segundos con entradas y niveles TP y SL">'+svg+'</svg><div class="chart-legend"><span>🟢 BUY / TP</span><span>🔴 SELL / SL</span><span>Velas de 1 minuto · entrada con contexto M2</span></div>';
  $("trade-audit-list").innerHTML=r.entries.slice(-30).reverse().map(t=>'<article class="audit-trade"><b class="'+(t.result==="GANADA"?"rate":"loss")+'">'+t.result+' · '+t.direction+'</b><span>Entrada '+fmt(t.entry)+' · '+new Date(t.entryTime*1000).toLocaleString("es-PA")+'</span><span>TP1 '+fmt(t.tp)+' · TP2 '+fmt(t.tp2)+' · SL '+fmt(t.sl)+'</span><span>Salida '+fmt(t.exitPrice)+' · '+(t.exitTime?new Date(t.exitTime*1000).toLocaleString("es-PA"):"sin salida")+'</span></article>').join("");
 }
 function progress(){const total=symbols.length;$("progress-count").textContent=idx+" / "+total+" instrumentos · 8 estrategias por instrumento";$("progress-bar").style.width=(total?idx/total*100:0)+"%";$("progress-title").textContent=busy?"Analizando "+(active?.name||"Deriv"):"Análisis finalizado"}
@@ -161,15 +161,15 @@ function handleHistory(m){
  if(oldest>st.start&&st.pages>=MAX_HISTORY_PAGES){reqState=null;st.done([],"Se alcanzó el límite de "+MAX_HISTORY_PAGES+" páginas antes de completar los 2 días.");return}
  if(oldest>st.start&&st.lastOldest===oldest){reqState=null;st.done([],"La paginación de Deriv no avanzó hacia datos más antiguos.");return}
  const ticks=st.data.filter(x=>x.time>=st.start&&x.time<st.targetEnd);
+ const m2=candlesFromTicks(ticks,120).filter(c=>c.time>=st.start&&c.time+120<=st.targetEnd);
  const m1=candlesFromTicks(ticks,60).filter(c=>c.time>=st.start&&c.time+60<=st.targetEnd);
- const m30=candlesFromTicks(ticks,30).filter(c=>c.time>=st.start&&c.time+30<=st.targetEnd);
  const coverage=ticks.length?(ticks[ticks.length-1].time-ticks[0].time)/DAY:0;
  reqState=null;
- st.done({m1,m30,tickCount:ticks.length,pages:st.pages,coverage,start:st.start,end:st.targetEnd});
+ st.done({m1,m2,tickCount:ticks.length,pages:st.pages,coverage,start:st.start,end:st.targetEnd});
 }
 function runInstrument(){
  if(!busy)return;
- if(idx>=symbols.length){finish("ANÁLISIS COMPLETADO · 2 DÍAS · M1 + 30 SEGUNDOS");return}
+ if(idx>=symbols.length){finish("ANÁLISIS COMPLETADO · 2 DÍAS · M2 + M1");return}
  active=symbols[idx];
  $("live-detail").textContent="Descargando ticks para construir exactamente 2 días de velas M1 y 30 segundos: "+active.name;
  status("DESCARGANDO · "+active.name);progress();
@@ -178,20 +178,20 @@ function runInstrument(){
   if(error){
    failedInstruments++;$("live-detail").textContent=active.name+": ERROR DE HISTORIAL · "+error;
   }else{
-   const {m1,m30,tickCount,pages,coverage}=series;
-   if(coverage<1.98||m1.length<2800||m30.length<5600){
-    failedInstruments++;$("live-detail").textContent=active.name+": datos insuficientes. Cobertura "+coverage.toFixed(2)+" días; M1 "+m1.length+" velas; 30s "+m30.length+" velas. No se publican resultados parciales.";
+   const {m1,m2,tickCount,pages,coverage}=series;
+   if(coverage<1.98||m1.length<2800||m2.length<1400){
+    failedInstruments++;$("live-detail").textContent=active.name+": datos insuficientes. Cobertura "+coverage.toFixed(2)+" días; M2 contexto "+m2.length+" velas; M1 entrada "+m1.length+" velas. No se publican resultados parciales.";
    }else{
-    hist[active.symbol]={m1,m30};validInstruments++;
+    hist[active.symbol]={m1,m2};validInstruments++;
     for(const s of strategies){
      $("live-detail").textContent="TESTING · "+active.name+" · estrategia "+s.id+" de "+strategies.length+": "+s.name;
      $("progress-title").textContent="TESTING · "+active.name;
-     const r=buildTrades(m1,m30,s);
+     const r=buildTrades(m2,m1,s);
      results.push({symbol:active.symbol,market:active.name,strategy:s,...r});
      updateTotals();
      $("live-count").textContent=results.length+" / "+(symbols.length*strategies.length)+" pruebas completadas";
     }
-    $("live-detail").textContent=active.name+": 2 días completos · "+m1.length+" velas M1 · "+m30.length+" velas 30s · "+tickCount.toLocaleString("es-PA")+" ticks descargados en "+pages+" páginas · 8 estrategias probadas.";
+    $("live-detail").textContent=active.name+": 2 días completos · "+m1.length+" velas M2 de contexto · "+m1.length+" velas M1 de entrada · "+tickCount.toLocaleString("es-PA")+" ticks descargados en "+pages+" páginas · 8 estrategias probadas.";
    }
   }
   idx++;progress();render();runInstrument();
@@ -215,6 +215,6 @@ document.addEventListener("DOMContentLoaded",()=>{
  $("start").addEventListener("click",start);$("chart-market").addEventListener("change",drawChart);$("chart-strategy").addEventListener("change",drawChart);
  document.querySelectorAll(".tab").forEach(b=>b.addEventListener("click",()=>{document.querySelectorAll(".tab").forEach(x=>x.classList.toggle("active",x===b));document.querySelectorAll(".panel").forEach(p=>p.classList.toggle("active",p.id==="panel-"+b.dataset.tab));if(b.dataset.tab==="chart")drawChart()}));
  document.addEventListener("click",e=>{const b=e.target.closest(".inspect-result");if(b){$("chart-market").value=b.dataset.symbol;$("chart-strategy").value=b.dataset.strategy;document.querySelector('[data-tab="chart"]').click();drawChart()}});
- $("live-detail").textContent="Preparado para analizar M1 y entradas de 30 segundos.";start();
+ $("live-detail").textContent="Preparado para analizar M2 de contexto y entradas de 1 minuto.";start();
 });
 })();
