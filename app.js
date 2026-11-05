@@ -260,7 +260,7 @@ function drawOverlays(trades,c,host,obZones=[],setups=[]){
    el.style.display='flex';el.style.left=left+'px';el.style.width=Math.min(window.innerWidth<=600?126:150,Math.max(112,width-left-8))+'px';el.style.top=Math.max(0,mid-15)+'px';el.style.height='30px';
   });
   const xSignal=t?scale.timeToCoordinate(Number.isFinite(t.entryTime)?t.entryTime:t.time):null,xStart=Math.max(0,Math.min(width-8,xSignal==null?width*.35:xSignal)),positioned=[];
-  lineEls.forEach(v=>{const y=candleSeries.priceToCoordinate(v.p);if(y==null){v.el.style.display='none';return;}v.el.style.display='flex';v.el.style.left='6px';v.el.style.width='max-content';v.el.style.top=(y-11)+'px';});
+  lineEls.forEach(v=>{const y=candleSeries.priceToCoordinate(v.p);if(y==null){v.el.style.display='none';return;}v.el.style.display='flex';v.el.style.left='auto';v.el.style.right='4px';v.el.style.width='max-content';v.el.style.top=(y-11)+'px';});
  };
  state.overlayUpdate=update;
  if(!state.overlayRangeHandler){state.overlayRangeHandler=()=>{
