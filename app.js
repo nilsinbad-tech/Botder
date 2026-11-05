@@ -136,25 +136,27 @@ function drawPivotLines(){
  for(const line of state.pivotLines){try{state.series.candle.removePriceLine(line);}catch{}}
  state.pivotLines=[];
  const raw=state.rawCandles,last=raw[raw.length-1].time,cutoff=last-3600;
+ const current=Number(raw[raw.length-1].close);
+ if(!Number.isFinite(current))return;
  const m10=pivots(aggregate(raw,10),3,600),h1=pivots(aggregate(raw,60),2,3600);
- // Los pivotes M10 recientes se muestran primero; H1 conserva el contexto anterior.
- // Conservar únicamente las cuatro resistencias más recientes entre M10 y H1.
- const resistances=[
-  ...m10.highs.map(p=>({...p,kind:'recent-resistance'})),
-  ...h1.highs.filter(p=>p.time<cutoff).map(p=>({...p,kind:'hour-resistance'}))
- ].sort((a,b)=>a.time-b.time).slice(-4);
- // Los soportes/pivotes se mantienen separados; el límite de cuatro aplica a resistencias.
- const supports=[
-  ...m10.lows.slice(-4).map(p=>({...p,kind:'recent-support'})),
-  ...h1.lows.filter(p=>p.time<cutoff).slice(-3).map(p=>({...p,kind:'hour-support'}))
- ];
- const levels=[...resistances,...supports];
+ // Un solo nivel por lado: la resistencia más cercana arriba y el soporte más cercano abajo.
+ const resistanceCandidates=[
+  ...m10.highs.map(p=>({...p,kind:'resistance'})),
+  ...h1.highs.filter(p=>p.time<cutoff).map(p=>({...p,kind:'resistance'}))
+ ].filter(p=>Number.isFinite(p.price)&&p.price>current);
+ const supportCandidates=[
+  ...m10.lows.map(p=>({...p,kind:'support'})),
+  ...h1.lows.filter(p=>p.time<cutoff).map(p=>({...p,kind:'support'}))
+ ].filter(p=>Number.isFinite(p.price)&&p.price<current);
+ const resistance=resistanceCandidates.sort((a,b)=>a.price-b.price)[0];
+ const support=supportCandidates.sort((a,b)=>b.price-a.price)[0];
+ const levels=[...(resistance?[resistance]:[]),...(support?[support]:[])];
  const L=window.LightweightCharts;
  for(const p of levels){
-  const isRecent=p.kind.startsWith('recent'),isResistance=p.kind.endsWith('resistance');
+  const isResistance=p.kind==='resistance';
   const line=state.series.candle.createPriceLine({
    price:p.price,
-   color:isRecent?(isResistance?'#b98242':'#287f70'):(isResistance?'#87663d':'#28675e'),
+   color:isResistance?'#b98242':'#287f70',
    lineWidth:1,
    lineStyle:L.LineStyle.Dashed,
    axisLabelVisible:true,title:isResistance?'Resistencia':'Pivote'
