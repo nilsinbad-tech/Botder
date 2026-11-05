@@ -176,10 +176,10 @@ function drawOverlays(trades,c,host){
   }
   return null;
  };
- const zones=[latestOB('BUY'),latestOB('SELL')].filter(Boolean);
+ const zones=[latestOB('BUY'),latestOB('SELL')].filter(Boolean);const signal=[...trades].reverse().find(x=>x.fvg);if(signal)zones.push({time:signal.time-240,high:signal.fvg.high,low:signal.fvg.low,side:signal.side,fvg:true});
  const zoneEls=zones.map(ob=>{
-  const el=document.createElement('div');el.className='ob-zone '+(ob.side==='BUY'?'bull-zone':'bear-zone');
-  el.innerHTML='<b>'+(ob.side==='BUY'?'OB ALCISTA · COMPRA':'OB BAJISTA · VENTA')+'</b>';
+  const el=document.createElement('div');el.className='ob-zone '+(ob.fvg?'fvg-zone ':'')+(ob.side==='BUY'?'bull-zone':'bear-zone');
+  el.innerHTML='<b>'+(ob.fvg?(ob.side==='BUY'?'FVG ALCISTA':'FVG BAJISTA'):(ob.side==='BUY'?'OB ALCISTA · COMPRA':'OB BAJISTA · VENTA'))+'</b>';
   overlay.appendChild(el);return{el,ob};
  });
  const t=[...trades].reverse().find(x=>x.result==='PENDIENTE')||trades[trades.length-1];
@@ -226,8 +226,8 @@ function showLatest(calc,trades,c){
  $('signalValue').textContent=t?(t.side==='BUY'?'COMPRA':'VENTA'):'ESPERANDO';$('signalValue').style.color=t?(t.side==='BUY'?'#20d69a':'#ff6876'):'#aab8ca';
  $('entryValue').textContent=t?fmt(t.entry):'—';$('slValue').textContent=t?fmt(t.sl):'—';$('tp1Value').textContent=t?fmt(t.tp1):'—';$('tp2Value').textContent=t?fmt(t.tp2):'—';$('rsiValue').textContent=fmt(rv);
  const confirms=t&&((t.side==='BUY'&&t.rsi>=50&&t.rsi<=60)||(t.side==='SELL'&&t.rsi<=55&&t.rsi>=40));
- $('rsiConfirm').textContent=t?(confirms?'CONFIRMA '+(t.side==='BUY'?'COMPRA':'VENTA'):'NO CONFIRMA'):'Sin señal';$('rsiConfirm').style.color=confirms?'#20d69a':'#ff6876';
- $('signalState').textContent=t?(t.entryIndex>=0?'ACTIVA':'PREPARADA'):'ESPERANDO';$('signalDetails').textContent=t?(t.entryIndex>=0?'Operación ACTIVA. ':'')+(t.side==='BUY'?'OB alcista':'OB bajista')+' detectado. Entrada proyectada '+fmt(t.entry)+', SL '+fmt(t.sl)+', TP1 en pivote '+fmt(t.tp1)+' y TP2 '+fmt(t.tp2)+'.':'No hay una señal completa en la última vela. El motor sigue analizando.';
+ $('rsiConfirm').textContent=t?'OB + FVG + EMA CONFIRMADOS':'Sin señal';$('rsiConfirm').style.color=t?'#20d69a':'#8b9bb0';
+ $('signalState').textContent=t?(t.entryIndex>=0?'ACTIVA':'PREPARADA'):'ESPERANDO';$('signalDetails').textContent=t?(t.entryIndex>=0?'Operación ACTIVA. ':'')+(t.side==='BUY'?'OB alcista + FVG':'OB bajista + FVG')+' detectados con confirmación EMA en M2. Entrada proyectada '+fmt(t.entry)+', SL '+fmt(t.sl)+', TP1 en pivote '+fmt(t.tp1)+' y TP2 '+fmt(t.tp2)+'.':'No hay una señal completa en la última vela. El motor sigue analizando.';
  $('rsiLegend').textContent='Valor actual: '+fmt(rv);
 }
 function renderHistory(trades){const rows=trades.slice(-150).reverse();$('historyCount').textContent=trades.length+' operaciones';$('historyBody').innerHTML=rows.length?rows.map(t=>'<tr><td>'+new Date(t.time*1000).toLocaleTimeString('es-PA',{hour:'2-digit',minute:'2-digit'})+'</td><td style="color:'+(t.side==='BUY'?'#20d69a':'#ff6876')+'">'+(t.side==='BUY'?'COMPRA':'VENTA')+'</td><td>'+fmt(t.entry)+'</td><td>'+fmt(t.sl)+'</td><td>'+fmt(t.tp1)+'</td><td>'+fmt(t.tp2)+'</td><td>'+t.result+'</td></tr>').join(''):'<tr><td colspan="7" class="empty-cell">No hay operaciones detectadas en este período.</td></tr>';const closed=trades.filter(t=>t.result==='GANADA'||t.result==='PERDIDA');$('wins').textContent=closed.filter(t=>t.result==='GANADA').length;$('losses').textContent=closed.filter(t=>t.result==='PERDIDA').length;$('pending').textContent=trades.filter(t=>t.result==='PENDIENTE').length;$('expired').textContent=trades.filter(t=>t.result==='CANCELADA').length;}
@@ -244,7 +244,7 @@ async function runUniverseBacktest(refresh=false){
  const closed=allTrades.filter(t=>t.result==='GANADA'||t.result==='PERDIDA');
  $('wins').textContent=closed.filter(t=>t.result==='GANADA').length;$('losses').textContent=closed.filter(t=>t.result==='PERDIDA').length;
  $('pending').textContent=allTrades.filter(t=>t.result==='PENDIENTE').length;$('expired').textContent=allTrades.filter(t=>t.result==='CANCELADA').length;
- const failed=state.downloadErrors.length;$('backtestInfo').textContent='Universo: '+state.symbols.length+' instrumentos · M'+state.tf+' · período: últimas 24 horas · '+allTrades.length+' señales simuladas · '+failed+' descargas fallidas · '+shortHistory.length+' con historial parcial'+(failed?'. Errores: '+state.downloadErrors.slice(0,2).join(' | '):'')+(shortHistory.length?'. Parciales: '+shortHistory.slice(0,3).join(', '):'.');
+ const failed=state.downloadErrors.length;$('backtestInfo').textContent='Universo: '+state.symbols.length+' instrumentos · señales M2 · gráfico M'+state.tf+' · período: últimas 24 horas · '+allTrades.length+' señales simuladas · '+failed+' descargas fallidas · '+shortHistory.length+' con historial parcial'+(failed?'. Errores: '+state.downloadErrors.slice(0,2).join(' | '):'')+(shortHistory.length?'. Parciales: '+shortHistory.slice(0,3).join(', '):'.');
 }
 async function analyze(){
  if(state.busy){state.analyzeQueued=true;return;}state.busy=true;$('dataStatus').textContent='Cargando gráfico…';
