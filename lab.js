@@ -111,8 +111,8 @@ function renderWinners(tf,id){
  const host=$(id),label=tf===120?'M2':'M5';
  host.className='instrument-ranking';
  host.innerHTML=symbols.map(m=>{
-  const rows=results.filter(r=>r.symbol===m.symbol&&r.tf===tf&&r.total>0).sort((a,b)=>b.rate-a.rate||b.wins-a.wins||a.losses-b.losses);
-  if(!rows.length)return '<article class="instrument-rank-card"><strong>'+esc(m.name)+'</strong><small>'+esc(m.symbol)+' · '+label+'</small><div class="empty">Aún no hay operaciones cerradas para este instrumento.</div></article>';
+  const rows=results.filter(r=>r.symbol===m.symbol&&r.tf===tf&&r.total>=MIN).sort((a,b)=>b.rate-a.rate||b.wins-a.wins||a.losses-b.losses);
+  if(!rows.length)return '<article class="instrument-rank-card"><strong>'+esc(m.name)+'</strong><small>'+esc(m.symbol)+' · '+label+'</small><div class="empty">No hay estrategias con al menos '+MIN+' operaciones cerradas.</div></article>';
   const best=rows[0],worst=rows[rows.length-1];
   const item=(r,kind)=>'<div class="instrument-rank '+kind+'"><div class="rank-label">'+(kind==='best'?'MEJOR ESTRATEGIA':'PEOR ESTRATEGIA')+'</div><b>'+esc(r.strategy.name)+'</b><strong>'+f(r.rate)+'% acierto</strong><small>'+r.wins+' ganadas · '+r.losses+' perdidas · '+r.total+' operaciones</small><button class="inspect-result" data-symbol="'+esc(r.symbol)+'" data-strategy="'+r.strategy.id+'" data-tf="'+tf+'">VER GRÁFICO</button></div>';
   return '<article class="instrument-rank-card"><div class="instrument-rank-title"><strong>'+esc(m.name)+'</strong><small>'+esc(m.symbol)+' · '+label+'</small></div><div class="instrument-rank-pair">'+item(best,'best')+item(worst,'worst')+'</div></article>';
