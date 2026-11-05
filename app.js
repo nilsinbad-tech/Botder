@@ -17,6 +17,8 @@ const CANDIDATES = [
  ['stpRNG','Step Index 100'],['CRASH500','Crash 500'],['BOOM500','Boom 500'],
  ['frxEURUSD','EUR/USD'],['frxGBPUSD','GBP/USD'],['frxUSDJPY','USD/JPY'],['frxAUDUSD','AUD/USD'],['frxUSDCAD','USD/CAD'],['frxUSDCHF','USD/CHF'],['frxNZDUSD','NZD/USD']
 ];
+/* Deriv CFD public specs: contract size and minimum volume */
+const DERIV_CFD_SPECS={'1HZ10V':{contractSize:1,minLot:.5},'1HZ15V':{contractSize:1,minLot:.2},'1HZ25V':{contractSize:1,minLot:.005},'1HZ30V':{contractSize:1,minLot:.2},'1HZ50V':{contractSize:1,minLot:.005},'1HZ75V':{contractSize:1,minLot:.05},'1HZ90V':{contractSize:1,minLot:.1},'1HZ100V':{contractSize:1,minLot:1},'R_10':{contractSize:1,minLot:.5},'R_25':{contractSize:1,minLot:.5},'R_50':{contractSize:1,minLot:4},'R_75':{contractSize:1,minLot:.01},'R_100':{contractSize:1,minLot:1}};
 function setConnection(ok,msg){$('connectionDot').parentElement.classList.toggle('connected',ok);$('connectionText').textContent=msg;}
 function connect(){
  return new Promise((resolve,reject)=>{
@@ -255,12 +257,7 @@ function drawOverlays(trades,c,host,obZones=[],setups=[]){
  // Elimina las capas anteriores y muestra el último OB válido de compra y el último de venta.
  host.querySelectorAll('.chart-overlay').forEach(node=>node.remove());state.overlayUpdate=null;
  const overlay=document.createElement('div');overlay.className='chart-overlay';host.appendChild(overlay);
- const closedTrades=(trades||[]).filter(x=>(x.result==='GANADA'||x.result==='PERDIDA')&&Number.isFinite(x.points));
- const wonPoints=closedTrades.filter(x=>x.result==='GANADA').reduce((sum,x)=>sum+Math.max(0,x.points),0);
- const lostPoints=closedTrades.filter(x=>x.result==='PERDIDA').reduce((sum,x)=>sum+Math.abs(Math.min(0,x.points)),0);
- const wonEl=$('chartWonPoints'),lostEl=$('chartLostPoints');
- if(wonEl)wonEl.textContent='+'+fmt(wonPoints)+' pts';
- if(lostEl)lostEl.textContent='-'+fmt(lostPoints)+' pts';
+ const closedTrades=(trades||[]).filter(x=>(x.result==='GANADA'||x.result==='PERDIDA')&&Number.isFinite(x.points));const wonPoints=closedTrades.filter(x=>x.result==='GANADA').reduce((sum,x)=>sum+Math.max(0,x.points),0);const lostPoints=closedTrades.filter(x=>x.result==='PERDIDA').reduce((sum,x)=>sum+Math.abs(Math.min(0,x.points)),0);const wonMoney=closedTrades.filter(x=>x.result==='GANADA'&&Number.isFinite(x.exitPrice)).reduce((sum,x)=>sum+(tradeMoney(x,x.exitPrice)||0),0);const lostMoney=closedTrades.filter(x=>x.result==='PERDIDA'&&Number.isFinite(x.exitPrice)).reduce((sum,x)=>sum+Math.abs(tradeMoney(x,x.exitPrice)||0),0);const wonEl=$('chartWonPoints'),lostEl=$('chartLostPoints'),wonMoneyEl=$('chartWonMoney'),lostMoneyEl=$('chartLostMoney');if(wonEl)wonEl.textContent='+'+fmt(wonPoints)+' pts';if(lostEl)lostEl.textContent='-'+fmt(lostPoints)+' pts';if(wonMoneyEl)wonMoneyEl.textContent='+'+moneyFmtAbs(wonMoney);if(lostMoneyEl)lostMoneyEl.textContent='−'+moneyFmtAbs(lostMoney);
  const lockedTrade=[...(trades||[])].reverse().find(x=>['ESPERANDO DOJI','ESPERANDO CAMBIO','PENDIENTE'].includes(x.result));
  const zones=[...(obZones||[]),...(lockedTrade&&lockedTrade.ob?[{...lockedTrade.ob,side:lockedTrade.side,timeframe:state.obPrimaryTf,structureTime:lockedTrade.structureTime}]:[])].filter((ob,i,all)=>ob&&Number.isFinite(ob.time)&&all.findIndex(q=>q.time===ob.time&&q.side===ob.side)===i).sort((x,y)=>x.time-y.time);
  const zoneEls=zones.map(ob=>{
@@ -283,7 +280,7 @@ function drawOverlays(trades,c,host,obZones=[],setups=[]){
   const label=trade.side==='BUY'?'COMPRA':'VENTA';
   const el=document.createElement('div');el.className='price-label entry-line';
   el.setAttribute('aria-label','Entrada '+label+' '+fmt(trade.entry));
-  el.innerHTML='<b>'+label+'</b><strong>'+fmt(trade.entry)+'</strong><small>RSI '+fmt(Number.isFinite(trade.entryRsi)?trade.entryRsi:trade.rsi)+'</small>';
+  const lotSpec=cfdSpec(trade.symbol||state.selected);el.innerHTML='<b>'+label+'</b><strong>'+fmt(trade.entry)+'</strong><small>RSI '+fmt(Number.isFinite(trade.entryRsi)?trade.entryRsi:trade.rsi)+'</small>'+(lotSpec?'<small>LOTE '+lotSpec.minLot+'</small>':'');
   overlay.appendChild(el);
   lineEls.push({key:'entry-'+index,p:trade.entry,label,cls:'entry-line',el,time,side:trade.side});
   [['SL',trade.sl,'sl-line'],['TP1',trade.tp1,'tp-line'],['TP2',trade.tp2,'tp2-line']].forEach(([name,price,cls])=>{
@@ -291,7 +288,7 @@ function drawOverlays(trades,c,host,obZones=[],setups=[]){
    const rule=document.createElement('div');rule.className='trade-level-rule '+cls;
    const tag=document.createElement('div');tag.className='price-label '+cls;
    tag.setAttribute('aria-label',name+' '+fmt(Number(price)));
-   tag.innerHTML='<b>'+name+'</b><strong>'+fmt(Number(price))+'</strong>';
+   const cash=tradeMoney(trade,Number(price));tag.innerHTML='<b>'+name+'</b><strong>'+fmt(Number(price))+'</strong>'+(cash==null?'':'<small>'+moneyText(cash)+'</small>');
    overlay.appendChild(rule);overlay.appendChild(tag);
    levelLineEls.push({p:Number(price),time,rule,tag});
   });
@@ -337,6 +334,14 @@ function drawOverlays(trades,c,host,obZones=[],setups=[]){
  requestAnimationFrame(update);
 }
 function fmt(n){return Number.isFinite(n)?Number(n).toFixed(2):'—';}
+
+function cfdSpec(symbol){return DERIV_CFD_SPECS[String(symbol||'')]||null;}
+function estimateMoney(symbol,side,entry,target){const spec=cfdSpec(symbol);if(!spec||!Number.isFinite(Number(entry))||!Number.isFinite(Number(target)))return null;const move=side==='BUY'?Number(target)-Number(entry):Number(entry)-Number(target);return move*spec.contractSize*spec.minLot;}
+function moneyFmtAbs(value){return '$'+Math.abs(Number(value)||0).toFixed(2);}
+function moneyText(value){if(!Number.isFinite(value))return '—';return (value>0?'+':value<0?'−':'')+'$'+Math.abs(value).toFixed(2);}
+function tradeMoney(t,target){if(!t)return null;return estimateMoney(t.symbol||state.selected,t.side,t.entry,target);}
+function updateMoneyPanel(t){const spec=cfdSpec(t?(t.symbol||state.selected):state.selected);const lot=$('moneyLot'),sl=$('moneySL'),tp1=$('moneyTP1'),tp2=$('moneyTP2'),status=$('moneySpecStatus');if(!spec){if(lot)lot.textContent='—';if(sl)sl.textContent='—';if(tp1)tp1.textContent='—';if(tp2)tp2.textContent='—';if(status)status.textContent='Sin especificación CFD verificada para este instrumento; no se inventa el cálculo.';return;}if(lot)lot.textContent=String(spec.minLot)+' lotes';if(sl)sl.textContent=moneyText(tradeMoney(t,t?.sl));if(tp1)tp1.textContent=moneyText(tradeMoney(t,t?.tp1));if(tp2)tp2.textContent=moneyText(tradeMoney(t,t?.tp2));if(status)status.textContent='Estimación con contrato '+spec.contractSize+' · volumen mínimo Deriv '+spec.minLot+' lote(s). Importe bruto, antes de spread/comisiones.';}
+
 function getHourlyBias(raw){
  const h1=aggregate(raw,60);
  if(h1.length<4)return{trend:'SIN DATOS',side:null,ob:null};
@@ -355,7 +360,7 @@ function showLatest(calc,trades,c,raw=state.rawCandles){
  const obLabel=hourly.side?(hourly.side==='BUY'?'OB ALCISTA':'OB BAJISTA'):'SIN OB · H1 LATERAL';
  $('signalValue').textContent=obLabel;
  $('signalValue').style.color=hourly.side?(hourly.side==='BUY'?'#20d69a':'#ff6876'):'#aab8ca';
- $('entryValue').textContent=t?fmt(t.entry):'—';if($('slValue'))$('slValue').textContent=t?fmt(t.sl):'—';if($('tp1Value'))$('tp1Value').textContent=t?fmt(t.tp1):'—';if($('tp2Value'))$('tp2Value').textContent=t?fmt(t.tp2):'—';$('rsiValue').textContent=fmt(rv);
+ $('entryValue').textContent=t?fmt(t.entry):'—';if($('slValue'))$('slValue').textContent=t?fmt(t.sl):'—';if($('tp1Value'))$('tp1Value').textContent=t?fmt(t.tp1):'—';if($('tp2Value'))$('tp2Value').textContent=t?fmt(t.tp2):'—';$('rsiValue').textContent=fmt(rv);updateMoneyPanel(t);
  $('rsiConfirm').textContent=t?'OB + TENDENCIA H1 + PIVOTE CONFIRMADOS':'Sin señal';$('rsiConfirm').style.color=t?'#20d69a':'#8b9bb0';
  $('signalState').textContent=t?(t.entryIndex>=0?'ACTIVA':'PREPARADA'):'ESPERANDO';
  $('signalDetails').textContent=(hourly.side?'Sesgo de 1 hora: '+trend+'. Mostrando únicamente el '+obLabel+' de H1'+(hourly.ob?' entre '+fmt(hourly.ob.low)+' y '+fmt(hourly.ob.high):' (zona no localizada en las últimas 9 velas H1)')+'. ':'La tendencia H1 está lateral; no se selecciona OB direccional. ')+(t?(t.entryIndex>=0?'Operación ACTIVA. ':'')+(t.side==='BUY'?'OB alcista + FVG':'OB bajista + FVG')+' alineado con la tendencia H1. Entrada en el OB; TP1 es la primera resistencia/soporte disponible de M3, M5 o M10. Entrada proyectada '+fmt(t.entry)+', SL '+fmt(t.sl)+', TP1 '+fmt(t.tp1)+' y TP2 '+fmt(t.tp2)+'.':'No hay una señal completa en la última vela M2.');
@@ -365,8 +370,7 @@ function renderHistory(trades){
  const source=mergeTrades(state.marketBacktests,state.savedChartTrades.length?state.savedChartTrades:(trades||[]),2000);
  const rows=[...source].sort((a,b)=>Number(a.time)-Number(b.time)).slice(-550).reverse();
  const shown=Math.min(rows.length,550);
- $('historyCount').textContent='Mostrando '+shown+' de '+source.length+' · +'+fmt(source.filter(t=>t.result==='GANADA'&&Number.isFinite(t.points)).reduce((a,t)=>a+Math.max(0,t.points),0))+' / -'+fmt(source.filter(t=>t.result==='PERDIDA'&&Number.isFinite(t.points)).reduce((a,t)=>a+Math.abs(Math.min(0,t.points)),0))+' pts';
- $('historyBody').innerHTML=rows.length?rows.map(t=>'<tr><td>'+new Date(t.time*1000).toLocaleTimeString('es-PA',{hour:'2-digit',minute:'2-digit'})+'</td><td>'+esc(state.symbols.find(x=>x.symbol===t.symbol)?.name||t.symbol||state.selected)+'</td><td style="color:'+(t.side==='BUY'?'#20d69a':'#ff6876')+'">'+(t.side==='BUY'?'COMPRA':'VENTA')+'</td><td>'+fmt(t.entry)+'</td><td>'+fmt(Number.isFinite(t.entryRsi)?t.entryRsi:t.rsi)+'</td><td>'+fmt(t.sl)+'</td><td>'+fmt(t.tp1)+'</td><td>'+fmt(t.tp2)+'</td><td>'+t.result+'</td><td style="color:'+(t.points==null?'#8b9bb0':t.points>=0?'#20d69a':'#ff6876')+'">'+(t.points==null?'—':(t.points>0?'+':'')+fmt(t.points)+' pts')+'</td></tr>').join(''):'<tr><td colspan="10" class="empty-cell">No hay operaciones detectadas en este período.</td></tr>';
+ const realized=source.filter(t=>(t.result==='GANADA'||t.result==='PERDIDA')&&Number.isFinite(t.exitPrice)).map(t=>tradeMoney(t,t.exitPrice)).filter(Number.isFinite);const moneyTotal=realized.reduce((a,v)=>a+v,0);$('historyCount').textContent='Mostrando '+shown+' de '+source.length+' · resultado estimado '+moneyText(moneyTotal)+' USD';$('historyBody').innerHTML=rows.length?rows.map(t=>{const spec=cfdSpec(t.symbol),slMoney=tradeMoney(t,t.sl),tp1Money=tradeMoney(t,t.tp1),tp2Money=tradeMoney(t,t.tp2),resultMoney=t.exitPrice==null?null:tradeMoney(t,t.exitPrice);return '<tr><td>'+new Date(t.time*1000).toLocaleTimeString('es-PA',{hour:'2-digit',minute:'2-digit'})+'</td><td>'+esc(state.symbols.find(x=>x.symbol===t.symbol)?.name||t.symbol||state.selected)+'</td><td style="color:'+(t.side==='BUY'?'#20d69a':'#ff6876')+'">'+(t.side==='BUY'?'COMPRA':'VENTA')+'</td><td>'+fmt(t.entry)+'</td><td>'+fmt(Number.isFinite(t.entryRsi)?t.entryRsi:t.rsi)+'</td><td>'+fmt(t.sl)+'</td><td>'+fmt(t.tp1)+'</td><td>'+fmt(t.tp2)+'</td><td>'+t.result+'</td><td style="color:'+(t.points==null?'#8b9bb0':t.points>=0?'#20d69a':'#ff6876')+'">'+(t.points==null?'—':(t.points>0?'+':'')+fmt(t.points)+' pts')+'</td><td>'+(spec?spec.minLot+' lotes':'—')+'</td><td>'+moneyText(slMoney)+'</td><td>'+moneyText(tp1Money)+'</td><td>'+moneyText(tp2Money)+'</td><td>'+moneyText(resultMoney)+'</td></tr>';}).join(''):'<tr><td colspan="15" class="empty-cell">No hay operaciones detectadas en este período.</td></tr>';
  const closed=source.filter(t=>t.result==='GANADA'||t.result==='PERDIDA');
  $('wins').textContent=closed.filter(t=>t.result==='GANADA').length;$('losses').textContent=closed.filter(t=>t.result==='PERDIDA').length;$('pending').textContent=source.filter(t=>t.result==='PENDIENTE').length;$('expired').textContent=source.filter(t=>t.result==='CANCELADA').length;
 }
