@@ -42,9 +42,9 @@ async function loadSymbols(){
  state.symbols=[...ordered,...extras].slice(0,25);
  if(!state.symbols.length)throw new Error('Deriv no devolvió los símbolos priorizados. Revisa el catálogo disponible.');
  $('instrumentCount').textContent=state.symbols.length+' / 25 instrumentos activos';
- $('instrumentList').innerHTML=state.symbols.map(s=>'<span class="instrument-chip">'+esc(s.name)+'</span>').join('');
- $('symbolSelect').innerHTML=state.symbols.map(s=>'<option value="'+esc(s.symbol)+'">'+esc(s.name)+'</option>').join('');
  state.selected=state.symbols[0].symbol;
+ $('instrumentList').innerHTML=state.symbols.map(s=>'<button type="button" class="instrument-chip'+(s.symbol===state.selected?' selected':'')+'" data-symbol="'+esc(s.symbol)+'">'+esc(s.name)+'</button>').join('');
+ $('symbolSelect').innerHTML=state.symbols.map(s=>'<option value="'+esc(s.symbol)+'">'+esc(s.name)+'</option>').join('');
 }
 
 function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
@@ -182,8 +182,10 @@ function onLiveTick(tick){
  if(state.lastRecalcBucket!==null&&recalcBucket>state.lastRecalcBucket){state.lastRecalcBucket=recalcBucket;state.rawBySymbol.set(state.selected,state.rawCandles);runUniverseBacktest(false).then(analyze);}
 }
 function subscribeLive(){if(state.liveSub){try{state.ws.send(JSON.stringify({forget:state.liveSub}));}catch{}}request({ticks:state.selected,subscribe:1}).then(r=>{state.liveSub=r.subscription?.id||null;}).catch(()=>{});}
+function selectSymbol(symbol){if(!state.symbols.some(s=>s.symbol===symbol))return;state.selected=symbol;$('symbolSelect').value=symbol;document.querySelectorAll('.instrument-chip').forEach(b=>b.classList.toggle('selected',b.dataset.symbol===symbol));analyze();subscribeLive();}
 function bind(){
- $('symbolSelect').addEventListener('change',e=>{state.selected=e.target.value;analyze();subscribeLive();});
+ $('instrumentList').addEventListener('click',e=>{const b=e.target.closest('button[data-symbol]');if(b)selectSymbol(b.dataset.symbol);});
+ $('symbolSelect').addEventListener('change',e=>selectSymbol(e.target.value));
  $('timeframes').addEventListener('click',async e=>{const b=e.target.closest('button[data-tf]');if(!b)return;state.tf=+b.dataset.tf;document.querySelectorAll('#timeframes button').forEach(x=>x.classList.toggle('active',x===b));await runUniverseBacktest(false);await analyze();});
  $('refreshBtn').addEventListener('click',async()=>{await runUniverseBacktest(true);await analyze();});$('runBacktest').addEventListener('click',async()=>{await runUniverseBacktest(true);await analyze();});
 }
