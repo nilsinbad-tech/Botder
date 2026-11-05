@@ -84,7 +84,10 @@
 .chart-overlay .bear-zone{background:rgba(225,55,75,.58)!important;border-color:#ffd34e!important;color:#fff!important;box-shadow:0 0 0 1px #ffd34e88,0 0 16px #ff5968bb,0 0 13px #ffd34e99,inset 0 0 8px #ff596855!important}
 @media(max-width:600px){.chart-overlay .ob-zone{min-width:104px!important;min-height:28px!important;height:28px!important;padding:4px 7px!important}.chart-overlay .ob-zone b{font-size:9px!important}}
 
-/* v53: niveles compactos y arrastrables; el precio y su descripción quedan en la escala derecha */
-.chart-overlay .level-line{height:16px!important;margin-top:-8px!important;border-top:2px dashed!important;pointer-events:auto!important;touch-action:none!important;cursor:ns-resize!important;background:transparent!important;z-index:12!important}
-.chart-overlay .entry-line{border-top-style:solid!important;border-top-width:2px!important}
+/* v54: los niveles no ocupan el gráfico; solo queda un pequeño tirador a la izquierda. El desplazamiento vertical queda libre. */
+.chart-overlay .level-line{height:14px!important;margin-top:0!important;border-top:1px solid currentColor!important;border-radius:3px!important;background:rgba(11,18,30,.72)!important;opacity:.95!important;pointer-events:auto!important;touch-action:none!important;cursor:ns-resize!important;z-index:12!important}
+.chart-overlay .entry-line{border-top:2px solid #f1c45b!important}
+.chart-overlay .sl-line{border-top:1px dashed #ff5968!important}
+.chart-overlay .tp-line{border-top:1px dashed #20d69a!important}
+.chart-overlay .tp2-line{border-top:1px dotted #46b6ff!important}
 .chart-overlay .level-tag{display:none!important}
