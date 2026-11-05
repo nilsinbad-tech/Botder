@@ -268,3 +268,73 @@
  .timeframes button{padding:4px 5px!important;font-size:9px!important}
  .summary-grid article{min-height:45px!important}
 }
+
+
+/* BOTDER A06 · distribución real adaptable: evita controles fuera del viewport */
+*,*::before,*::after{box-sizing:border-box}
+html,body{width:100%;max-width:100%;min-width:0;overflow-x:clip}
+.app,.app>*{min-width:0;max-width:100%}
+.toolbar{width:100%;min-width:0;align-items:stretch}
+.toolbar>*{min-width:0}
+.history-scroll{width:100%;max-width:100%;overflow-x:auto;overscroll-behavior-x:contain}
+.history-scroll table{min-width:760px}
+.instrument-list{width:100%;max-width:100%;min-width:0}
+.chart-card,.panel,.summary-grid,.lower-grid{min-width:0;max-width:100%}
+.settings-drawer{width:100%;min-width:0}
+.settings-drawer .compact-settings{width:100%;min-width:0;display:flex;flex-direction:column;align-items:stretch;gap:8px}
+.settings-drawer .compact-settings>strong,
+.settings-drawer .compact-settings>small{display:block;width:100%;min-width:0;white-space:normal}
+.settings-drawer .compact-row{width:100%;min-width:0;flex-wrap:wrap}
+.settings-drawer .pivot-tf-controls,
+#obTfControls,#obPreviousTfControls,#pivotStructureTfControls,#pivotTfControls{display:flex;width:100%;max-width:100%;min-width:0;flex-wrap:wrap;gap:5px}
+.settings-drawer .pivot-tf-controls button,
+#obTfControls button,#obPreviousTfControls button,#pivotStructureTfControls button,#pivotTfControls button{flex:0 0 auto;min-width:0}
+.rsi-config-grid,.rsi-level-group{display:flex;width:100%;min-width:0;flex-wrap:wrap;gap:8px}
+.rsi-config-grid label,.rsi-level-group label{min-width:0;max-width:100%;flex-wrap:wrap}
+.rsi-config-grid select,.rsi-config-grid input,.rsi-level-group input{max-width:100%}
+#applyRsiConfig{max-width:100%;white-space:normal;text-align:left}
+@media(max-width:600px){
+ .app{padding:6px!important;gap:7px!important}
+ .toolbar{display:grid!important;grid-template-columns:minmax(0,1fr)!important;gap:6px!important}
+ .toolbar label{display:grid!important;grid-template-columns:1fr!important;width:100%;min-width:0}
+ .toolbar select{display:block;width:100%!important;min-width:0!important;max-width:100%!important}
+ .timeframes{display:grid!important;grid-template-columns:repeat(5,minmax(0,1fr))!important;width:100%!important;min-width:0!important}
+ .timeframes button{width:100%;min-width:0;padding-left:2px!important;padding-right:2px!important}
+ .data-status{width:100%;min-width:0;overflow-wrap:anywhere}
+ .summary-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+ .summary-grid article{min-width:0;overflow:hidden}
+ .chart-head{min-width:0;gap:6px}
+ .chart-head>div{min-width:0;max-width:100%}
+ .chart-head small,.chart-mode{overflow-wrap:anywhere}
+ .chart-points-summary{min-width:0;flex-wrap:wrap}
+ .chart-points-summary span{min-width:0}
+ .chart-points-summary small{min-width:0;overflow-wrap:anywhere}
+ .chart-foot{min-width:0;flex-wrap:wrap;overflow-wrap:anywhere}
+ .chart-foot>*{min-width:0;max-width:100%}
+ .settings-drawer .compact-settings{padding:8px!important}
+ .settings-drawer .pivot-tf-controls{display:grid!important;grid-template-columns:repeat(4,minmax(0,1fr))!important}
+ .settings-drawer .pivot-tf-controls button{width:100%;min-width:0!important;max-width:100%;padding:5px 2px!important}
+ .ob-previous-toggle{width:100%;min-width:0;white-space:normal}
+ .rsi-config-grid label,.rsi-level-group label{display:flex;flex:1 1 120px;justify-content:space-between}
+ .rsi-config-grid select,.rsi-config-grid input,.rsi-level-group input{width:66px;min-width:0}
+ .lower-grid{grid-template-columns:minmax(0,1fr)!important}
+ .panel-title{min-width:0;gap:6px;flex-wrap:wrap}
+ .stats-row{grid-template-columns:repeat(4,minmax(0,1fr))}
+ .stats-row>div{min-width:0}
+ .stats-row b{overflow-wrap:anywhere}
+ .signal-details{overflow-wrap:anywhere}
+ .instrument-chip{max-width:100%;overflow-wrap:anywhere}
+ .connection{min-width:0;max-width:48%;overflow:hidden}
+ .connection span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+}
+@media(max-width:390px){
+ .topbar{padding-left:6px!important;padding-right:6px!important;gap:5px!important}
+ .brand{min-width:0}
+ .brand small{max-width:105px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+ .connection{max-width:42%;font-size:8px!important}
+ .icon-btn{flex:0 0 29px}
+ .settings-drawer .pivot-tf-controls{grid-template-columns:repeat(4,minmax(0,1fr))!important}
+ .stats-row{gap:3px!important}
+ .stats-row small{letter-spacing:0;font-size:7px!important}
+ .stats-row b{font-size:13px!important}
+}
