@@ -4,7 +4,7 @@
 const APP_ID = '1089';
 const API_URL = 'wss://ws.derivws.com/websockets/v3?app_id=' + APP_ID;
 const $ = id => document.getElementById(id);
-const state = { ws:null, req:0, pending:new Map(), symbols:[], selected:null, tf:1, candles:[], trades:[], liveSub:null, main:null, rsi:null, series:{}, busy:false };
+const state = { ws:null, req:0, pending:new Map(), symbols:[], selected:null, tf:1, candles:[], rawCandles:[], trades:[], liveSub:null, main:null, rsi:null, series:{}, busy:false, lastRecalcBucket:null };
 const CANDIDATES = [
  ['1HZ10V','Volatility 10 (1s)'],['1HZ15V','Volatility 15 (1s)'],['1HZ25V','Volatility 25 (1s)'],['1HZ30V','Volatility 30 (1s)'],['1HZ50V','Volatility 50 (1s)'],['1HZ75V','Volatility 75 (1s)'],['1HZ90V','Volatility 90 (1s)'],['1HZ100V','Volatility 100 (1s)'],['1HZ150V','Volatility 150 (1s)'],['1HZ250V','Volatility 250 (1s)'],
  ['R_10','Volatility 10'],['R_25','Volatility 25'],['R_50','Volatility 50'],['R_75','Volatility 75'],['R_100','Volatility 100'],
@@ -27,8 +27,19 @@ async function loadSymbols(){
  await connect();const r=await request({active_symbols:'brief',product_type:'basic'});
  const all=r.active_symbols||[];const byCode=new Map(all.map(s=>[s.symbol,s]));
  const chosen=CANDIDATES.map(([code,label])=>{const s=byCode.get(code);return s?{symbol:s.symbol,name:s.display_name||label,market:s.market,submarket:s.submarket}:null;}).filter(Boolean);
- // Se usan únicamente símbolos que Deriv devuelve como activos; nunca se inventan instrumentos.
- state.symbols=chosen.slice(0,25);
+ // Completa el universo con otros sintéticos activos si algún símbolo preferido no está disponible.
+ const extras=all.filter(s=>/synthetic|derived/i.test((s.market||'')+' '+(s.submarket||'')) && /volatility|crash|boom|step|jump/i.test(s.display_name||''))
+   .filter(s=>!chosen.some(x=>x.symbol===s.symbol))
+   .sort((a,b)=>{
+     const rank=n=>/step index/i.test(n)?0:/crash 300|boom 300/i.test(n)?1:/volatility/i.test(n)?2:/crash|boom/i.test(n)?3:4;
+     return rank(a.display_name)-rank(b.display_name)||a.display_name.localeCompare(b.display_name);
+   }).map(s=>({symbol:s.symbol,name:s.display_name,market:s.market,submarket:s.submarket}));
+ // Prioriza Step Index y los Crash/Boom con el número más bajo disponible.
+ const ordered=[...chosen].sort((a,b)=>{
+   const rank=n=>/step index/i.test(n)?0:/crash 300|boom 300/i.test(n)?1:/volatility/i.test(n)?2:/crash|boom/i.test(n)?3:4;
+   return rank(a.name)-rank(b.name);
+ });
+ state.symbols=[...ordered,...extras].slice(0,25);
  if(!state.symbols.length)throw new Error('Deriv no devolvió los símbolos priorizados. Revisa el catálogo disponible.');
  $('instrumentCount').textContent=state.symbols.length+' / 25 instrumentos activos';
  $('instrumentList').innerHTML=state.symbols.map(s=>'<span class="instrument-chip">'+esc(s.name)+'</span>').join('');
@@ -77,15 +88,18 @@ function draw(c,calc,trades){
  if(state.main){state.main.remove();state.rsi.remove();}
  const L=LightweightCharts,main=$('mainChart');main.innerHTML='';
  state.main=L.createChart(main,{autoSize:true,layout:{background:{type:'solid',color:'#0b121e'},textColor:'#9aaac0',fontSize:11},grid:{vertLines:{color:'#172235'},horzLines:{color:'#172235'}},rightPriceScale:{borderColor:'#28364a'},timeScale:{borderColor:'#28364a',timeVisible:true,secondsVisible:false},handleScroll:{mouseWheel:true,pressedMouseMove:true,horzTouchDrag:true,vertTouchDrag:true},handleScale:{mouseWheel:true,pinch:true,axisPressedMouseMove:true}});
- const candle=state.main.addSeries(L.CandlestickSeries,{upColor:'#19c99a',downColor:'#ff5968',borderVisible:false,wickUpColor:'#19c99a',wickDownColor:'#ff5968'});
+ const candle=state.main.addSeries(L.CandlestickSeries,{upColor:'#19c99a',downColor:'#ff5968',borderVisible:false,wickUpColor:'#19c99a',wickDownColor:'#ff5968'});state.series.candle=candle;
  candle.setData(c);
  const addLine=(values,color)=>{const s=state.main.addSeries(L.LineSeries,{color,lineWidth:2,priceLineVisible:false,lastValueVisible:false});s.setData(values.map((v,i)=>v==null?null:{time:c[i].time,value:v}).filter(Boolean));return s;};
  addLine(calc.e9,'#36b9f6');addLine(calc.e21,'#f5a33b');addLine(calc.e50,'#a36aff');
  const markers=[];
- trades.forEach(t=>{markers.push({time:t.time,position:t.side==='BUY'?'belowBar':'aboveBar',color:t.side==='BUY'?'#20d69a':'#ff5968',shape:t.side==='BUY'?'arrowUp':'arrowDown',text:(t.side==='BUY'?'COMPRA':'VENTA')+' '+fmt(t.entry)});});
+ trades.forEach(t=>{
+  markers.push({time:t.ob.time,position:t.side==='BUY'?'belowBar':'aboveBar',color:t.side==='BUY'?'#168f76':'#b43c4b',shape:'square',text:t.side==='BUY'?'OB A':'OB B'});
+  markers.push({time:t.time,position:t.side==='BUY'?'belowBar':'aboveBar',color:t.side==='BUY'?'#20d69a':'#ff5968',shape:t.side==='BUY'?'arrowUp':'arrowDown',text:(t.side==='BUY'?'COMPRA ':'VENTA ')+fmt(t.entry)});
+ });
  candle.setMarkers(markers.sort((a,b)=>a.time-b.time));
  const latest=trades.filter(t=>t.state==='PREPARADA').slice(-1)[0];
- if(latest){candle.createPriceLine({price:latest.entry,color:latest.side==='BUY'?'#20d69a':'#ff5968',lineWidth:2,lineStyle:L.LineStyle.Dashed,axisLabelVisible:true,title:latest.side==='BUY'?'COMPRA':'VENTA'});candle.createPriceLine({price:latest.sl,color:'#ff5968',lineStyle:L.LineStyle.Dotted,axisLabelVisible:true,title:'SL'});candle.createPriceLine({price:latest.tp1,color:'#20d69a',lineStyle:L.LineStyle.Dotted,axisLabelVisible:true,title:'TP1'});candle.createPriceLine({price:latest.tp2,color:'#20d69a',lineStyle:L.LineStyle.Dashed,axisLabelVisible:true,title:'TP2'});}
+ if(latest){candle.createPriceLine({price:latest.ob.high,color:latest.side==='BUY'?'#168f76':'#b43c4b',lineWidth:1,lineStyle:L.LineStyle.Dotted,axisLabelVisible:false,title:latest.side==='BUY'?'OB alcista':'OB bajista'});candle.createPriceLine({price:latest.ob.low,color:latest.side==='BUY'?'#168f76':'#b43c4b',lineWidth:1,lineStyle:L.LineStyle.Dotted,axisLabelVisible:false,title:'OB'});candle.createPriceLine({price:latest.entry,color:latest.side==='BUY'?'#20d69a':'#ff5968',lineWidth:2,lineStyle:L.LineStyle.Dashed,axisLabelVisible:true,title:latest.side==='BUY'?'COMPRA':'VENTA'});candle.createPriceLine({price:latest.sl,color:'#ff5968',lineStyle:L.LineStyle.Dotted,axisLabelVisible:true,title:'SL'});candle.createPriceLine({price:latest.tp1,color:'#20d69a',lineStyle:L.LineStyle.Dotted,axisLabelVisible:true,title:'TP1'});candle.createPriceLine({price:latest.tp2,color:'#20d69a',lineStyle:L.LineStyle.Dashed,axisLabelVisible:true,title:'TP2'});}
  state.main.timeScale().fitContent();
  const rsiEl=$('rsiChart');rsiEl.innerHTML='';
  state.rsi=L.createChart(rsiEl,{autoSize:true,layout:{background:{type:'solid',color:'#0b121e'},textColor:'#8b9bb0',fontSize:10},grid:{vertLines:{color:'#172235'},horzLines:{color:'#172235'}},rightPriceScale:{borderColor:'#28364a'},timeScale:{visible:false},handleScroll:{mouseWheel:true,pressedMouseMove:true,horzTouchDrag:true},handleScale:{mouseWheel:true,pinch:true}});
@@ -109,7 +123,7 @@ function renderHistory(trades){const rows=trades.slice(-150).reverse();$('histor
 async function analyze(){
  if(state.busy)return;state.busy=true;$('dataStatus').textContent='Descargando 24h…';
  try{const raw=await getCandles(state.selected);if(!raw.length)throw new Error('No llegaron velas para '+state.selected);
- const c=aggregate(raw,state.tf);state.candles=c;const calc=buildSetups(c);state.trades=simulate(c,calc.setups);
+ state.rawCandles=raw;state.lastRecalcBucket=Math.floor(raw.at(-1).time/(state.tf*60));const c=aggregate(raw,state.tf);state.candles=c;const calc=buildSetups(c);state.trades=simulate(c,calc.setups);
  draw(c,calc,state.trades);showLatest(calc,state.trades,c);renderHistory(state.trades);
  $('chartTitle').textContent=(state.symbols.find(s=>s.symbol===state.selected)?.name||state.selected)+' · M'+state.tf;
  $('chartSubtitle').textContent='Velas '+c.length+' · análisis de 24 horas · señales proyectadas';
@@ -118,7 +132,18 @@ async function analyze(){
  $('dataStatus').textContent='Datos actualizados';
  }catch(e){$('dataStatus').textContent='Error: '+e.message;$('signalDetails').textContent=e.message;}finally{state.busy=false;}
 }
-function onLiveTick(tick){if(!state.selected||tick.symbol!==state.selected)return;/* La vela histórica y el escáner se actualizan al refrescar; no se inventa una vela OHLC con un tick aislado. */}
+function onLiveTick(tick){
+ if(!state.selected||tick.symbol!==state.selected||!state.rawCandles.length)return;
+ const price=Number(tick.quote),epoch=Number(tick.epoch);if(!Number.isFinite(price)||!Number.isFinite(epoch))return;
+ const minute=Math.floor(epoch/60)*60;let last=state.rawCandles[state.rawCandles.length-1];
+ if(minute>last.time){state.rawCandles.push({time:minute,open:price,high:price,low:price,close:price});if(state.rawCandles.length>1440)state.rawCandles.shift();}
+ else if(minute===last.time){last.high=Math.max(last.high,price);last.low=Math.min(last.low,price);last.close=price;}
+ const tfSeconds=state.tf*60,bucket=Math.floor(epoch/tfSeconds)*tfSeconds;
+ const group=state.rawCandles.filter(x=>Math.floor(x.time/tfSeconds)*tfSeconds===bucket);
+ if(group.length&&state.series.candle){state.series.candle.update({time:bucket,open:group[0].open,high:Math.max(...group.map(x=>x.high)),low:Math.min(...group.map(x=>x.low)),close:price});}
+ const recalcBucket=Math.floor(epoch/tfSeconds);
+ if(state.lastRecalcBucket!==null&&recalcBucket>state.lastRecalcBucket){state.lastRecalcBucket=recalcBucket;analyze();}
+}
 function subscribeLive(){if(state.liveSub){try{state.ws.send(JSON.stringify({forget:state.liveSub}));}catch{}}request({ticks:state.selected,subscribe:1}).then(r=>{state.liveSub=r.subscription?.id||null;}).catch(()=>{});}
 function bind(){
  $('symbolSelect').addEventListener('change',e=>{state.selected=e.target.value;analyze();subscribeLive();});
