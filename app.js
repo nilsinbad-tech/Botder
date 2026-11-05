@@ -286,7 +286,7 @@ function drawOverlays(trades,c,host,obZones=[],setups=[]){
     if(closed&&Number.isFinite(trade.exitPrice)&&Number.isFinite(trade.exitTime)){
       const isTp2=trade.result==='GANADA'&&Number.isFinite(Number(trade.tp2))&&Math.abs(trade.exitPrice-Number(trade.tp2))<=Math.max(1e-10,Math.abs(Number(trade.tp2))*1e-8);
       const resultText=trade.result==='PERDIDA'?'PÉRDIDA':(isTp2?'GANADA TP2':'GANADA TP1');
-      levels=[[resultText,trade.exitPrice,'result-line',trade.exitTime]];
+      levels=[[resultText,trade.exitPrice,'result-line',time]];
     }else if(!closed){
       levels=[['SL',trade.sl,'sl-line',time],['TP1',trade.tp1,'tp-line',time]];
       if(Number.isFinite(Number(trade.tp2))&&Math.abs(Number(trade.tp2)-Number(trade.tp1))>Math.max(1e-10,Math.abs(Number(trade.tp1))*1e-8))levels.push(['TP2',trade.tp2,'tp2-line',time]);
