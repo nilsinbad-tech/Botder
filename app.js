@@ -132,24 +132,29 @@ function draw(c,calc,trades){
  if(preserveRange){state.main.timeScale().setVisibleLogicalRange(priorRange);state.rsi.timeScale().setVisibleLogicalRange(priorRange);}else{const visibleFrom=Math.max(0,c.length-120);const visibleRange={from:visibleFrom,to:c.length+3};state.main.timeScale().setVisibleLogicalRange(visibleRange);state.rsi.timeScale().setVisibleLogicalRange(visibleRange);}let syncingRange=false;state.main.timeScale().subscribeVisibleLogicalRangeChange(range=>{if(!range||syncingRange)return;syncingRange=true;state.rsi.timeScale().setVisibleLogicalRange(range);syncingRange=false;});state.rsi.timeScale().subscribeVisibleLogicalRangeChange(range=>{if(!range||syncingRange)return;syncingRange=true;state.main.timeScale().setVisibleLogicalRange(range);syncingRange=false;});state.forceFitNext=false;
 }
 function drawPivotLines(){
- // Última hora: pivotes M10 recientes. Niveles anteriores: solo pivotes H1.
  if(!state.series.candle||!state.rawCandles.length)return;
  for(const line of state.pivotLines){try{state.series.candle.removePriceLine(line);}catch{}}
  state.pivotLines=[];
- const raw=state.rawCandles,last=raw[raw.length-1].time,recentFrom=last-3600;
- const recent=pivots(aggregate(raw,10),3,600),hourly=pivots(aggregate(raw,60),3,3600);
- const levels=[
-  ...recent.highs.filter(p=>p.time>=recentFrom&&p.confirmedTime<=last).slice(-3).map(p=>({...p,kind:'recent-high'})),
-  ...recent.lows.filter(p=>p.time>=recentFrom&&p.confirmedTime<=last).slice(-3).map(p=>({...p,kind:'recent-low'})),
-  ...hourly.highs.filter(p=>p.time<recentFrom&&p.confirmedTime<=last).slice(-4).map(p=>({...p,kind:'hour-high'})),
-  ...hourly.lows.filter(p=>p.time<recentFrom&&p.confirmedTime<=last).slice(-4).map(p=>({...p,kind:'hour-low'}))
+ const raw=state.rawCandles,last=raw[raw.length-1].time,cutoff=last-3600;
+ const m10=pivots(aggregate(raw,10),3,600),h1=pivots(aggregate(raw,60),2,3600);
+ // Los pivotes M10 recientes se muestran primero; H1 conserva el contexto anterior.
+ let recent=[
+  ...m10.highs.slice(-4).map(p=>({...p,kind:'recent-resistance'})),
+  ...m10.lows.slice(-4).map(p=>({...p,kind:'recent-support'}))
  ];
+ // Si el mercado no ha confirmado un pivote M10 en el tramo final,
+ // se conserva el último nivel M10 válido para no dejar el gráfico vacío.
+ const old=[
+  ...h1.highs.filter(p=>p.time<cutoff).slice(-3).map(p=>({...p,kind:'hour-resistance'})),
+  ...h1.lows.filter(p=>p.time<cutoff).slice(-3).map(p=>({...p,kind:'hour-support'}))
+ ];
+ const levels=[...recent,...old];
  const L=window.LightweightCharts;
  for(const p of levels){
-  const isRecent=p.kind.startsWith('recent'),isResistance=p.kind.endsWith('high');
+  const isRecent=p.kind.startsWith('recent'),isResistance=p.kind.endsWith('resistance');
   const line=state.series.candle.createPriceLine({
    price:p.price,
-   color:isRecent?(isResistance?'#f0a34a':'#39b9a0'):(isResistance?'rgba(240,163,74,.48)':'rgba(57,185,160,.48)'),
+   color:isRecent?(isResistance?'#f0a34a':'#39b9a0'):(isResistance?'#c58a48':'#398f82'),
    lineWidth:isRecent?2:1,
    lineStyle:isRecent?L.LineStyle.Solid:L.LineStyle.Dashed,
    axisLabelVisible:false,title:''
