@@ -95,9 +95,9 @@ function render(){
  $("strategy-list").innerHTML=strategies.map(s=>{const cells=symbols.map(m=>{const r=results.find(x=>x.symbol===m.symbol&&x.strategy.id===s.id);return '<div class="instrument-result"><b>'+(r?fmt(r.rate,1)+"%":"—")+'</b><span>'+esc(m.name)+' · '+(r?r.wins+"G / "+r.losses+"P · "+r.total+" ops":"pendiente")+'</span></div>'}).join("");return '<article class="strategy-card"><div class="strategy-top"><strong>'+s.id+'. '+esc(s.name)+'</strong><small>'+esc(s.group)+' · '+esc(s.rules)+'</small></div><div class="strategy-results">'+cells+'</div></article>'}).join("");
  $("market-list").innerHTML=symbols.map(m=>'<div class="market-chip"><span>'+esc(m.name)+'</span><small>'+m.symbol+'</small></div>').join("");
  $("s-symbols").textContent=symbols.length;$("s-tests").textContent=results.length+"/"+(symbols.length*strategies.length);
- const sorted=results.filter(r=>r.total>=5).sort((a,b)=>b.rate-a.rate);
- $("best-list").innerHTML=sorted.slice(0,5).map(r=>rankCard(r,"best")).join("")||'<div class="empty">Se necesitan al menos 5 operaciones cerradas por estrategia.</div>';
- $("worst-list").innerHTML=sorted.slice(-5).reverse().map(r=>rankCard(r,"worst")).join("")||'<div class="empty">Todavía no hay resultados suficientes.</div>';
+ const ranked=symbols.map(m=>({market:m,rows:results.filter(r=>r.symbol===m.symbol&&r.total>=5).sort((a,b)=>b.rate-a.rate||b.wins-a.wins)}));
+ $("best-list").innerHTML=ranked.map(g=>'<section class="market-rank"><h4>'+esc(g.market.name)+'</h4>'+(g.rows.length?rankCard(g.rows[0],"best"):'<div class="empty">Aún no hay estrategia con 5 operaciones cerradas.</div>')+'</section>').join("")||'<div class="empty">Esperando instrumentos…</div>';
+ $("worst-list").innerHTML=ranked.map(g=>'<section class="market-rank"><h4>'+esc(g.market.name)+'</h4>'+(g.rows.length?rankCard(g.rows[g.rows.length-1],"worst"):'<div class="empty">Aún no hay estrategia con 5 operaciones cerradas.</div>')+'</section>').join("")||'<div class="empty">Esperando instrumentos…</div>';
  const old=$("chart-market").value;$("chart-market").innerHTML=symbols.map(m=>'<option value="'+m.symbol+'">'+esc(m.name)+'</option>').join("");if(symbols.some(m=>m.symbol===old))$("chart-market").value=old;
  $("chart-strategy").innerHTML=strategies.map(s=>'<option value="'+s.id+'">'+s.id+". "+esc(s.name)+'</option>').join("");
  $("s-strategies").textContent=strategies.length;$("live-count").textContent=results.length+" / "+(symbols.length*strategies.length)+" pruebas";
