@@ -46,6 +46,7 @@ function connect(){
   ws.onopen=()=>{if(settled)return;settled=true;clearTimeout(timer);setConnection(false,'Deriv conectada · verificando…');startHeartbeat();resolve();};
   ws.onerror=()=>{setConnection(false,'Error de conexión · reconectando…');fail(new Error('No se pudo conectar a Deriv'));try{ws.close();}catch{}};
   ws.onclose=()=>{
+   if(state.heartbeatTimer){clearInterval(state.heartbeatTimer);state.heartbeatTimer=null;}
    fail(new Error('Conexión cerrada'));
    if(state.ws===ws)state.ws=null;
    state.liveSub=null;setConnection(false,'Deriv desconectada · reconectando…');
@@ -82,7 +83,7 @@ function scheduleReconnect(){
   }
  },3000);
 }
-function request(payload,timeoutMs=REQUEST_TIMEOUT_MS){return new Promise((resolve,reject)=>{if(!state.ws||state.ws.readyState!==1){reject(new Error('WebSocket no está conectado'));return;}const id=++state.req;const timer=setTimeout(()=>{if(state.pending.has(id)){state.pending.delete(id);reject(new Error('Deriv no respondió a tiempo: '+(payload.ticks_history||payload.active_symbols||payload.ping?'ping':'solicitud')));}},timeoutMs);state.pending.set(id,{resolve:m=>{clearTimeout(timer);resolve(m);},reject:e=>{clearTimeout(timer);reject(e);}});try{state.ws.send(JSON.stringify({...payload,req_id:id}));}catch(e){clearTimeout(timer);state.pending.delete(id);reject(e);}});}
+function request(payload,timeoutMs=REQUEST_TIMEOUT_MS){return new Promise((resolve,reject)=>{if(!state.ws||state.ws.readyState!==1){reject(new Error('WebSocket no está conectado'));return;}const id=++state.req;const timer=setTimeout(()=>{if(state.pending.has(id)){state.pending.delete(id);reject(new Error('Deriv no respondió a tiempo: '+(payload.ping?'ping':payload.ticks_history?'historial':payload.active_symbols?'instrumentos':'solicitud')));}},timeoutMs);state.pending.set(id,{resolve:m=>{clearTimeout(timer);resolve(m);},reject:e=>{clearTimeout(timer);reject(e);}});try{state.ws.send(JSON.stringify({...payload,req_id:id}));}catch(e){clearTimeout(timer);state.pending.delete(id);reject(e);}});}
 async function loadSymbols(){
  await connect();const r=await request({active_symbols:'brief'});
  const all=r.active_symbols||[];
