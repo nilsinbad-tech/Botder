@@ -104,7 +104,7 @@ function connectDeriv() {
       }
       if (Number.isFinite(price) && Number.isFinite(epoch) && selectedSymbol) {
         updateOperationPrice(selectedSymbol, price);
-        const interval = 60, bucket = Math.floor(epoch / interval) * interval;
+        const interval = selectedGranularity === 30 ? 30 : 60, bucket = Math.floor(epoch / interval) * interval;
         let live = candleBuffer[candleBuffer.length - 1], candleClosed = false;
         if (!live || live.time !== bucket) {
           live = { time: bucket, open: price, high: price, low: price, close: price };
