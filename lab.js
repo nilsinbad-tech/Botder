@@ -9,15 +9,12 @@ const strategies=[
 {id:5,name:"EMA Pullback",group:"Tendencia",rules:"EMA 9/21/50 M1 alineadas + retroceso y continuación en 30s"},
 {id:6,name:"RSI Reversal",group:"Reversión",rules:"RSI M1 sale de extremo + giro confirmado en 30s"},
 {id:7,name:"FVG + Reacción",group:"Desequilibrio",rules:"Regreso a FVG M1 + rechazo confirmado en 30s"},
-{id:8,name:"Doble techo / suelo",group:"Price Action",rules:"Segundo test M1 + ruptura de neckline en 30s"},
-{id:9,name:"Momentum",group:"Impulso",rules:"Vela de impulso M1 + continuación en 30s"},
-{id:10,name:"OB + Liquidity Sweep",group:"Confluencia",rules:"Barrida de liquidez dentro de OB M1 + confirmación en 30s",ob:true},
-{id:11,name:"EMA 9/25 + EMA 50 + OB + RSI",group:"Estrategia personalizada",rules:"Cruce EMA 9/25 M1 hacia la dirección de EMA 50 + OB + vela fuerte + RSI; entrada en 30s",ob:true}
+{id:8,name:"Doble techo / suelo",group:"Price Action",rules:"Segundo test M1 + ruptura de neckline en 30s"}
 ];
 let socket=null,busy=false,req=1,reqState=null,symbols=[],results=[],hist={},idx=0,active=null,queue=[],timer=null,connectTimer=null,symbolTimer=null,overallTimer=null,validInstruments=0,failedInstruments=0;
 const $=id=>document.getElementById(id),esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const fmt=(v,n=5)=>Number.isFinite(v)?v.toFixed(n):"—";
-function status(s){$("status").textContent=s;$("live-status").textContent=s}
+function status(s){$("status").textContent=s;$("live-status").textContent=busy?"TESTING · "+s:s}
 function connection(s,ok){$("connection-state").textContent=s;$("connection-state").className=ok?"connected":"disconnected"}
 function ema(a,p){let o=Array(a.length).fill(null);if(a.length<p)return o;let v=a.slice(0,p).reduce((x,y)=>x+y,0)/p,k=2/(p+1);o[p-1]=v;for(let i=p;i<a.length;i++){v=a[i]*k+v*(1-k);o[i]=v}return o}
 function rsi(c,p=14){let o=Array(c.length).fill(null),g=0,l=0;if(c.length<=p)return o;for(let i=1;i<=p;i++){let d=c[i]-c[i-1];g+=Math.max(d,0);l+=Math.max(-d,0)}g/=p;l/=p;o[p]=l?100-100/(1+g/l):100;for(let i=p+1;i<c.length;i++){let d=c[i]-c[i-1];g=(g*(p-1)+Math.max(d,0))/p;l=(l*(p-1)+Math.max(-d,0))/p;o[i]=l?100-100/(1+g/l):100}return o}
@@ -96,13 +93,13 @@ function render(){
  updateTotals();
  $("strategy-list").innerHTML=strategies.map(s=>{const cells=symbols.map(m=>{const r=results.find(x=>x.symbol===m.symbol&&x.strategy.id===s.id);return '<div class="instrument-result"><b>'+(r?fmt(r.rate,1)+"%":"—")+'</b><span>'+esc(m.name)+' · '+(r?r.wins+"G / "+r.losses+"P · "+r.total+" ops":"pendiente")+'</span></div>'}).join("");return '<article class="strategy-card"><div class="strategy-top"><strong>'+s.id+'. '+esc(s.name)+'</strong><small>'+esc(s.group)+' · '+esc(s.rules)+'</small></div><div class="strategy-results">'+cells+'</div></article>'}).join("");
  $("market-list").innerHTML=symbols.map(m=>'<div class="market-chip"><span>'+esc(m.name)+'</span><small>'+m.symbol+'</small></div>').join("");
- $("s-symbols").textContent=symbols.length;$("s-tests").textContent="11 por índice";
+ $("s-symbols").textContent=symbols.length;$("s-tests").textContent="8 por índice";
  const ranked=symbols.map(m=>({market:m,rows:results.filter(r=>r.symbol===m.symbol&&r.total>=5).sort((a,b)=>b.rate-a.rate||b.wins-a.wins)}));
  $("best-list").innerHTML=ranked.map(g=>'<section class="market-rank"><h4>'+esc(g.market.name)+'</h4>'+(g.rows.length?rankCard(g.rows[0],"best"):'<div class="empty">Aún no hay estrategia con 5 operaciones cerradas.</div>')+'</section>').join("")||'<div class="empty">Esperando instrumentos…</div>';
  $("worst-list").innerHTML=ranked.map(g=>'<section class="market-rank"><h4>'+esc(g.market.name)+'</h4>'+(g.rows.length?rankCard(g.rows[g.rows.length-1],"worst"):'<div class="empty">Aún no hay estrategia con 5 operaciones cerradas.</div>')+'</section>').join("")||'<div class="empty">Esperando instrumentos…</div>';
  const old=$("chart-market").value;$("chart-market").innerHTML=symbols.map(m=>'<option value="'+m.symbol+'">'+esc(m.name)+'</option>').join("");if(symbols.some(m=>m.symbol===old))$("chart-market").value=old;
  $("chart-strategy").innerHTML=strategies.map(s=>'<option value="'+s.id+'">'+s.id+". "+esc(s.name)+'</option>').join("");
- $("s-strategies").textContent=strategies.length;$("live-count").textContent="11 estrategias por cada uno de "+symbols.length+" instrumentos";
+ $("s-strategies").textContent=strategies.length;$("live-count").textContent=results.length+" / "+(symbols.length*strategies.length)+" pruebas completadas";
  drawChart();
 }
 function rankCard(r,kind){return '<article class="rank-card"><div><b>'+esc(r.market)+'</b><small>'+r.strategy.name+'</small></div><strong class="'+(kind==="best"?"rate":"loss")+'">'+fmt(r.rate,1)+'%</strong><small>'+r.wins+' ganadas · '+r.losses+' perdidas · '+r.total+' operaciones</small><button class="inspect-result" data-symbol="'+r.symbol+'" data-strategy="'+r.strategy.id+'">VER GRÁFICO</button></article>'}
@@ -119,7 +116,7 @@ function drawChart(){
  host.innerHTML='<svg class="market-chart" viewBox="0 0 1000 300" role="img" aria-label="Velas de treinta segundos con entradas y niveles TP y SL">'+svg+'</svg><div class="chart-legend"><span>🟢 BUY / TP</span><span>🔴 SELL / SL</span><span>Velas de 30 segundos · contexto y señales M1</span></div>';
  $("trade-audit-list").innerHTML=r.entries.slice(-30).reverse().map(t=>'<article class="audit-trade"><b class="'+(t.result==="GANADA"?"rate":"loss")+'">'+t.result+' · '+t.direction+'</b><span>Entrada '+fmt(t.entry)+' · '+new Date(t.entryTime*1000).toLocaleString("es-PA")+'</span><span>TP1 '+fmt(t.tp)+' · TP2 '+fmt(t.tp2)+' · SL '+fmt(t.sl)+'</span><span>Salida '+fmt(t.exitPrice)+' · '+(t.exitTime?new Date(t.exitTime*1000).toLocaleString("es-PA"):"sin salida")+'</span></article>').join("");
 }
-function progress(){const total=symbols.length;$("progress-count").textContent=idx+" / "+total+" instrumentos · 11 estrategias por instrumento";$("progress-bar").style.width=(total?idx/total*100:0)+"%";$("progress-title").textContent=busy?"Analizando "+(active?.name||"Deriv"):"Análisis finalizado"}
+function progress(){const total=symbols.length;$("progress-count").textContent=idx+" / "+total+" instrumentos · 8 estrategias por instrumento";$("progress-bar").style.width=(total?idx/total*100:0)+"%";$("progress-title").textContent=busy?"Analizando "+(active?.name||"Deriv"):"Análisis finalizado"}
 function finish(msg){busy=false;clearTimeout(timer);clearTimeout(connectTimer);clearTimeout(symbolTimer);clearTimeout(overallTimer);if(socket){try{socket.close()}catch(e){}socket=null}status(msg);$("live-detail").textContent=msg;$("start").disabled=false;progress();render();$("updated").textContent="Actualizado: "+new Date().toLocaleString("es-PA")}
 function requestPage(){
  if(!busy||!reqState)return;
@@ -184,8 +181,15 @@ function runInstrument(){
     failedInstruments++;$("live-detail").textContent=active.name+": datos insuficientes. Cobertura "+coverage.toFixed(2)+" días; M1 "+m1.length+" velas; 30s "+m30.length+" velas. No se publican resultados parciales.";
    }else{
     hist[active.symbol]={m1,m30};validInstruments++;
-    for(const s of strategies){const r=buildTrades(m1,m30,s);results.push({symbol:active.symbol,market:active.name,strategy:s,...r})}
-    $("live-detail").textContent=active.name+": 2 días completos · "+m1.length+" velas M1 · "+m30.length+" velas 30s · "+tickCount.toLocaleString("es-PA")+" ticks descargados en "+pages+" páginas · 11 estrategias probadas.";
+    for(const s of strategies){
+     $("live-detail").textContent="TESTING · "+active.name+" · estrategia "+s.id+" de "+strategies.length+": "+s.name;
+     $("progress-title").textContent="TESTING · "+active.name;
+     const r=buildTrades(m1,m30,s);
+     results.push({symbol:active.symbol,market:active.name,strategy:s,...r});
+     updateTotals();
+     $("live-count").textContent=results.length+" / "+(symbols.length*strategies.length)+" pruebas completadas";
+    }
+    $("live-detail").textContent=active.name+": 2 días completos · "+m1.length+" velas M1 · "+m30.length+" velas 30s · "+tickCount.toLocaleString("es-PA")+" ticks descargados en "+pages+" páginas · 8 estrategias probadas.";
    }
   }
   idx++;progress();render();runInstrument();
