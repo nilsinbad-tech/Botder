@@ -77,7 +77,7 @@ function botderOverlap(a,b,pad=0){
 function botderTradeAt(d,i,tf,cache=null){
  if(i<60||i>=d.length)return null;
  const close=cache?null:d.slice(0,i+1).map(c=>c.close),e9=cache?.e9||botderEma(close,9),e20=cache?.e20||botderEma(close,20),e50=cache?.e50||botderEma(close,50);
- const c=d[i],emaBull=e9[i]!=null&&e20[i]!=null&&e50[i]!=null&&e9[i]>e20[i]&&e20[i]>e50[i],emaBear=e9[i]!=null&&e20[i]!=null&&e50[i]!=null&&e9[i]<e20[i]&&e20[i]<e50[i];
+ const c=d[i],confirm=i-1,emaBull=e9[confirm]!=null&&e20[confirm]!=null&&e50[confirm]!=null&&e9[confirm]>e20[confirm]&&e20[confirm]>e50[confirm],emaBear=e9[confirm]!=null&&e20[confirm]!=null&&e50[confirm]!=null&&e9[confirm]<e20[confirm]&&e20[confirm]<e50[confirm];
  const piv=botderPivots(d,i-1,2),liq=botderLiquidity(d,i-1,piv),zones=botderZones(d,i-1),range=botderMedianRange(d,i-1),pad=Math.max(range*.75,liq.tolerance*2);
  const candidate=(side)=>{
   const isBuy=side==="BUY",pool=(isBuy?liq.ssl:liq.bsl).find(p=>c.low<=p.high+pad&&c.high>=p.low-pad);
@@ -93,8 +93,8 @@ function botderTradeAt(d,i,tf,cache=null){
   if(isBuy?!(sl<entry&&tp1>entry&&tp2>tp1):!(sl>entry&&tp1<entry&&tp2<tp1))return null;
   const touches=pool.count,risk=Math.abs(entry-sl),reward=Math.abs(tp1-entry);
   if(!risk||reward/risk<1.05)return null;
-  const emaSpread=Math.abs(e9[i]-e50[i])/Math.max(range,1e-9),score=Math.min(99,Math.round(70+Math.min(10,(touches-2)*4)+Math.min(10,emaSpread*3)+Math.min(10,(reward/risk-1)*5)));
-  return{direction:isBuy?"COMPRAR":"VENDER",entry,sl,tp1,tp2,time:c.time,index:i,timeframe:botderLabel(tf),timeframeSeconds:tf,confidence:score,scoreLabel:"CONFLUENCIA",mode:(isBuy?"OB ALCISTA + FVG + SSL":"OB BAJISTA + FVG + BSL")+" · EMA 9/20/50",pool,ob,gap,ema:{e9:e9[i],e20:e20[i],e50:e50[i]},rr:reward/risk};
+  const emaSpread=Math.abs(e9[confirm]-e50[confirm])/Math.max(range,1e-9),score=Math.min(99,Math.round(70+Math.min(10,(touches-2)*4)+Math.min(10,emaSpread*3)+Math.min(10,(reward/risk-1)*5)));
+  return{direction:isBuy?"COMPRAR":"VENDER",entry,sl,tp1,tp2,time:c.time,index:i,timeframe:botderLabel(tf),timeframeSeconds:tf,confidence:score,scoreLabel:"CONFLUENCIA",mode:(isBuy?"OB ALCISTA + FVG + SSL":"OB BAJISTA + FVG + BSL")+" · EMA 9/20/50",pool,ob,gap,ema:{e9:e9[confirm],e20:e20[confirm],e50:e50[confirm]},rr:reward/risk};
  };
  return candidate("BUY")||candidate("SELL");
 }
@@ -118,7 +118,10 @@ function botderBacktest(d,tf,symbol,market){
   const key=[tf,signal.direction,signal.pool.time,signal.pool.level.toPrecision(12)].join(":");
   if(seen.has(key))continue;seen.add(key);
   let result="ABIERTA",exitPrice=null,exitTime=0,exitReason="SIN CIERRE",exitIndex=-1;
-  for(let j=i+1;j<d.length;j++){
+  const entryBar=d[i],entryBarStop=signal.direction==="COMPRAR"?entryBar.low<=signal.sl:entryBar.high>=signal.sl;
+  // Si la vela de activación también alcanza el SL, se cuenta como pérdida; TP en esa misma vela no se acredita.
+  if(entryBarStop){result="PERDIDA";exitPrice=signal.sl;exitTime=entryBar.time*1000;exitReason="SL EN VELA DE ENTRADA";exitIndex=i;}
+  for(let j=i+1;exitIndex<0&&j<d.length;j++){
    const bar=d[j],stop=signal.direction==="COMPRAR"?bar.low<=signal.sl:bar.high>=signal.sl;
    const tp1=signal.direction==="COMPRAR"?bar.high>=signal.tp1:bar.low<=signal.tp1;
    const tp2=signal.direction==="COMPRAR"?bar.high>=signal.tp2:bar.low<=signal.tp2;
