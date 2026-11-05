@@ -356,10 +356,11 @@ function drawOverlays(trades,c,host,obZones=[],setups=[]){
  const lineEls=[];
  const overrideKey=t?String(state.selected||'')+':'+String(t.time)+':'+t.side:null;
  if(t&&overrideKey&&state.levelOverrides[overrideKey])Object.assign(t,state.levelOverrides[overrideKey]);
- // Conserva las entradas históricas del backtest en su vela y precio originales.
- const entryRecords=(trades||[]).filter(x=>Number.isFinite(x.entry)&&Number.isFinite(x.entryTime)&&x.entryIndex>=0&&x.result!=='CANCELADA');
- const currentPending=t&&t.entryIndex<0&&!Number.isFinite(t.entryTime)?[t]:[];
- const visibleEntries=[...entryRecords,...currentPending].slice(-550);
+ // En el gráfico solo se dibuja la señal vigente. Las operaciones cerradas
+ // (TP1, TP2 o SL) quedan exclusivamente en el historial y no dejan marcas activas.
+ const activeEntries=(trades||[]).filter(x=>x.result==='PENDIENTE'&&Number.isFinite(x.entry)&&x.entryIndex>=0&&Number.isFinite(x.entryTime));
+ const currentPending=t&&t.result==='PENDIENTE'&&t.entryIndex<0&&!Number.isFinite(t.entryTime)?[t]:[];
+ const visibleEntries=[...activeEntries,...currentPending].slice(-1);
  state.overlayPriceLevels=t?[t.entry,t.sl,t.tp1,t.tp2].filter(Number.isFinite):[];
  const levelLineEls=[];
  visibleEntries.forEach((trade,index)=>{
