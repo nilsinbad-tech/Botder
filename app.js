@@ -18,7 +18,7 @@ function connect(){
   if(state.ws && state.ws.readyState===1){resolve();return;}
   const ws=new WebSocket(API_URL); state.ws=ws;
   const timer=setTimeout(()=>reject(new Error('Tiempo de conexión agotado')),12000);
-  ws.onopen=()=>{clearTimeout(timer);setConnection(true,'Deriv conectada');resolve();};
+  ws.onopen=()=>{clearTimeout(timer);setConnection(false,'Validando Deriv…');resolve();};
   ws.onerror=()=>{clearTimeout(timer);setConnection(false,'Error de conexión');reject(new Error('No se pudo conectar a Deriv'));};
   ws.onclose=()=>{setConnection(false,'Deriv desconectada');for(const [,p] of state.pending)p.reject(new Error('Conexión cerrada'));state.pending.clear();};
   ws.onmessage=e=>{let m;try{m=JSON.parse(e.data);}catch(err){console.error('Respuesta Deriv no válida',err);return;}if(m.req_id&&state.pending.has(m.req_id)){const p=state.pending.get(m.req_id);state.pending.delete(m.req_id);m.error?p.reject(new Error(m.error.message)):p.resolve(m);}if(m.msg_type==='tick'&&m.tick)onLiveTick(m.tick);};
