@@ -1,10 +1,9 @@
 /* BOTDER · motor de análisis y backtesting. Sin ejecución de órdenes. */
 (() => {
 'use strict';
-const APP_ID = '1089';
 const HISTORY_CANDLES = 1440;
 const REQUEST_TIMEOUT_MS = 45000;
-const API_URL = 'wss://ws.derivws.com/websockets/v3?app_id=' + APP_ID;
+const API_URL = 'wss://api.derivws.com/trading/v1/options/ws/public';
 const $ = id => document.getElementById(id);
 const state = { ws:null, req:0, pending:new Map(), symbols:[], selected:null, tf:1, candles:[], rawCandles:[], rawBySymbol:new Map(), marketBacktests:[], trades:[], liveSub:null, main:null, rsi:null, markerPlugin:null, overlayResizeObserver:null, overlayUpdate:null, overlayRangeHandler:null, chartKey:null, series:{}, busy:false, analyzeQueued:false, forceFitNext:true, lastRecalcBucket:null };
 const CANDIDATES = [
@@ -26,7 +25,7 @@ function connect(){
 }
 function request(payload){return new Promise((resolve,reject)=>{if(!state.ws||state.ws.readyState!==1){reject(new Error('WebSocket no está conectado'));return;}const id=++state.req;const timer=setTimeout(()=>{if(state.pending.has(id)){state.pending.delete(id);reject(new Error('Deriv no respondió a tiempo: '+(payload.ticks_history||payload.active_symbols||'solicitud')));}},REQUEST_TIMEOUT_MS);state.pending.set(id,{resolve:m=>{clearTimeout(timer);resolve(m);},reject:e=>{clearTimeout(timer);reject(e);}});try{state.ws.send(JSON.stringify({...payload,req_id:id}));}catch(e){clearTimeout(timer);state.pending.delete(id);reject(e);}});}
 async function loadSymbols(){
- await connect();const r=await request({active_symbols:'brief',product_type:'basic'});
+ await connect();const r=await request({active_symbols:'brief'});
  const all=r.active_symbols||[];const byCode=new Map(all.map(s=>[s.symbol,s]));
  const chosen=CANDIDATES.map(([code,label])=>{const s=byCode.get(code);return s?{symbol:s.symbol,name:s.display_name||label,market:s.market,submarket:s.submarket}:null;}).filter(Boolean);
  // Completa el universo con otros sintéticos activos si algún símbolo preferido no está disponible.
