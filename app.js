@@ -124,6 +124,59 @@ function ema(values,period){const out=Array(values.length).fill(null),k=2/(perio
 function rsi(values,period=14){const out=Array(values.length).fill(null);let gain=0,loss=0;for(let i=1;i<values.length;i++){const d=values[i]-values[i-1];const g=Math.max(d,0),l=Math.max(-d,0);if(i<=period){gain+=g;loss+=l;if(i===period){gain/=period;loss/=period;out[i]=loss===0?100:100-100/(1+gain/loss);}}else{gain=(gain*(period-1)+g)/period;loss=(loss*(period-1)+l)/period;out[i]=loss===0?100:100-100/(1+gain/loss);}}return out;}
 function pivots(c,span=3,candleSeconds=600){const highs=[],lows=[];for(let i=span;i<c.length-span;i++){let hi=true,lo=true;for(let j=1;j<=span;j++){if(c[i].high<=c[i-j].high||c[i].high<=c[i+j].high)hi=false;if(c[i].low>=c[i-j].low||c[i].low>=c[i+j].low)lo=false;}if(hi)highs.push({index:i,time:c[i].time,confirmedTime:c[i+span].time+candleSeconds,price:c[i].high});if(lo)lows.push({index:i,time:c[i].time,confirmedTime:c[i+span].time+candleSeconds,price:c[i].low});}const sample=c.slice(-30),avgRange=sample.length?sample.reduce((sum,v)=>sum+(v.high-v.low),0)/sample.length:0,tolerance=avgRange*.45;const merge=items=>{const kept=[];for(const p of items){const near=kept.findIndex(q=>Math.abs(q.price-p.price)<=tolerance);if(near<0)kept.push(p);else if(p.confirmedTime>kept[near].confirmedTime)kept[near]=p;}return kept.sort((a,b)=>a.time-b.time);};return{highs:merge(highs),lows:merge(lows)};}
 function rsiForCandles(candles,raw){
+function calculateZigZagM1(raw,depth=3,deviation=5,separation=3){
+ const points=[];if(!Array.isArray(raw)||raw.length<depth*2+3)return points;
+ const decimals=Math.min(10,Math.max(0,...raw.slice(-300).map(x=>{const v=String(x.close);return v.includes('.')?v.split('.')[1].length:0;})));
+ const pointSize=Math.pow(10,-decimals),minMove=deviation*pointSize;
+ const candidates=[];
+ for(let i=depth;i<raw.length-depth;i++){
+  let high=true,low=true;
+  for(let j=1;j<=depth;j++){if(raw[i].high<raw[i-j].high||raw[i].high<raw[i+j].high)high=false;if(raw[i].low>raw[i-j].low||raw[i].low>raw[i+j].low)low=false;}
+  const confirmedTime=raw[i+depth].time+60;
+  if(high)candidates.push({index:i,time:raw[i].time,confirmedTime,price:raw[i].high,type:'HIGH'});
+  if(low)candidates.push({index:i,time:raw[i].time,confirmedTime,price:raw[i].low,type:'LOW'});
+ }
+ candidates.sort((a,b)=>a.index-b.index||(a.type==='HIGH'?-1:1));
+ for(const p of candidates){
+  const last=points.at(-1);
+  if(!last){points.push(p);continue;}
+  if(p.type===last.type){
+   if((p.type==='HIGH'&&p.price>last.price)||(p.type==='LOW'&&p.price<last.price))points[points.length-1]=p;
+   continue;
+  }
+  if(p.index-last.index<separation||Math.abs(p.price-last.price)<minMove)continue;
+  points.push(p);
+ }
+ return points;
+}
+function zigZagLineData(raw){
+ const pivots=calculateZigZagM1(raw),up=[],down=[];
+ for(let i=1;i<pivots.length;i++){
+  const a=pivots[i-1],b=pivots[i],target=b.price>a.price?up:down;
+  target.push({time:a.time,value:a.price},{time:b.time,value:b.price},{time:b.time+1});
+ }
+ const clean=data=>{const map=new Map();for(const p of data)map.set(p.time,p);return [...map.values()].sort((a,b)=>a.time-b.time);};
+ return{up:clean(up),down:clean(down),pivots};
+}
+function zigZagConfirmations(raw){
+ const pivots=calculateZigZagM1(raw),signals=[];
+ for(let i=1;i<pivots.length;i++){
+  const prior=pivots[i-1],pivot=pivots[i];
+  const side=pivot.type==='LOW'&&prior.type==='HIGH'?'BUY':pivot.type==='HIGH'&&prior.type==='LOW'?'SELL':null;
+  if(!side)continue;
+  const next=raw.find(bar=>bar.time>=pivot.confirmedTime);
+  if(!next||next.time+60>(raw.at(-1)?.time||0)+60)continue;
+  const bullish=next.close>next.open,bearish=next.close<next.open;
+  if((side==='BUY'&&bullish)||(side==='SELL'&&bearish))signals.push({side,time:next.time+60,price:next.close,pivotTime:pivot.time,pivotConfirmedTime:pivot.confirmedTime});
+ }
+ return signals.sort((a,b)=>a.time-b.time);
+}
+
+
+
+ // ZigZag M1: profundidad 3 velas, desviación de 5 puntos y separación mínima de 3 velas.
+ // Los pivotes solo se publican cuando ya cerraron las 3 velas posteriores.
+
  const cfg=state.rsiConfig,mins=Math.max(1,Number(cfg.timeframe)||5),period=Math.max(2,Number(cfg.period)||14);
  const grouped=aggregate(raw,mins),values=rsi(grouped.map(x=>x.close),period),out=Array(candles.length).fill(null);
  let j=0,last=null;
@@ -223,10 +276,11 @@ function isOBInvalidated(ob,side,structure,raw,time){
 }
 function findOBAtTime(c,time,side,tf=state.obTf){const completed=c.filter(bar=>bar.time+tf*60<=time);return findOB(completed,completed.length,side);}
 function findOB(c,i,side){for(let j=i-1;j>=Math.max(0,i-9);j--){const q=c[j],opposite=side==='BUY'?q.close<q.open:q.close>q.open;if(opposite){const entry=(q.high+q.low)/2;return{time:q.time,high:q.high,low:q.low,entry};}}return null;}
-function simulate(c,setups,rsiM5Values=[]){
+function simulate(c,setups,rsiM5Values=[],m1Candles=state.rawCandles){
+ const zigSignals=zigZagConfirmations(m1Candles);
  const trades=[],entryRsiValues=rsi(c.map(x=>x.close));
  for(const s of setups){
-  let entered=false,result='PENDIENTE',entryIndex=-1,entryTime=null,exitTime=null,exitPrice=null,oppositeCandles=0,cancelReason=null;
+  let entered=false,result='PENDIENTE',entryIndex=-1,entryTime=null,exitTime=null,exitPrice=null,oppositeCandles=0,cancelReason=null,entryPrice=s.entry,slLevel=s.sl,tp1Level=s.tp1,tp2Level=s.tp2;
   for(let j=s.index+1;j<c.length;j++){
    const k=c[j];
    if(!entered){
@@ -239,24 +293,27 @@ function simulate(c,setups,rsiM5Values=[]){
     const opposite=s.side==='BUY'?k.close<k.open:k.close>k.open;
     oppositeCandles=opposite?oppositeCandles+1:0;
     if(oppositeCandles>=2){result='CANCELADA';exitTime=k.time;cancelReason='DOS_VELAS_CONTRARIAS';break;}
-    const entryHit=k.low<=s.entry&&k.high>=s.entry;
-    if(!entryHit){
-     if((s.side==='BUY'&&k.low<s.sl)||(s.side==='SELL'&&k.high>s.sl)){result='CANCELADA';exitTime=k.time;cancelReason='SL_ANTES_DE_ENTRADA';break;}
-     if(j-s.index>=5){result='CANCELADA';exitTime=k.time;cancelReason='EXPIRADA';break;}
+    const zigTrigger=zigSignals.find(signal=>signal.side===s.side&&signal.time> s.time&&signal.time<=k.time+120);
+    if(!zigTrigger){
+     if((s.side==='BUY'&&k.low<s.sl)||(s.side==='SELL'&&k.high>s.sl)){result='CANCELADA';exitTime=k.time;cancelReason='SL_ANTES_DE_CONFIRMACION_ZIGZAG';break;}
+     if(j-s.index>=5){result='CANCELADA';exitTime=k.time;cancelReason='EXPIRADA_SIN_ZIGZAG';break;}
      continue;
     }
-    entered=true;entryIndex=j;entryTime=k.time;
+    entered=true;entryIndex=j;entryTime=zigTrigger.time;
+    entryPrice=zigTrigger.price;
+    slLevel=entryPrice+(s.sl-s.entry);tp1Level=entryPrice+(s.tp1-s.entry);tp2Level=entryPrice+(s.tp2-s.entry);
    }
-   const slHit=s.side==='BUY'?k.low<=s.sl:k.high>=s.sl;
-   const tp1Hit=s.side==='BUY'?k.high>=s.tp1:k.low<=s.tp1;
-   const tp2Hit=s.side==='BUY'?k.high>=s.tp2:k.low<=s.tp2;
+   if(k.time+120<=entryTime)continue;
+   const slHit=s.side==='BUY'?k.low<=slLevel:k.high>=slLevel;
+   const tp1Hit=s.side==='BUY'?k.high>=tp1Level:k.low<=tp1Level;
+   const tp2Hit=s.side==='BUY'?k.high>=tp2Level:k.low<=tp2Level;
    // Si SL y TP aparecen dentro de la misma vela, se cuenta SL primero (criterio conservador).
-   if(slHit){result='PERDIDA';exitPrice=s.sl;exitTime=k.time;break;}
-   if(tp2Hit){result='GANADA';exitPrice=s.tp2;exitTime=k.time;break;}
-   if(tp1Hit){result='GANADA';exitPrice=s.tp1;exitTime=k.time;break;}
+   if(slHit){result='PERDIDA';exitPrice=slLevel;exitTime=k.time;break;}
+   if(tp2Hit){result='GANADA';exitPrice=tp2Level;exitTime=k.time;break;}
+   if(tp1Hit){result='GANADA';exitPrice=tp1Level;exitTime=k.time;break;}
   }
   const points=exitPrice==null?null:(s.side==='BUY'?exitPrice-s.entry:s.entry-exitPrice);
-  trades.push({...s,result,entryIndex,entryTime,entryRsi:entryIndex>=0?entryRsiValues[entryIndex]:null,exitTime,exitPrice,points,cancelReason});
+  trades.push({...s,entry:entryPrice,sl:slLevel,tp1:tp1Level,tp2:tp2Level,zigzagConfirmed:true,result,entryIndex,entryTime,entryRsi:entryIndex>=0?entryRsiValues[entryIndex]:null,exitTime,exitPrice,points,cancelReason});
  }
  return trades;
 }
@@ -281,6 +338,7 @@ function draw(c,calc,trades,obZones=[],setups=[]){
  if(state.main&&state.rsi&&state.chartKey===chartKey){
   const lineData=values=>values.map((v,i)=>v==null?null:{time:c[i].time,value:v}).filter(Boolean);const m5Ema=emaM5ForChart(c,state.rawCandles);
   state.series.candle.setData(c);state.series.rsi.setData(lineData(calc.rv));state.series.ema20M5.setData(m5Ema.line20);state.series.ema50M5.setData(m5Ema.line50);
+  const zz=zigZagLineData(state.rawCandles);if(state.series.zigzagUp)state.series.zigzagUp.setData(zz.up);if(state.series.zigzagDown)state.series.zigzagDown.setData(zz.down);
   drawPivotLines();if(state.markerPlugin)state.markerPlugin.setMarkers([]);
   const latest=trades.slice(-1)[0];drawOverlays(trades,c,$('mainChart'),obZones,setups);
   if(state.forceFitNext){const visibleFrom=Math.max(0,c.length-120);const visibleRange={from:visibleFrom,to:c.length+3};state.main.timeScale().setVisibleLogicalRange(visibleRange);state.rsi.timeScale().setVisibleLogicalRange(visibleRange);}else if(priorRange){state.main.timeScale().setVisibleLogicalRange(priorRange);state.rsi.timeScale().setVisibleLogicalRange(priorRange);}state.forceFitNext=false;return;
@@ -293,6 +351,7 @@ function draw(c,calc,trades,obZones=[],setups=[]){
  const m5Ema=emaM5ForChart(c,state.rawCandles);
  state.series.ema20M5=state.main.addSeries(L.LineSeries,{color:'#f5b942',lineWidth:2,priceLineVisible:false,lastValueVisible:true,title:'EMA 20 M5'});state.series.ema20M5.setData(m5Ema.line20);
  state.series.ema50M5=state.main.addSeries(L.LineSeries,{color:'#48a9ff',lineWidth:2,priceLineVisible:false,lastValueVisible:true,title:'EMA 50 M5'});state.series.ema50M5.setData(m5Ema.line50);
+ const zz=zigZagLineData(state.rawCandles);state.series.zigzagUp=state.main.addSeries(L.LineSeries,{color:'#19c99a',lineWidth:2,priceLineVisible:false,lastValueVisible:false,title:'ZigZag alcista M1'});state.series.zigzagUp.setData(zz.up);state.series.zigzagDown=state.main.addSeries(L.LineSeries,{color:'#ff5968',lineWidth:2,priceLineVisible:false,lastValueVisible:false,title:'ZigZag bajista M1'});state.series.zigzagDown.setData(zz.down);
  drawPivotLines();
  if(typeof L.createSeriesMarkers==='function'){state.markerPlugin=L.createSeriesMarkers(candle,[]);}else{state.markerPlugin=null;}
  const latest=trades.slice(-1)[0];
@@ -532,7 +591,7 @@ async function runUniverseBacktest(refresh=false){
  });
  await Promise.all(workers);
  const allTrades=[],shortHistory=[];
- for(const item of state.symbols){const source=state.rawBySymbol.get(item.symbol)||[];if(!source.length)continue;const raw=source;if(raw.length<HISTORY_CANDLES)shortHistory.push(item.name+' ('+raw.length+' de '+HISTORY_CANDLES+' velas)');const candles=aggregate(raw,2);if(candles.length<70)continue;const hourly=getHourlyBias(raw),obCandles=raw,pivotCandles=aggregate(raw,state.pivotTf),calc=buildSetups(candles,obCandles,pivotCandles,pivotCandles,hourly.side,raw),setups=hourly.side?calc.setups.filter(x=>x.side===hourly.side):[],trades=simulate(candles,setups,rsiForCandles(candles,raw));allTrades.push(...trades.map(t=>({...t,symbol:item.symbol})));}
+ for(const item of state.symbols){const source=state.rawBySymbol.get(item.symbol)||[];if(!source.length)continue;const raw=source;if(raw.length<HISTORY_CANDLES)shortHistory.push(item.name+' ('+raw.length+' de '+HISTORY_CANDLES+' velas)');const candles=aggregate(raw,2);if(candles.length<70)continue;const hourly=getHourlyBias(raw),obCandles=raw,pivotCandles=aggregate(raw,state.pivotTf),calc=buildSetups(candles,obCandles,pivotCandles,pivotCandles,hourly.side,raw),setups=hourly.side?calc.setups.filter(x=>x.side===hourly.side):[],trades=simulate(candles,setups,rsiForCandles(candles,raw),raw);allTrades.push(...trades.map(t=>({...t,symbol:item.symbol})));}
  state.marketBacktests=mergeTrades(state.marketBacktests,allTrades,2000);
  state.savedChartTrades=mergeTrades(state.savedChartTrades,allTrades,2000);
  state.trades=state.savedChartTrades.filter(t=>t.symbol===state.selected);
@@ -560,7 +619,7 @@ async function analyze(){
  // Una sola dirección gobierna las señales y los OB visibles: la tendencia H1.
  const alignedSetups=activeSide?signalCalc.setups.filter(setup=>setup.side===activeSide):[];
  const alignedZones=chartCalc.obZones;
- const freshTrades=simulate(signalCandles,alignedSetups,rsiForCandles(signalCandles,raw)).map(t=>({...t,symbol:state.selected}));
+ const freshTrades=simulate(signalCandles,alignedSetups,rsiForCandles(signalCandles,raw),raw).map(t=>({...t,symbol:state.selected}));
  state.savedChartTrades=mergeTrades(state.savedChartTrades,freshTrades,2000);
  state.trades=state.savedChartTrades.filter(t=>t.symbol===state.selected);
  savePersistentState();
