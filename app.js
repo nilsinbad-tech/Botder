@@ -352,7 +352,7 @@ function drawOverlays(trades,c,host,obZones=[],setups=[]){
   const tag=document.createElement('b');tag.textContent=(ob.side==='BUY'?'OB ALCISTA':'OB BAJISTA')+' · M'+ob.timeframe;el.appendChild(tag);
   overlay.appendChild(el);return{el,ob};
  });
- const t=[...trades].reverse().find(x=>['ESPERANDO DOJI','ESPERANDO CAMBIO','PENDIENTE'].includes(x.result))||[...setups].reverse()[0]||trades[trades.length-1];
+ const t=[...(trades||[])].reverse().find(x=>x.result==='PENDIENTE')||null;
  const lineEls=[];
  const overrideKey=t?String(state.selected||'')+':'+String(t.time)+':'+t.side:null;
  if(t&&overrideKey&&state.levelOverrides[overrideKey])Object.assign(t,state.levelOverrides[overrideKey]);
@@ -364,10 +364,11 @@ function drawOverlays(trades,c,host,obZones=[],setups=[]){
  const levelLineEls=[];
  visibleEntries.forEach((trade,index)=>{
   const time=Number.isFinite(trade.entryTime)?trade.entryTime:trade.time;
+  const confirmed=trade.entryIndex>=0&&Number.isFinite(trade.entryTime);
   const label=trade.side==='BUY'?'COMPRA':'VENTA';
-  const el=document.createElement('div');el.className='price-label entry-line';
-  el.setAttribute('aria-label','Entrada '+label+' '+fmt(trade.entry));
-  const lotSpec=cfdSpec(trade.symbol||state.selected);el.innerHTML='<b>'+label+'</b><strong>'+fmt(trade.entry)+'</strong><small>RSI '+fmt(Number.isFinite(trade.entryRsi)?trade.entryRsi:trade.rsi)+'</small>'+(lotSpec?'<small>LOTE '+lotSpec.minLot+'</small>':'');
+  const el=document.createElement('div');el.className='price-label '+(confirmed?'entry-line confirmed-entry-line':'entry-line possible-entry-line');
+  el.setAttribute('aria-label',(confirmed?'Entrada confirmada ':'Posible entrada ')+label+' '+fmt(trade.entry));
+  const lotSpec=cfdSpec(trade.symbol||state.selected);el.innerHTML='<b>'+(confirmed?'CONFIRMADA':'POSIBLE '+label)+'</b><strong>'+fmt(trade.entry)+'</strong><small>RSI '+fmt(Number.isFinite(trade.entryRsi)?trade.entryRsi:trade.rsi)+'</small>'+(lotSpec?'<small>LOTE '+lotSpec.minLot+'</small>':'');
   overlay.appendChild(el);
   lineEls.push({key:'entry-'+index,p:trade.entry,label,cls:'entry-line',el,time,side:trade.side});
   [['SL',trade.sl,'sl-line'],['TP1',trade.tp1,'tp-line'],['TP2',trade.tp2,'tp2-line']].forEach(([name,price,cls])=>{
@@ -441,16 +442,18 @@ function getHourlyBias(raw){
  return{trend,side,ob,h1};
 }
 function showLatest(calc,trades,c,raw=state.rawCandles){
- const t=trades.filter(x=>x.result==='PENDIENTE').slice(-1)[0]||trades.slice(-1)[0],rv=calc.rv[calc.rv.length-1];
+ const t=[...(trades||[])].reverse().find(x=>x.result==='PENDIENTE')||null,rv=calc.rv[calc.rv.length-1];
  const hourly=getHourlyBias(raw),trend=hourly.trend;
  $('trendValue').textContent=trend;$('trendValue').style.color=trend==='BAJISTA'?'#ff6876':trend==='ALCISTA'?'#20d69a':'#d5b35b';
  const obLabel=hourly.side?(hourly.side==='BUY'?'OB ALCISTA':'OB BAJISTA'):'SIN OB · H1 LATERAL';
  $('signalValue').textContent=obLabel;
  $('signalValue').style.color=hourly.side?(hourly.side==='BUY'?'#20d69a':'#ff6876'):'#aab8ca';
  $('entryValue').textContent=t?fmt(t.entry):'—';if($('slValue'))$('slValue').textContent=t?fmt(t.sl):'—';if($('tp1Value'))$('tp1Value').textContent=t?fmt(t.tp1):'—';if($('tp2Value'))$('tp2Value').textContent=t?fmt(t.tp2):'—';$('rsiValue').textContent=fmt(rv);updateMoneyPanel(t);
- $('rsiConfirm').textContent=t?'OB + TENDENCIA H1 + PIVOTE CONFIRMADOS':'Sin señal';$('rsiConfirm').style.color=t?'#20d69a':'#8b9bb0';
- $('signalState').textContent=t?(t.entryIndex>=0?'ACTIVA':'PREPARADA'):'ESPERANDO';
- $('signalDetails').textContent=(hourly.side?'Sesgo de 1 hora: '+trend+'. Mostrando únicamente el '+obLabel+' de H1'+(hourly.ob?' entre '+fmt(hourly.ob.low)+' y '+fmt(hourly.ob.high):' (zona no localizada en las últimas 9 velas H1)')+'. ':'La tendencia H1 está lateral; no se selecciona OB direccional. ')+(t?(t.entryIndex>=0?'Operación ACTIVA. ':'')+(t.side==='BUY'?'OB alcista + FVG':'OB bajista + FVG')+' alineado con la tendencia H1. Entrada en el OB; TP1 es la primera resistencia/soporte disponible de M3, M5 o M10. Entrada proyectada '+fmt(t.entry)+', SL '+fmt(t.sl)+', TP1 '+fmt(t.tp1)+' y TP2 '+fmt(t.tp2)+'.':'No hay una señal completa en la última vela M2.');
+ const confirmed=!!t&&t.entryIndex>=0;
+ $('rsiConfirm').textContent=t?(confirmed?'ENTRADA CONFIRMADA':'POSIBLE ENTRADA · ESPERANDO TOQUE'):'Sin señal activa';
+ $('rsiConfirm').style.color=confirmed?'#20d69a':t?'#f1c45b':'#8b9bb0';
+ $('signalState').textContent=t?(confirmed?'ACTIVA':'POSIBLE'):'ESPERANDO';
+ $('signalDetails').textContent=(hourly.side?'Sesgo de 1 hora: '+trend+'. Mostrando únicamente el '+obLabel+' de H1'+(hourly.ob?' entre '+fmt(hourly.ob.low)+' y '+fmt(hourly.ob.high):' (zona no localizada en las últimas 9 velas H1)')+'. ':'La tendencia H1 está lateral; no se selecciona OB direccional. ')+(t?(confirmed?'ENTRADA CONFIRMADA. Seguimiento activo. ':'POSIBLE ENTRADA: todavía no está confirmada. ')+(t.side==='BUY'?'OB alcista':'OB bajista')+' alineado con la tendencia H1. Nivel proyectado '+fmt(t.entry)+', SL '+fmt(t.sl)+', TP1 '+fmt(t.tp1)+' y TP2 '+fmt(t.tp2)+'.':'No hay señal activa. La última operación alcanzó su resultado y permanece únicamente en el historial.');
  $('rsiLegend').textContent='Valor actual: '+fmt(rv);
 }
 function renderHistory(trades){
