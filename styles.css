@@ -39,3 +39,6 @@
 
 .fvg-zone{border-style:dotted;opacity:.55;background:transparent}
 .chart-mode{color:var(--muted);font-size:10px}
+
+/* Las medias móviles son solo cálculo interno; nunca se muestran sobre el precio. */
+.legend,.ema9,.ema13,.ema20,.ema21,.ema3,.ema50{display:none!important}
