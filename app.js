@@ -62,8 +62,8 @@ function buildSetups(c){
  const setups=[];
  for(let i=55;i<c.length-5;i++){
   const x=c[i],prev=c[i-1],body=Math.abs(x.close-x.open),avg=c.slice(i-8,i).reduce((s,v)=>s+Math.abs(v.close-v.open),0)/8;
-  const bull=e9[i]>e21[i]&&e21[i]>e50[i],bear=e9[i]<e21[i]&&e21[i]<e50[i];
-  const buyRsi=rv[i]>=50&&rv[i]<=65&&rv[i]>rv[i-1],sellRsi=rv[i]<=55&&rv[i]>=35&&rv[i]<rv[i-1];
+  const bull=e9[i-1]<=e21[i-1]&&e9[i]>e21[i]&&e21[i]>e50[i],bear=e9[i-1]>=e21[i-1]&&e9[i]<e21[i]&&e21[i]<e50[i];
+  const buyRsi=rv[i]>=50&&rv[i]<=60&&rv[i]>rv[i-1],sellRsi=rv[i]<=55&&rv[i]>=40&&rv[i]<rv[i-1];
   const strongBull=x.close>x.open&&body>avg*1.25, strongBear=x.close<x.open&&body>avg*1.25;
   if(bull&&buyRsi&&strongBull){
    const ob=findOB(c,i,'buy');if(!ob)continue;
