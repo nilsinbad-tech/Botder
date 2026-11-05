@@ -253,7 +253,7 @@ function drawOverlays(trades,c,host,obZones=[],setups=[]){
  const zones=[...(obZones||[]),...(lockedTrade&&lockedTrade.ob?[{...lockedTrade.ob,side:lockedTrade.side,timeframe:state.obPrimaryTf,structureTime:lockedTrade.structureTime}]:[])].filter((ob,i,all)=>ob&&Number.isFinite(ob.time)&&all.findIndex(q=>q.time===ob.time&&q.side===ob.side)===i).sort((x,y)=>x.time-y.time);
  const zoneEls=zones.map(ob=>{
   const el=document.createElement('div');el.className='ob-zone '+(ob.fvg?'fvg-zone ':'')+(ob.side==='BUY'?'bull-zone':'bear-zone');
-  el.innerHTML='<b>'+(ob.side==='BUY'?'OB COMPRA':'OB VENTA')+'</b>';
+  el.innerHTML='';
   overlay.appendChild(el);return{el,ob};
  });
  const t=[...trades].reverse().find(x=>['ESPERANDO DOJI','ESPERANDO CAMBIO','PENDIENTE'].includes(x.result))||[...setups].reverse()[0]||trades[trades.length-1];
@@ -262,9 +262,9 @@ function drawOverlays(trades,c,host,obZones=[],setups=[]){
  if(t&&overrideKey&&state.levelOverrides[overrideKey])Object.assign(t,state.levelOverrides[overrideKey]);
  state.overlayPriceLevels=t?[t.entry].filter(Number.isFinite):[];
  if(t){
-  const label=t.side==='BUY'?'ENTRADA COMPRA':'ENTRADA VENTA';
+  const label='ENTRADA';
   const el=document.createElement('div');el.className='price-label entry-line';
-  el.setAttribute('aria-label',label+' '+fmt(t.entry));
+  el.setAttribute('aria-label','Punto de entrada '+fmt(t.entry));
   el.innerHTML='<b>'+label+'</b><strong>'+fmt(t.entry)+'</strong>';
   overlay.appendChild(el);lineEls.push({key:'entry',p:t.entry,label,cls:'entry-line',el,time:Number.isFinite(t.entryTime)?t.entryTime:(t.doji?.time||t.time),side:t.side});
  }
@@ -290,7 +290,7 @@ function drawOverlays(trades,c,host,obZones=[],setups=[]){
    const labelWidth=v.el.offsetWidth||145;
    const targetX=current+8;
    v.el.style.left=Math.max(2,Math.min(Math.max(2,width-labelWidth-2),targetX))+'px';
-   v.el.style.top=Math.max(2,Math.min(host.clientHeight-v.el.offsetHeight-2,y-(v.el.offsetHeight/2)))+'px';
+   v.el.style.top=(y-(v.el.offsetHeight/2))+'px';
   });
  };
  state.overlayUpdate=update;
