@@ -80,13 +80,15 @@ function buildSetups(c,liquidityCandles=c,pivotCandles=liquidityCandles,obStruct
  const m10Candles=aggregate(targetRawCandles,10),m10Pv=fixedM10Pivots(m10Candles,3);
  const stopPivots=state.slTfs.map(mins=>({mins,pv:pivots(aggregate(targetRawCandles,mins),3,mins*60)}));
  const setups=[],latestZones=[],zoneKeys=new Set(),usedOBs=new Set();
+ const ob10Candles=aggregate(targetRawCandles,10),ob30Candles=aggregate(targetRawCandles,30);
  for(let i=55;i<c.length;i++){
   const x=c[i];
   for(const side of (trendSide?[trendSide]:[])){
-   const candidates=findValidOBsAtTime(liquidityCandles,x.time,side,m10Pv,m10Candles,targetRawCandles);
-   if(candidates.length<2)continue;
-   for(const item of candidates){const zoneKey=side+':'+item.ob.time;if(!zoneKeys.has(zoneKey)){latestZones.push({...item.ob,side,timeframe:1,structurePrice:item.structure.price,structureTime:item.structure.time,structureType:side==='BUY'?'SOPORTE M10':'RESISTENCIA M10'});zoneKeys.add(zoneKey);}}
-   const {ob,structure}=candidates[0],key=side+':'+ob.time;
+   const primary=findValidOBAtTime(ob10Candles,x.time,side,10,m10Pv,m10Candles,targetRawCandles);
+   const previous=findValidOBAtTime(ob30Candles,x.time,side,30,m10Pv,m10Candles,targetRawCandles);
+   if(!primary||!previous)continue;
+   for(const item of [{...primary,tf:10},{...previous,tf:30}]){const zoneKey=side+':'+item.tf+':'+item.ob.time;if(!zoneKeys.has(zoneKey)){latestZones.push({...item.ob,side,timeframe:item.tf,structurePrice:item.structure.price,structureTime:item.structure.time,structureType:side==='BUY'?'SOPORTE':'RESISTENCIA'});zoneKeys.add(zoneKey);}}
+   const {ob,structure}=primary,key=side+':'+ob.time;
    if(!trendSide||side!==trendSide||usedOBs.has(key))continue;
    // TP1 y TP2: los dos niveles M10 anteriores al OB, en dirección del objetivo.
    const targets=(side==='BUY'?m10Pv.highs:m10Pv.lows)
@@ -118,18 +120,17 @@ function fixedM10Pivots(c,span=3){
  }
  return{highs,lows};
 }
-function findValidOBsAtTime(c,time,side,pv,m10Candles,raw){
+function findValidOBAtTime(c,time,side,tf,pv,m10Candles,raw){
  let lo=0,hi=c.length;
- while(lo<hi){const mid=(lo+hi)>>1;if(c[mid].time+60<=time)lo=mid+1;else hi=mid;}
- const valid=[];
- for(let j=lo-1;j>=Math.max(0,lo-60)&&valid.length<2;j--){
+ while(lo<hi){const mid=(lo+hi)>>1;if(c[mid].time+tf*60<=time)lo=mid+1;else hi=mid;}
+ for(let j=lo-1;j>=Math.max(0,lo-12);j--){
   const q=c[j],opposite=side==='BUY'?q.close<q.open:q.close>q.open;
   if(!opposite)continue;
   const ob={time:q.time,high:q.high,low:q.low,entry:(q.high+q.low)/2};
   const structure=findM10Structure(ob,side,pv,m10Candles,time);
-  if(structure&&!isOBInvalidated(ob,side,structure,raw,time))valid.push({ob,structure});
+  if(structure&&!isOBInvalidated(ob,side,structure,raw,time))return{ob,structure};
  }
- return valid.length===2?valid:[];
+ return null;
 }
 function findM10Structure(ob,side,pv,candles,time){
  // Exige que ya existan dos máximos (venta) o dos mínimos (compra) confirmados.
@@ -292,8 +293,9 @@ function drawOverlays(trades,c,host,obZones=[],setups=[]){
    const y1=candleSeries.priceToCoordinate(ob.high),y2=candleSeries.priceToCoordinate(ob.low);
    if(y1==null||y2==null){el.style.display='none';return;}
    if(x1==null){if(firstTime!=null&&ob.time<firstTime)x1=0;else{el.style.display='none';return;}}
-   const left=Math.max(0,Math.min(width-112,x1)),mid=(y1+y2)/2;
-   el.style.display='flex';el.style.left=left+'px';el.style.width=Math.min(window.innerWidth<=600?126:150,Math.max(112,width-left-8))+'px';el.style.top=Math.max(0,mid-15)+'px';el.style.height='30px';
+   const left=Math.max(0,Math.min(width-8,x1)),mid=(y1+y2)/2,boxWidth=Math.min(window.innerWidth<=600?126:150,Math.max(0,width-left-8));
+   if(boxWidth<24){el.style.display='none';return;}
+   el.style.display='flex';el.style.left=left+'px';el.style.width=boxWidth+'px';el.style.top=Math.max(0,mid-15)+'px';el.style.height='30px';
   });
   lineEls.forEach(v=>{const y=candleSeries.priceToCoordinate(v.p);if(y==null){v.el.style.display='none';return;}v.el.style.display='flex';v.el.style.left='auto';v.el.style.right='4px';v.el.style.width='max-content';v.el.style.top=(y-11)+'px';});
  };
