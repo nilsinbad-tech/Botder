@@ -217,7 +217,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const tf = document.getElementById("timeframe");
   const tfButtons=[...document.querySelectorAll(".timeframe-button")];
   const syncTfButtons=()=>tfButtons.forEach(b=>b.classList.toggle("active",b.dataset.tf===String(tf?.value||"60")));
-  if(tf){tf.value="60";tf.disabled=false;tf.addEventListener("change",()=>{selectedGranularity=Number(tf.value)||60;if(typeof setChartGranularity==="function")setChartGranularity(selectedGranularity);syncTfButtons();if(selectedSymbol&&candleBuffer.length&&typeof updateCandles==="function"){const h=getHigherTimeframeHistory(selectedGranularity);updateCandles(h.length?getDisplayCandles(selectedGranularity):aggregateForDisplay(candleBuffer,selectedGranularity));analyzeCandles(selectedSymbol,selectedMarketName(),candleBuffer);}});}
+  if(tf){tf.value="60";tf.disabled=false;tf.addEventListener("change",()=>{selectedGranularity=Number(tf.value)||60;if(typeof setChartGranularity==="function")setChartGranularity(selectedGranularity);syncTfButtons();if(selectedSymbol)loadMarketHistory(selectedSymbol,selectedGranularity);});}
   tfButtons.forEach(b=>b.addEventListener("click",()=>{if(!tf)return;tf.value=b.dataset.tf;tf.dispatchEvent(new Event("change",{bubbles:true}));}));
   syncTfButtons();
   const style=document.getElementById("candle-style");if(style)style.addEventListener("change",()=>{if(typeof setCandleStyle==="function")setCandleStyle(style.value);});
