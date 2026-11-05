@@ -3,3 +3,14 @@
 @media(max-width:850px){.app{padding:9px;gap:9px}.topbar{height:55px;padding:0 12px}.summary-grid{grid-template-columns:repeat(4,minmax(0,1fr))}.summary-grid article{min-height:61px;padding:8px}.summary-grid b{font-size:12px}.main-chart{height:350px}.lower-grid{grid-template-columns:1fr}.toolbar{gap:7px}.toolbar select{min-width:0;width:100%}.toolbar label{flex:1}.data-status{width:100%;margin:0;padding:0}.legend{gap:7px}.legend span{font-size:9px}.chart-head{align-items:flex-start}.stats-row b{font-size:20px}}
 @media(max-width:390px){.summary-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.timeframes{width:100%;justify-content:space-between}.timeframes button{flex:1;padding:8px 5px}.main-chart{height:310px}.brand small{font-size:8px}}
 .main-chart{position:relative}.chart-overlay{position:absolute;inset:0;z-index:3;pointer-events:none;overflow:hidden}.ob-zone{position:absolute;display:flex;align-items:flex-start;justify-content:flex-start;padding:4px 7px;font-size:10px;letter-spacing:.4px;opacity:.78;border:1px solid;min-height:9px}.bull-zone{background:#087c6530;border-color:#20d69a;color:#62e5c1}.bear-zone{background:#a32d3b30;border-color:#ff5968;color:#ff9aa4}.level-line{position:absolute;height:0;border-top:1px dashed;opacity:.9}.level-line span{position:absolute;right:3px;top:-17px;background:#0b121e;border:1px solid currentColor;border-radius:5px;padding:2px 5px;font-size:9px;white-space:nowrap}.entry-line{border-color:#f1c45b;color:#f1c45b;border-top-width:2px}.sl-line{border-color:#ff5968;color:#ff7a86}.tp-line{border-color:#20d69a;color:#58e2b4}
+
+/* Operaciones: niveles legibles y etiquetas separadas */
+.chart-overlay{z-index:4}
+.level-line{opacity:1;border-top-width:1px;border-top-style:dashed}
+.entry-line{border-top-style:solid;border-top-width:2px}
+.tp2-line{border-color:#46b6ff;color:#70caff;border-top-style:dotted}
+.level-line .level-tag{position:absolute;right:5px;top:-13px;display:flex;align-items:center;gap:7px;min-width:118px;justify-content:space-between;background:#101a29;border:1px solid currentColor;border-radius:6px;padding:4px 7px;font-size:9px;line-height:1.15;box-shadow:0 2px 8px #0009;white-space:nowrap}
+.level-tag b{font-size:8px;letter-spacing:.45px;font-weight:800}
+.level-tag strong{font-size:10px;color:#fff;font-variant-numeric:tabular-nums}
+.ob-zone{font-weight:800;text-shadow:0 1px 2px #000;min-width:70px}
+@media(max-width:600px){.main-chart{height:390px}.level-line .level-tag{right:3px;min-width:104px;padding:4px 5px;gap:5px;font-size:8px}.level-tag b{font-size:7px}.level-tag strong{font-size:9px}.ob-zone{font-size:9px}}
