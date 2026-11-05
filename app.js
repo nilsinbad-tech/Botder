@@ -56,9 +56,9 @@ async function getCandles(symbol){
 function aggregate(candles,mins){if(mins===1)return candles;const groups=new Map();for(const candle of candles){const bucket=Math.floor(candle.time/(mins*60))*(mins*60);let g=groups.get(bucket);if(!g){g={time:bucket,open:candle.open,high:candle.high,low:candle.low,close:candle.close,count:0};groups.set(bucket,g);}g.high=Math.max(g.high,candle.high);g.low=Math.min(g.low,candle.low);g.close=candle.close;g.count++;}const lastBucket=candles.length?Math.floor(candles.at(-1).time/(mins*60))*(mins*60):null;return [...groups.values()].filter(g=>g.count===mins||g.time===lastBucket).map(({count,...bar})=>bar).sort((a,b)=>a.time-b.time);}
 function ema(values,period){const out=Array(values.length).fill(null),k=2/(period+1);let prev=null;values.forEach((v,i)=>{prev=prev===null?v:v*k+prev*(1-k);out[i]=prev;});return out;}
 function rsi(values,period=14){const out=Array(values.length).fill(null);let gain=0,loss=0;for(let i=1;i<values.length;i++){const d=values[i]-values[i-1];const g=Math.max(d,0),l=Math.max(-d,0);if(i<=period){gain+=g;loss+=l;if(i===period){gain/=period;loss/=period;out[i]=loss===0?100:100-100/(1+gain/loss);}}else{gain=(gain*(period-1)+g)/period;loss=(loss*(period-1)+l)/period;out[i]=loss===0?100:100-100/(1+gain/loss);}}return out;}
-function pivots(c,span=3){const highs=[],lows=[];for(let i=span;i<c.length-span;i++){let hi=true,lo=true;for(let j=1;j<=span;j++){if(c[i].high<=c[i-j].high||c[i].high<=c[i+j].high)hi=false;if(c[i].low>=c[i-j].low||c[i].low>=c[i+j].low)lo=false;}if(hi)highs.push({index:i,time:c[i].time,price:c[i].high});if(lo)lows.push({index:i,time:c[i].time,price:c[i].low});}return{highs,lows};}
-function buildSetups(c){
- const close=c.map(x=>x.close),e9=ema(close,9),e21=ema(close,21),e50=ema(close,50),rv=rsi(close),pv=pivots(c);
+function pivots(c,span=3){const highs=[],lows=[];for(let i=span;i<c.length-span;i++){let hi=true,lo=true;for(let j=1;j<=span;j++){if(c[i].high<=c[i-j].high||c[i].high<=c[i+j].high)hi=false;if(c[i].low>=c[i-j].low||c[i].low>=c[i+j].low)lo=false;}if(hi)highs.push({index:i,time:c[i].time,confirmedTime:c[i+span].time+300,price:c[i].high});if(lo)lows.push({index:i,time:c[i].time,confirmedTime:c[i+span].time+300,price:c[i].low});}return{highs,lows};}
+function buildSetups(c,liquidityCandles=c){
+ const close=c.map(x=>x.close),e9=ema(close,9),e21=ema(close,21),e50=ema(close,50),rv=rsi(close),pv=pivots(liquidityCandles);
  const setups=[];
  for(let i=55;i<c.length-5;i++){
   const x=c[i],prev=c[i-1],body=Math.abs(x.close-x.open),avg=c.slice(i-8,i).reduce((s,v)=>s+Math.abs(v.close-v.open),0)/8;
@@ -66,15 +66,15 @@ function buildSetups(c){
   const buyRsi=rv[i]>=50&&rv[i]<=60&&rv[i]>rv[i-1],sellRsi=rv[i]<=55&&rv[i]>=40&&rv[i]<rv[i-1];
   const strongBull=x.close>x.open&&body>avg*1.25, strongBear=x.close<x.open&&body>avg*1.25;
   if(bull&&buyRsi&&strongBull){
-   const ob=findOB(c,i,'buy');if(!ob)continue;
-   const targets=pv.highs.filter(p=>p.index<i&&p.price>ob.entry).sort((a,b)=>a.price-b.price);
+   const ob=findOBAtTime(liquidityCandles,x.time,'buy');if(!ob)continue;
+   const targets=pv.highs.filter(p=>p.confirmedTime<=x.time&&p.price>ob.entry).sort((a,b)=>a.price-b.price);
    if(targets.length<2)continue;
    const sl=ob.low-(ob.high-ob.low)*.12;if(targets[0].price-ob.entry<=(ob.entry-sl)*1.5)continue;
    setups.push({side:'BUY',index:i,time:x.time,entry:ob.entry,sl,tp1:targets[0].price,tp2:targets[1].price,ob, rsi:rv[i],state:'PREPARADA'});
   }
   if(bear&&sellRsi&&strongBear){
-   const ob=findOB(c,i,'sell');if(!ob)continue;
-   const targets=pv.lows.filter(p=>p.index<i&&p.price<ob.entry).sort((a,b)=>b.price-a.price);
+   const ob=findOBAtTime(liquidityCandles,x.time,'sell');if(!ob)continue;
+   const targets=pv.lows.filter(p=>p.confirmedTime<=x.time&&p.price<ob.entry).sort((a,b)=>b.price-a.price);
    if(targets.length<2)continue;
    const sl=ob.high+(ob.high-ob.low)*.12;if(ob.entry-targets[0].price<=(sl-ob.entry)*1.5)continue;
    setups.push({side:'SELL',index:i,time:x.time,entry:ob.entry,sl,tp1:targets[0].price,tp2:targets[1].price,ob,rsi:rv[i],state:'PREPARADA'});
@@ -82,6 +82,7 @@ function buildSetups(c){
  }
  return{setups,e9,e21,e50,rv,pv};
 }
+function findOBAtTime(c,time,side){const completed=c.filter(bar=>bar.time+300<=time);return findOB(completed,completed.length,side);}
 function findOB(c,i,side){for(let j=i-1;j>=Math.max(0,i-9);j--){const q=c[j],opposite=side==='BUY'?q.close<q.open:q.close>q.open;if(opposite){const entry=(q.high+q.low)/2;return{time:q.time,high:q.high,low:q.low,entry};}}return null;}
 function simulate(c,setups){
  const trades=[];for(const s of setups){let entered=false,result='PENDIENTE',entryIndex=-1,exitTime=null;for(let j=s.index+1;j<c.length;j++){const k=c[j];if(!entered){const entryHit=k.low<=s.entry&&k.high>=s.entry;if(!entryHit){if((s.side==='BUY'&&k.low<s.sl)||(s.side==='SELL'&&k.high>s.sl)){result='CANCELADA';exitTime=k.time;break;}if(j-s.index>=5){result='CANCELADA';exitTime=k.time;break;}continue;}entered=true;entryIndex=j;}const slHit=s.side==='BUY'?k.low<=s.sl:k.high>=s.sl;const tp1Hit=s.side==='BUY'?k.high>=s.tp1:k.low<=s.tp1;const tp2Hit=s.side==='BUY'?k.high>=s.tp2:k.low<=s.tp2;if(slHit){result='PERDIDA';exitTime=k.time;break;}if(tp1Hit||tp2Hit){result='GANADA';exitTime=k.time;break;}}trades.push({...s,result,entryIndex,exitTime});}return trades;}
@@ -154,7 +155,7 @@ async function runUniverseBacktest(refresh=false){
  });
  await Promise.all(workers);
  const allTrades=[];
- for(const item of state.symbols){const raw=state.rawBySymbol.get(item.symbol)||[];if(!raw.length)continue;const candles=aggregate(raw,state.tf);if(candles.length<70)continue;const calc=buildSetups(candles),trades=simulate(candles,calc.setups);allTrades.push(...trades.map(t=>({...t,symbol:item.symbol})));}
+ for(const item of state.symbols){const raw=state.rawBySymbol.get(item.symbol)||[];if(!raw.length)continue;const candles=aggregate(raw,state.tf);if(candles.length<70)continue;const calc=buildSetups(candles,aggregate(raw,5)),trades=simulate(candles,calc.setups);allTrades.push(...trades.map(t=>({...t,symbol:item.symbol})));}
  state.marketBacktests=allTrades;
  const closed=allTrades.filter(t=>t.result==='GANADA'||t.result==='PERDIDA');
  $('wins').textContent=closed.filter(t=>t.result==='GANADA').length;$('losses').textContent=closed.filter(t=>t.result==='PERDIDA').length;
@@ -164,7 +165,7 @@ async function runUniverseBacktest(refresh=false){
 async function analyze(){
  if(state.busy)return;state.busy=true;$('dataStatus').textContent='Cargando gráfico…';
  try{const raw=state.rawBySymbol.get(state.selected)||await getCandles(state.selected);if(!raw.length)throw new Error('No llegaron velas para '+state.selected);
- state.rawCandles=raw;state.lastRecalcBucket=Math.floor(raw.at(-1).time/(state.tf*60));const c=aggregate(raw,state.tf);state.candles=c;const calc=buildSetups(c);state.trades=simulate(c,calc.setups);
+ state.rawCandles=raw;state.lastRecalcBucket=Math.floor(raw.at(-1).time/(state.tf*60));const c=aggregate(raw,state.tf);state.candles=c;const calc=buildSetups(c,aggregate(raw,5));state.trades=simulate(c,calc.setups);
  draw(c,calc,state.trades);showLatest(calc,state.trades,c);renderHistory(state.trades);
  $('chartTitle').textContent=(state.symbols.find(s=>s.symbol===state.selected)?.name||state.selected)+' · M'+state.tf;
  $('chartSubtitle').textContent='Velas '+c.length+' · análisis de 7 días · señales proyectadas';
