@@ -191,7 +191,7 @@ function runInstrument(){
      updateTotals();
      $("live-count").textContent=results.length+" / "+(symbols.length*strategies.length)+" pruebas completadas";
     }
-    $("live-detail").textContent=active.name+": 2 días completos · "+m1.length+" velas M2 de contexto · "+m1.length+" velas M1 de entrada · "+tickCount.toLocaleString("es-PA")+" ticks descargados en "+pages+" páginas · 8 estrategias probadas.";
+    $("live-detail").textContent=active.name+": 2 días completos · "+m2.length+" velas M2 de contexto · "+m1.length+" velas M1 de entrada · "+tickCount.toLocaleString("es-PA")+" ticks descargados en "+pages+" páginas · 8 estrategias probadas.";
    }
   }
   idx++;progress();render();runInstrument();
