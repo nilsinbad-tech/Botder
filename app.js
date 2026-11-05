@@ -239,7 +239,7 @@ function drawOverlays(trades,c,host,obZones=[],setups=[]){
   const levels=[{key:'entry',p:t.entry,label:t.side==='BUY'?'ENTRADA · ZONA COMPRA':'ENTRADA · ZONA VENTA',cls:'entry-line',priority:0},{key:'sl',p:t.sl,label:t.side==='BUY'?'STOP LOSS · PIVOTE SOPORTE':'STOP LOSS · PIVOTE RESISTENCIA',cls:'sl-line',priority:1},{key:'tp1',p:t.tp1,label:'TP1 · OBJETIVO',cls:'tp-line',priority:2}];
   if(Math.abs(t.tp2-t.tp1)>1e-10)levels.push({key:'tp2',p:t.tp2,label:'TP2 · OBJETIVO',cls:'tp2-line',priority:3});
   state.series.candle.setData(c);
-  levels.forEach(v=>{const el=document.createElement('div');el.className='level-line '+v.cls;el.setAttribute('role','slider');el.setAttribute('aria-label',v.label+'; arrastra para modificar');el.title='Arrastra para mover '+v.label;overlay.appendChild(el);lineEls.push({...v,el});});
+  levels.forEach(v=>{const el=document.createElement('div');el.className='level-line '+v.cls;el.setAttribute('role','slider');el.setAttribute('aria-label',v.label+'; arrastra para modificar');el.title='Arrastra para mover '+v.label;overlay.appendChild(el);lineEls.push({...v,el});const color=v.cls==='entry-line'?'#f1c45b':v.cls==='sl-line'?'#ff5968':v.cls==='tp-line'?'#20d69a':'#46b6ff';state.tradePriceLines.push(state.series.candle.createPriceLine({price:v.p,color,lineWidth:2,axisLabelVisible:true,title:v.label+' '+fmt(v.p)}));});
  }
  const update=()=>{
   const width=host.clientWidth,scale=state.main.timeScale(),candleSeries=state.series.candle;
