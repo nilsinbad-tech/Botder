@@ -89,9 +89,9 @@ function botderTradeAt(d,i,tf){
   const sl=isBuy?pool.low-Math.max(range*.35,liq.tolerance*.5):pool.high+Math.max(range*.35,liq.tolerance*.5);
   const tp1=opposite[0].level,tp2=opposite[1].level;
   if(isBuy?!(sl<entry&&tp1>entry&&tp2>tp1):!(sl>entry&&tp1<entry&&tp2<tp1))return null;
-  const touches=pool.count,score=Math.min(100,25+25+25+Math.min(25,15+(touches-2)*5));
-  const risk=Math.abs(entry-sl),reward=Math.abs(tp1-entry);
+  const touches=pool.count,risk=Math.abs(entry-sl),reward=Math.abs(tp1-entry);
   if(!risk||reward/risk<1.05)return null;
+  const emaSpread=Math.abs(e9[i]-e50[i])/Math.max(range,1e-9),score=Math.min(99,Math.round(70+Math.min(10,(touches-2)*4)+Math.min(10,emaSpread*3)+Math.min(10,(reward/risk-1)*5)));
   return{direction:isBuy?"COMPRAR":"VENDER",entry,sl,tp1,tp2,time:c.time,index:i,timeframe:botderLabel(tf),timeframeSeconds:tf,confidence:score,scoreLabel:"CONFLUENCIA",mode:(isBuy?"OB ALCISTA + FVG + SSL":"OB BAJISTA + FVG + BSL")+" · EMA 9/20/50",pool,ob,gap,ema:{e9:e9[i],e20:e20[i],e50:e50[i]},rr:reward/risk};
  };
  return candidate("BUY")||candidate("SELL");
@@ -134,7 +134,8 @@ function setBacktestTrades(trades){
 function buildStructuralPlan(baseCandles,displayTf){
  const tf=Number(displayTf)||60,source=tf===30?botderAggregate(baseCandles,150):baseCandles.slice(),label=tf===30?"S30 · MOTOR 150s":botderLabel(tf),i=source.length-2;
  if(i<60)return{items:[],lines:[],projection:null,signal:null,status:"CARGANDO HISTORIAL",activeSource:source,bias4:null,recommendation:"ESPERANDO"};
- const items=botderAnnotations(source,i,tf),signal=botderTradeAt(source,i,tf);\n const closes=source.slice(0,i+1).map(c=>c.close),emaSets=[{name:"EMA 9",color:"#ffd166",values:botderEma(closes,9)},{name:"EMA 20",color:"#61b7ff",values:botderEma(closes,20)},{name:"EMA 50",color:"#bd8cff",values:botderEma(closes,50)}],ema=emaSets.map(set=>({name:set.name,color:set.color,points:set.values.map((price,k)=>price==null?null:{time:source[k].time,price}).filter(Boolean).slice(-180)}));
+ const items=botderAnnotations(source,i,tf),signal=botderTradeAt(source,i,tf);
+ const closes=source.slice(0,i+1).map(c=>c.close),emaSets=[{name:"EMA 9",color:"#ffd166",values:botderEma(closes,9)},{name:"EMA 20",color:"#61b7ff",values:botderEma(closes,20)},{name:"EMA 50",color:"#bd8cff",values:botderEma(closes,50)}],ema=emaSets.map(set=>({name:set.name,color:set.color,points:set.values.map((price,k)=>price==null?null:{time:source[k].time,price}).filter(Boolean).slice(-180)}));
  let projection=null;
  if(signal){
   projection={direction:signal.direction,entry:signal.entry,sl:signal.sl,tp1:signal.tp1,tp2:signal.tp2,zoneLow:signal.pool.low,zoneHigh:signal.pool.high,low:signal.pool.low,high:signal.pool.high,stage:"OPORTUNIDAD "+signal.confidence+"%",timeframe:label,confidence:signal.confidence,reason:signal.mode};
