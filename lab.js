@@ -14,7 +14,7 @@ const strategies=[
 {id:10,name:"OB + Liquidity Sweep",group:"Confluencia",rules:"Barrida de liquidez dentro de OB M1 + confirmación en 30s",ob:true},
 {id:11,name:"EMA 9/25 + EMA 50 + OB + RSI",group:"Estrategia personalizada",rules:"Cruce EMA 9/25 M1 hacia la dirección de EMA 50 + OB + vela fuerte + RSI; entrada en 30s",ob:true}
 ];
-let socket=null,busy=false,req=1,reqState=null,symbols=[],results=[],hist={},idx=0,active=null,queue=[],timer=null,connectTimer=null;
+let socket=null,busy=false,req=1,reqState=null,symbols=[],results=[],hist={},idx=0,active=null,queue=[],timer=null,connectTimer=null,symbolTimer=null;
 const $=id=>document.getElementById(id),esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const fmt=(v,n=5)=>Number.isFinite(v)?v.toFixed(n):"—";
 function status(s){$("status").textContent=s;$("live-status").textContent=s}
@@ -118,7 +118,7 @@ function drawChart(){
  $("trade-audit-list").innerHTML=r.entries.slice(-30).reverse().map(t=>'<article class="audit-trade"><b class="'+(t.result==="GANADA"?"rate":"loss")+'">'+t.result+' · '+t.direction+'</b><span>Entrada '+fmt(t.entry)+' · '+new Date(t.entryTime*1000).toLocaleString("es-PA")+'</span><span>TP1 '+fmt(t.tp)+' · TP2 '+fmt(t.tp2)+' · SL '+fmt(t.sl)+'</span><span>Salida '+fmt(t.exitPrice)+' · '+(t.exitTime?new Date(t.exitTime*1000).toLocaleString("es-PA"):"sin salida")+'</span></article>').join("");
 }
 function progress(){const total=symbols.length;$("progress-count").textContent=idx+" / "+total+" instrumentos · 11 estrategias por instrumento";$("progress-bar").style.width=(total?idx/total*100:0)+"%";$("progress-title").textContent=busy?"Analizando "+(active?.name||"Deriv"):"Análisis finalizado"}
-function finish(msg){busy=false;clearTimeout(timer);clearTimeout(connectTimer);if(socket){try{socket.close()}catch(e){}socket=null}status(msg);$("live-detail").textContent=msg;$("start").disabled=false;progress();render();$("updated").textContent="Actualizado: "+new Date().toLocaleString("es-PA")}
+function finish(msg){busy=false;clearTimeout(timer);clearTimeout(connectTimer);clearTimeout(symbolTimer);if(socket){try{socket.close()}catch(e){}socket=null}status(msg);$("live-detail").textContent=msg;$("start").disabled=false;progress();render();$("updated").textContent="Actualizado: "+new Date().toLocaleString("es-PA")}
 function requestPage(){
  if(!busy||!reqState)return;
  req++;reqState.req=req;
@@ -192,12 +192,12 @@ function start(){
  try{socket=new WebSocket(WS)}catch(e){finish("NO SE PUDO ABRIR LA CONEXIÓN");return}
  connectTimer=setTimeout(()=>{if(busy&&socket?.readyState!==WebSocket.OPEN)finish("NO SE PUDO CONECTAR A DERIV EN 15 SEGUNDOS")},15000);
  timer=setTimeout(()=>{if(busy)finish("TIEMPO AGOTADO · REVISA LA CONEXIÓN")},900000);
- socket.onopen=()=>{clearTimeout(connectTimer);socket.send(JSON.stringify({active_symbols:"brief",req_id:1}))};
- socket.onerror=()=>{if(busy)finish("ERROR DE RED CON DERIV")};
+ socket.onopen=()=>{clearTimeout(connectTimer);status("CONECTADO · PIDIENDO INSTRUMENTOS");$("live-detail").textContent="Conexión WebSocket abierta. Esperando la lista de instrumentos de Deriv…";try{socket.send(JSON.stringify({active_symbols:"brief",req_id:1}));symbolTimer=setTimeout(()=>{if(busy&&!symbols.length)finish("DERIV CONECTÓ, PERO NO RESPONDIÓ A active_symbols EN 12 SEGUNDOS");},12000)}catch(e){finish("ERROR AL PEDIR INSTRUMENTOS: "+(e.message||e))}};
+ socket.onerror=()=>{if(busy)finish("ERROR DE RED: EL NAVEGADOR NO PUDO COMPLETAR EL WEBSOCKET DE DERIV")};
  socket.onclose=e=>{if(busy)finish("DERIV DESCONECTÓ · CÓDIGO "+e.code)};
  socket.onmessage=e=>{let m;try{m=JSON.parse(e.data)}catch(err){return}
   if(m.error){const msg=m.error.message||"Error de API";if(m.req_id===1){finish("ERROR DE DERIV: "+msg);return}if(reqState&&m.req_id===reqState.req){const st=reqState;reqState=null;clearTimeout(timer);st.done([],"Deriv rechazó la descarga de ticks: "+msg)}return}
-  if(m.msg_type==="active_symbols"||Array.isArray(m.active_symbols)){connection("DERIV API CONFIRMADA",true);const list=m.active_symbols||[];const found=list.map(s=>({symbol:s.underlying_symbol||s.symbol||"",name:s.underlying_symbol_name||s.display_name||s.symbol||""})).filter(s=>s.symbol&&/volatility/i.test(s.name)&&/1s/i.test(s.name));symbols=[...new Map(found.map(s=>[s.symbol,s])).values()].sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true})).slice(0,INSTRUMENT_LIMIT);$("updated").textContent="Deriv devolvió "+list.length+" símbolos · "+symbols.length+" índices 1s";if(!symbols.length){finish("DERIV NO DEVOLVIÓ ÍNDICES VOLATILITY 1s");return}$("live-detail").textContent="Índices encontrados: "+symbols.length+". Se analizarán "+strategies.length+" estrategias por instrumento.";runInstrument();return}
+  if(m.msg_type==="active_symbols"||Array.isArray(m.active_symbols)){clearTimeout(symbolTimer);connection("DERIV API CONFIRMADA",true);const list=m.active_symbols||[];const found=list.map(s=>({symbol:s.underlying_symbol||s.symbol||"",name:s.underlying_symbol_name||s.display_name||s.symbol||""})).filter(s=>s.symbol&&/volatility/i.test(s.name)&&/1s/i.test(s.name));symbols=[...new Map(found.map(s=>[s.symbol,s])).values()].sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true})).slice(0,INSTRUMENT_LIMIT);$("updated").textContent="Deriv devolvió "+list.length+" símbolos · "+symbols.length+" índices 1s";if(!symbols.length){finish("DERIV NO DEVOLVIÓ ÍNDICES VOLATILITY 1s");return}$("live-detail").textContent="Índices encontrados: "+symbols.length+". Se analizarán "+strategies.length+" estrategias por instrumento.";runInstrument();return}
   if(reqState&&m.req_id===reqState.req){handleHistory(m);return}
  };
 }
