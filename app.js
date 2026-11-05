@@ -101,7 +101,7 @@ function draw(c,calc,trades){
   markers.push({time:t.time,position:t.side==='BUY'?'belowBar':'aboveBar',color:t.side==='BUY'?'#20d69a':'#ff5968',shape:t.side==='BUY'?'arrowUp':'arrowDown',text:(t.side==='BUY'?'COMPRA ':'VENTA ')+fmt(t.entry)});
  });
  if(typeof L.createSeriesMarkers==='function'){state.markerPlugin=L.createSeriesMarkers(candle,markers.sort((a,b)=>a.time-b.time));}else{console.warn('La versión de Lightweight Charts no incluye createSeriesMarkers');}
- const latest=trades.filter(t=>t.state==='PREPARADA').slice(-1)[0];
+ const latest=trades.filter(t=>t.result==='PENDIENTE').slice(-1)[0];
  state.main.timeScale().fitContent();drawOverlays(latest,c,main);
  const rsiEl=$('rsiChart');rsiEl.innerHTML='';
  state.rsi=L.createChart(rsiEl,{autoSize:true,layout:{background:{type:'solid',color:'#0b121e'},textColor:'#8b9bb0',fontSize:10},grid:{vertLines:{color:'#172235'},horzLines:{color:'#172235'}},rightPriceScale:{borderColor:'#28364a'},timeScale:{visible:false},handleScroll:{mouseWheel:true,pressedMouseMove:true,horzTouchDrag:true},handleScale:{mouseWheel:true,pinch:true}});
@@ -134,14 +134,14 @@ function drawOverlays(t,c,host){
 }
 function fmt(n){return Number.isFinite(n)?Number(n).toFixed(2):'—';}
 function showLatest(calc,trades,c){
- const last=c[c.length-1],t=trades.filter(x=>x.state==='PREPARADA').slice(-1)[0],rv=calc.rv[calc.rv.length-1];
+ const last=c[c.length-1],t=trades.filter(x=>x.result==='PENDIENTE').slice(-1)[0],rv=calc.rv[calc.rv.length-1];
  const trend=calc.e9.at(-1)>calc.e21.at(-1)&&calc.e21.at(-1)>calc.e50.at(-1)?'ALCISTA':calc.e9.at(-1)<calc.e21.at(-1)&&calc.e21.at(-1)<calc.e50.at(-1)?'BAJISTA':'LATERAL';
  $('trendValue').textContent=trend;$('trendValue').style.color=trend==='BAJISTA'?'#ff6876':trend==='ALCISTA'?'#20d69a':'#d5b35b';
  $('signalValue').textContent=t?(t.side==='BUY'?'COMPRA':'VENTA'):'ESPERANDO';$('signalValue').style.color=t?(t.side==='BUY'?'#20d69a':'#ff6876'):'#aab8ca';
  $('entryValue').textContent=t?fmt(t.entry):'—';$('slValue').textContent=t?fmt(t.sl):'—';$('tp1Value').textContent=t?fmt(t.tp1):'—';$('tp2Value').textContent=t?fmt(t.tp2):'—';$('rsiValue').textContent=fmt(rv);
  const confirms=t&&((t.side==='BUY'&&t.rsi>=50&&t.rsi<=65)||(t.side==='SELL'&&t.rsi<=55&&t.rsi>=35));
  $('rsiConfirm').textContent=t?(confirms?'CONFIRMA '+(t.side==='BUY'?'COMPRA':'VENTA'):'NO CONFIRMA'):'Sin señal';$('rsiConfirm').style.color=confirms?'#20d69a':'#ff6876';
- $('signalState').textContent=t?'PREPARADA':'ESPERANDO';$('signalDetails').textContent=t?(t.side==='BUY'?'OB alcista':'OB bajista')+' detectado. Entrada proyectada '+fmt(t.entry)+', SL '+fmt(t.sl)+', TP1 en pivote '+fmt(t.tp1)+' y TP2 '+fmt(t.tp2)+'.':'No hay una señal completa en la última vela. El motor sigue analizando.';
+ $('signalState').textContent=t?(t.entryIndex>=0?'ACTIVA':'PREPARADA'):'ESPERANDO';$('signalDetails').textContent=t?(t.entryIndex>=0?'Operación ACTIVA. ':'')+(t.side==='BUY'?'OB alcista':'OB bajista')+' detectado. Entrada proyectada '+fmt(t.entry)+', SL '+fmt(t.sl)+', TP1 en pivote '+fmt(t.tp1)+' y TP2 '+fmt(t.tp2)+'.':'No hay una señal completa en la última vela. El motor sigue analizando.';
  $('rsiLegend').textContent='Valor actual: '+fmt(rv);
 }
 function renderHistory(trades){const rows=trades.slice(-150).reverse();$('historyCount').textContent=trades.length+' operaciones';$('historyBody').innerHTML=rows.length?rows.map(t=>'<tr><td>'+new Date(t.time*1000).toLocaleTimeString('es-PA',{hour:'2-digit',minute:'2-digit'})+'</td><td style="color:'+(t.side==='BUY'?'#20d69a':'#ff6876')+'">'+(t.side==='BUY'?'COMPRA':'VENTA')+'</td><td>'+fmt(t.entry)+'</td><td>'+fmt(t.sl)+'</td><td>'+fmt(t.tp1)+'</td><td>'+fmt(t.tp2)+'</td><td>'+t.result+'</td></tr>').join(''):'<tr><td colspan="7" class="empty-cell">No hay operaciones detectadas en este período.</td></tr>';const closed=trades.filter(t=>t.result==='GANADA'||t.result==='PERDIDA');$('wins').textContent=closed.filter(t=>t.result==='GANADA').length;$('losses').textContent=closed.filter(t=>t.result==='PERDIDA').length;$('pending').textContent=trades.filter(t=>t.result==='PENDIENTE').length;$('expired').textContent=trades.filter(t=>t.result==='CANCELADA').length;}
