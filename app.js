@@ -1,7 +1,7 @@
 /* BOTDER · motor de análisis y backtesting. Sin ejecución de órdenes. */
 (() => {
 'use strict';
-const HISTORY_CANDLES = 2880;
+const HISTORY_CANDLES = 1440;
 const REQUEST_TIMEOUT_MS = 45000;
 const API_URL = 'wss://api.derivws.com/trading/v1/options/ws/public';
 const $ = id => document.getElementById(id);
@@ -71,7 +71,7 @@ function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;',
 async function getCandles(symbol,preferredCount=HISTORY_CANDLES){
  const target=Math.min(Math.max(1,Number(preferredCount)||HISTORY_CANDLES),HISTORY_CANDLES);
  const chunks=[],seen=new Set();let end='latest',lastError=null,total=0;
- // Descarga por bloques para completar las 48 horas aunque Deriv limite cada respuesta.
+ // Descarga las últimas 24 horas de velas M1.
  while(total<target){
   const count=Math.min(1440,target-total);
   try{
@@ -417,7 +417,7 @@ function showLatest(calc,trades,c,raw=state.rawCandles){
 }
 function renderHistory(trades){
  // El resultado del backtesting histórico es la fuente principal; el análisis del gráfico solo completa operaciones que aún no estén registradas.
- const source=mergeTrades(state.savedChartTrades,state.marketBacktests.length?state.marketBacktests:(trades||[]),2000);
+ const cutoff=Math.floor(Date.now()/1000)-86400;const source=mergeTrades(state.savedChartTrades,state.marketBacktests.length?state.marketBacktests:(trades||[]),2000).filter(t=>Number(t.time)>=cutoff);
  const rows=[...source].sort((a,b)=>Number(a.time)-Number(b.time)).slice(-550).reverse();
  const shown=Math.min(rows.length,550);
  $('historyCount').textContent='Mostrando '+shown+' de '+source.length+' · +'+fmt(source.filter(t=>t.result==='GANADA'&&Number.isFinite(t.points)).reduce((a,t)=>a+Math.max(0,t.points),0))+' / -'+fmt(source.filter(t=>t.result==='PERDIDA'&&Number.isFinite(t.points)).reduce((a,t)=>a+Math.abs(Math.min(0,t.points)),0))+' pts';
@@ -426,21 +426,21 @@ function renderHistory(trades){
  $('wins').textContent=closed.filter(t=>t.result==='GANADA').length;$('losses').textContent=closed.filter(t=>t.result==='PERDIDA').length;$('pending').textContent=source.filter(t=>t.result==='PENDIENTE').length;$('expired').textContent=source.filter(t=>t.result==='CANCELADA').length;
 }
 async function runUniverseBacktest(refresh=false){
- if(!state.rawCandles.length)$('dataStatus').textContent='Preparando análisis de 48 horas…';
+ if(!state.rawCandles.length)$('dataStatus').textContent='Preparando análisis de 24 horas…';
  if(refresh){state.rawBySymbol.clear();state.downloadErrors=[];}else if(!state.downloadErrors)state.downloadErrors=[];
  let cursor=0,done=0;const workers=Array.from({length:Math.min(4,state.symbols.length)},async()=>{
   while(cursor<state.symbols.length){const item=state.symbols[cursor++];try{if(refresh||!state.rawBySymbol.has(item.symbol)||(state.rawBySymbol.get(item.symbol)||[]).length<HISTORY_CANDLES){const raw=await getCandles(item.symbol,HISTORY_CANDLES);state.rawBySymbol.set(item.symbol,raw);}done++;$('backtestInfo').textContent='Descargando historial: '+done+' / '+state.symbols.length+' instrumentos…';}catch(e){state.rawBySymbol.set(item.symbol,[]);if(!state.downloadErrors)state.downloadErrors=[];state.downloadErrors.push(item.name+': '+e.message);if(!state.rawBySymbol.has(item.symbol))state.rawBySymbol.set(item.symbol,[]);done++;$('backtestInfo').textContent='Descargas '+done+' / '+state.symbols.length+' · falló '+item.name;}}
  });
  await Promise.all(workers);
  const allTrades=[],shortHistory=[];
- for(const item of state.symbols){const source=state.rawBySymbol.get(item.symbol)||[];if(!source.length)continue;const cutoff=Math.floor(Date.now()/1000)-172800;const raw=source.filter(v=>v.time>=cutoff);if(raw.length<HISTORY_CANDLES)shortHistory.push(item.name+' ('+raw.length+' velas/48h)');const candles=aggregate(raw,2);if(candles.length<70)continue;const historicalBias=buildHourlyBiasTimeline(raw),obCandles=raw,pivotCandles=aggregate(raw,state.pivotTf),calc=buildSetups(candles,obCandles,pivotCandles,pivotCandles,historicalBias,raw),trades=simulate(candles,calc.setups);allTrades.push(...trades.map(t=>({...t,symbol:item.symbol})));}
+ for(const item of state.symbols){const source=state.rawBySymbol.get(item.symbol)||[];if(!source.length)continue;const cutoff=Math.floor(Date.now()/1000)-86400;const raw=source.filter(v=>v.time>=cutoff);if(raw.length<HISTORY_CANDLES)shortHistory.push(item.name+' ('+raw.length+' velas/48h)');const candles=aggregate(raw,2);if(candles.length<70)continue;const historicalBias=buildHourlyBiasTimeline(raw),obCandles=raw,pivotCandles=aggregate(raw,state.pivotTf),calc=buildSetups(candles,obCandles,pivotCandles,pivotCandles,historicalBias,raw),trades=simulate(candles,calc.setups);allTrades.push(...trades.map(t=>({...t,symbol:item.symbol})));}
  state.marketBacktests=mergeTrades(state.marketBacktests,allTrades,2000);
  state.savedChartTrades=mergeTrades(state.savedChartTrades,allTrades,2000);
  state.trades=state.savedChartTrades.filter(t=>t.symbol===state.selected);
  // Al terminar el backtest, vuelve a pintar el gráfico con las entradas históricas recién guardadas.
  const currentRaw=state.rawBySymbol.get(state.selected)||state.rawCandles;
  if(currentRaw.length&&state.main){
-  state.rawCandles=currentRaw;const chartRaw=currentRaw.filter(v=>v.time>=currentRaw.at(-1).time-172800);const chartCandles=aggregate(chartRaw,state.tf),signalCandles=aggregate(currentRaw,2),pivotCandles=aggregate(currentRaw,state.pivotTf),chartPivots=aggregate(chartRaw,state.pivotTf),hourly=getHourlyBias(currentRaw);
+  state.rawCandles=currentRaw;const chartRaw=currentRaw.filter(v=>v.time>=currentRaw.at(-1).time-86400);const chartCandles=aggregate(chartRaw,state.tf),signalCandles=aggregate(currentRaw,2),pivotCandles=aggregate(currentRaw,state.pivotTf),chartPivots=aggregate(chartRaw,state.pivotTf),hourly=getHourlyBias(currentRaw);
   const chartCalc=buildSetups(chartCandles,chartRaw,chartPivots,chartPivots,hourly.side,chartRaw);
   const signalCalc=buildSetups(signalCandles,currentRaw,pivotCandles,pivotCandles,hourly.side,currentRaw);
   const aligned=hourly.side?signalCalc.setups.filter(x=>x.side===hourly.side):[];
@@ -452,12 +452,12 @@ async function runUniverseBacktest(refresh=false){
  const closed=allTrades.filter(t=>t.result==='GANADA'||t.result==='PERDIDA');
  $('wins').textContent=closed.filter(t=>t.result==='GANADA').length;$('losses').textContent=closed.filter(t=>t.result==='PERDIDA').length;
  $('pending').textContent=allTrades.filter(t=>t.result==='PENDIENTE').length;$('expired').textContent=allTrades.filter(t=>t.result==='CANCELADA').length;
- const failed=state.downloadErrors.length;$('backtestInfo').textContent='Universo: '+state.symbols.length+' instrumentos · señales M2 · backtesting: últimas 48 horas · gráfico M'+state.tf+' (48 horas visibles) · '+allTrades.length+' señales simuladas · '+failed+' descargas fallidas · '+shortHistory.length+' con historial parcial'+(failed?'. Errores: '+state.downloadErrors.slice(0,2).join(' | '):'')+(shortHistory.length?'. Parciales: '+shortHistory.slice(0,3).join(', '):'.');
+ const failed=state.downloadErrors.length;$('backtestInfo').textContent='Universo: '+state.symbols.length+' instrumentos · señales M2 · backtesting: últimas 24 horas · gráfico M'+state.tf+' (24 horas visibles) · '+allTrades.length+' señales simuladas · '+failed+' descargas fallidas · '+shortHistory.length+' con historial parcial'+(failed?'. Errores: '+state.downloadErrors.slice(0,2).join(' | '):'')+(shortHistory.length?'. Parciales: '+shortHistory.slice(0,3).join(', '):'.');
 }
 async function analyze(){
  if(state.busy){state.analyzeQueued=true;return;}state.busy=true;$('dataStatus').textContent='Cargando gráfico…';
  try{const raw=state.rawBySymbol.get(state.selected)||await getCandles(state.selected,HISTORY_CANDLES);if(!raw.length)throw new Error('No llegaron velas para '+state.selected);state.rawBySymbol.set(state.selected,raw);
- state.rawCandles=raw;state.lastRecalcBucket=Math.floor(raw.at(-1).time/120);const chartRaw=raw.filter(v=>v.time>=raw.at(-1).time-172800);const c=aggregate(chartRaw,state.tf);state.candles=c;const signalCandles=aggregate(raw,2);const obCandles=raw;const pivotCandles=aggregate(raw,state.pivotTf);const chartPivots=aggregate(chartRaw,state.pivotTf);
+ state.rawCandles=raw;state.lastRecalcBucket=Math.floor(raw.at(-1).time/120);const chartRaw=raw.filter(v=>v.time>=raw.at(-1).time-86400);const c=aggregate(chartRaw,state.tf);state.candles=c;const signalCandles=aggregate(raw,2);const obCandles=raw;const pivotCandles=aggregate(raw,state.pivotTf);const chartPivots=aggregate(chartRaw,state.pivotTf);
  const hourly=getHourlyBias(raw),activeSide=hourly.side,historicalBias=buildHourlyBiasTimeline(raw);const signalCalc=buildSetups(signalCandles,obCandles,pivotCandles,pivotCandles,historicalBias,raw);const chartCalc=buildSetups(c,chartRaw,chartPivots,chartPivots,activeSide,chartRaw);
  // El backtest y el historial usan el sesgo H1 que existía en cada vela, no el sesgo actual aplicado al pasado.
  const alignedSetups=signalCalc.setups;
@@ -468,7 +468,7 @@ async function analyze(){
  savePersistentState();
  draw(c,chartCalc,state.trades,alignedZones,alignedSetups);showLatest(signalCalc,state.trades.filter(t=>t.symbol===state.selected),signalCandles);renderHistory(state.trades);
  $('chartTitle').textContent=(state.symbols.find(s=>s.symbol===state.selected)?.name||state.selected)+' · M'+state.tf;
- $('chartSubtitle').textContent='Velas '+c.length+' · 48 horas visibles · análisis 48 horas';
+ $('chartSubtitle').textContent='Velas '+c.length+' · 24 horas visibles · análisis 24 horas';
  $('chartRange').textContent='Gráfico: últimas 48 horas · '+new Date(c[0].time*1000).toLocaleTimeString('es-PA')+' — '+new Date(c.at(-1).time*1000).toLocaleTimeString('es-PA');
  $('dataStatus').textContent='Datos actualizados · '+raw.length+' velas M1 · '+(raw.length>1?Math.round((raw.at(-1).time-raw[0].time)/3600)+' h de historial':'historial insuficiente');
  }catch(e){$('dataStatus').textContent='ERROR DE DATOS: '+e.message;$('signalDetails').textContent='No se pudo cargar este instrumento. '+e.message;}finally{state.busy=false;if(state.analyzeQueued){state.analyzeQueued=false;Promise.resolve().then(analyze);}}
@@ -560,6 +560,6 @@ function bind(){
  $('timeframes').addEventListener('click',async e=>{const b=e.target.closest('button[data-tf]');if(!b)return;state.tf=+b.dataset.tf;state.forceFitNext=true;document.querySelectorAll('#timeframes button').forEach(x=>x.classList.toggle('active',x===b));await analyze();});
  $('refreshBtn').addEventListener('click',async()=>{state.rawBySymbol.delete(state.selected);await analyze();runUniverseBacktest(true).catch(e=>{$('backtestInfo').textContent='Error al actualizar: '+e.message;});});$('runBacktest').addEventListener('click',async()=>{runUniverseBacktest(true).catch(e=>{$('backtestInfo').textContent='Error al actualizar: '+e.message;});});
 }
-async function start(){restorePersistentState();bind();try{await loadSymbols();if(state.savedSelected&&state.symbols.some(s=>s.symbol===state.savedSelected)){state.selected=state.savedSelected;$('symbolSelect').value=state.selected;document.querySelectorAll('.instrument-chip').forEach(b=>b.classList.toggle('selected',b.dataset.symbol===state.selected));}setConnection(false,'Catálogo recibido · cargando velas…');$('dataStatus').textContent='Instrumentos listos · cargando gráfico principal…';await analyze();if(!state.rawCandles.length||!state.main)throw new Error($('dataStatus').textContent||'Deriv no entregó velas para dibujar');setConnection(true,'Deriv conectada · datos recibidos');subscribeLive();$('backtestInfo').textContent='Gráfico listo. Calculando las últimas 48 horas en segundo plano…';runUniverseBacktest(false).catch(e=>{$('backtestInfo').textContent='Error en análisis de 48 horas: '+e.message;});}catch(e){setConnection(false,'Sin datos de Deriv');$('dataStatus').textContent='No se pudo iniciar: '+e.message;$('signalDetails').textContent=e.message;}}
+async function start(){restorePersistentState();bind();try{await loadSymbols();if(state.savedSelected&&state.symbols.some(s=>s.symbol===state.savedSelected)){state.selected=state.savedSelected;$('symbolSelect').value=state.selected;document.querySelectorAll('.instrument-chip').forEach(b=>b.classList.toggle('selected',b.dataset.symbol===state.selected));}setConnection(false,'Catálogo recibido · cargando velas…');$('dataStatus').textContent='Instrumentos listos · cargando gráfico principal…';await analyze();if(!state.rawCandles.length||!state.main)throw new Error($('dataStatus').textContent||'Deriv no entregó velas para dibujar');setConnection(true,'Deriv conectada · datos recibidos');subscribeLive();$('backtestInfo').textContent='Gráfico listo. Calculando las últimas 24 horas en segundo plano…';runUniverseBacktest(false).catch(e=>{$('backtestInfo').textContent='Error en análisis de 24 horas: '+e.message;});}catch(e){setConnection(false,'Sin datos de Deriv');$('dataStatus').textContent='No se pudo iniciar: '+e.message;$('signalDetails').textContent=e.message;}}
 start();
 })();
