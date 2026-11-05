@@ -91,3 +91,10 @@
 .chart-overlay .tp-line{border-top:1px dashed #20d69a!important}
 .chart-overlay .tp2-line{border-top:1px dotted #46b6ff!important}
 .chart-overlay .level-tag{display:none!important}
+
+
+/* BOTDER v56: solo etiquetas de precio; sin líneas horizontales ni tiradores. */
+.chart-overlay .level-line{position:absolute!important;height:auto!important;min-height:0!important;border:0!important;background:transparent!important;opacity:1!important;pointer-events:none!important;cursor:default!important;z-index:12!important}
+.chart-overlay .level-line .level-tag{position:relative!important;left:0!important;right:auto!important;top:0!important;display:flex!important;align-items:center!important;gap:5px!important;min-width:0!important;width:max-content!important;max-width:calc(100vw - 30px)!important;padding:3px 5px!important;border:1px solid currentColor!important;border-radius:4px!important;background:#07111fee!important;box-shadow:0 1px 4px #0009!important;white-space:nowrap!important;font-size:8px!important;line-height:1.1!important}
+.chart-overlay .level-tag b{font-size:7px!important;letter-spacing:.1px!important}
+.chart-overlay .level-tag strong{font-size:8px!important}
