@@ -1,6 +1,6 @@
 (()=>{
 "use strict";
-const WS="wss://api.derivws.com/trading/v1/options/ws/public",DAY=86400,MAX_DAYS=5,MIN_DAYS=2,COUNT=5000;
+const WS="wss://api.derivws.com/trading/v1/options/ws/public",DAY=86400,TEST_DAYS=2,COUNT=5000,INSTRUMENT_LIMIT=8;
 const strategies=[
 {id:1,name:"OB + EMA",group:"Tendencia",rules:"OB M1 + EMA 9/21 alineadas; confirmación de ruptura en 30s",ob:true},
 {id:2,name:"Liquidity Sweep",group:"Liquidez",rules:"Barrida de swing M1 + recuperación; confirmación en 30s"},
@@ -94,13 +94,13 @@ function buildTrades(m1,m30,strat){
 function render(){
  $("strategy-list").innerHTML=strategies.map(s=>{const cells=symbols.map(m=>{const r=results.find(x=>x.symbol===m.symbol&&x.strategy.id===s.id);return '<div class="instrument-result"><b>'+(r?fmt(r.rate,1)+"%":"—")+'</b><span>'+esc(m.name)+' · '+(r?r.wins+"G / "+r.losses+"P · "+r.total+" ops":"pendiente")+'</span></div>'}).join("");return '<article class="strategy-card"><div class="strategy-top"><strong>'+s.id+'. '+esc(s.name)+'</strong><small>'+esc(s.group)+' · '+esc(s.rules)+'</small></div><div class="strategy-results">'+cells+'</div></article>'}).join("");
  $("market-list").innerHTML=symbols.map(m=>'<div class="market-chip"><span>'+esc(m.name)+'</span><small>'+m.symbol+'</small></div>').join("");
- $("s-symbols").textContent=symbols.length;$("s-tests").textContent=results.length+"/"+(symbols.length*strategies.length);
+ $("s-symbols").textContent=symbols.length;$("s-tests").textContent="11 por índice";
  const ranked=symbols.map(m=>({market:m,rows:results.filter(r=>r.symbol===m.symbol&&r.total>=5).sort((a,b)=>b.rate-a.rate||b.wins-a.wins)}));
  $("best-list").innerHTML=ranked.map(g=>'<section class="market-rank"><h4>'+esc(g.market.name)+'</h4>'+(g.rows.length?rankCard(g.rows[0],"best"):'<div class="empty">Aún no hay estrategia con 5 operaciones cerradas.</div>')+'</section>').join("")||'<div class="empty">Esperando instrumentos…</div>';
  $("worst-list").innerHTML=ranked.map(g=>'<section class="market-rank"><h4>'+esc(g.market.name)+'</h4>'+(g.rows.length?rankCard(g.rows[g.rows.length-1],"worst"):'<div class="empty">Aún no hay estrategia con 5 operaciones cerradas.</div>')+'</section>').join("")||'<div class="empty">Esperando instrumentos…</div>';
  const old=$("chart-market").value;$("chart-market").innerHTML=symbols.map(m=>'<option value="'+m.symbol+'">'+esc(m.name)+'</option>').join("");if(symbols.some(m=>m.symbol===old))$("chart-market").value=old;
  $("chart-strategy").innerHTML=strategies.map(s=>'<option value="'+s.id+'">'+s.id+". "+esc(s.name)+'</option>').join("");
- $("s-strategies").textContent=strategies.length;$("live-count").textContent=results.length+" / "+(symbols.length*strategies.length)+" pruebas";
+ $("s-strategies").textContent=strategies.length;$("live-count").textContent="11 estrategias por cada uno de "+symbols.length+" instrumentos";
  drawChart();
 }
 function rankCard(r,kind){return '<article class="rank-card"><div><b>'+esc(r.market)+'</b><small>'+r.strategy.name+'</small></div><strong class="'+(kind==="best"?"rate":"loss")+'">'+fmt(r.rate,1)+'%</strong><small>'+r.wins+' ganadas · '+r.losses+' perdidas · '+r.total+' operaciones</small><button class="inspect-result" data-symbol="'+r.symbol+'" data-strategy="'+r.strategy.id+'">VER GRÁFICO</button></article>'}
@@ -117,32 +117,74 @@ function drawChart(){
  host.innerHTML='<svg class="market-chart" viewBox="0 0 1000 300" role="img" aria-label="Velas de treinta segundos con entradas y niveles TP y SL">'+svg+'</svg><div class="chart-legend"><span>🟢 BUY / TP</span><span>🔴 SELL / SL</span><span>Velas de 30 segundos · contexto y señales M1</span></div>';
  $("trade-audit-list").innerHTML=r.entries.slice(-30).reverse().map(t=>'<article class="audit-trade"><b class="'+(t.result==="GANADA"?"rate":"loss")+'">'+t.result+' · '+t.direction+'</b><span>Entrada '+fmt(t.entry)+' · '+new Date(t.entryTime*1000).toLocaleString("es-PA")+'</span><span>TP1 '+fmt(t.tp)+' · TP2 '+fmt(t.tp2)+' · SL '+fmt(t.sl)+'</span><span>Salida '+fmt(t.exitPrice)+' · '+(t.exitTime?new Date(t.exitTime*1000).toLocaleString("es-PA"):"sin salida")+'</span></article>').join("");
 }
-function progress(){const total=symbols.length;$("progress-count").textContent=idx+" / "+total+" instrumentos";$("progress-bar").style.width=(total?idx/total*100:0)+"%";$("progress-title").textContent=busy?"Analizando "+(active?.name||"Deriv"):"Análisis finalizado"}
+function progress(){const total=symbols.length;$("progress-count").textContent=idx+" / "+total+" instrumentos · 11 estrategias por instrumento";$("progress-bar").style.width=(total?idx/total*100:0)+"%";$("progress-title").textContent=busy?"Analizando "+(active?.name||"Deriv"):"Análisis finalizado"}
 function finish(msg){busy=false;clearTimeout(timer);clearTimeout(connectTimer);if(socket){try{socket.close()}catch(e){}socket=null}status(msg);$("live-detail").textContent=msg;$("start").disabled=false;progress();render();$("updated").textContent="Actualizado: "+new Date().toLocaleString("es-PA")}
-function requestPage(){if(!busy||!reqState)return;req++;reqState.req=req;socket.send(JSON.stringify({ticks_history:reqState.symbol,count:COUNT,end:reqState.end,style:"candles",granularity:reqState.gran,req_id:req}));clearTimeout(timer);timer=setTimeout(()=>{if(busy&&reqState){const st=reqState;reqState=null;st.done(st.data)}},25000)}
-function parseCandles(m){let arr=Array.isArray(m.candles)?m.candles:(Array.isArray(m.history?.candles)?m.history.candles:[]);return arr.map(c=>({time:+(c.epoch??c.open_time),open:+c.open,high:+c.high,low:+c.low,close:+c.close})).filter(c=>Number.isFinite(c.time)&&Number.isFinite(c.open)&&Number.isFinite(c.high)&&Number.isFinite(c.low)&&Number.isFinite(c.close)&&c.high>=c.low).sort((a,b)=>a.time-b.time)}
-function loadSeries(symbol,gran,done){
- reqState={symbol,gran,done,data:[],end:"latest",pages:0};requestPage();
+function requestPage(){
+ if(!busy||!reqState)return;
+ req++;reqState.req=req;
+ socket.send(JSON.stringify({ticks_history:reqState.symbol,count:COUNT,end:reqState.end,style:"ticks",req_id:req}));
+ clearTimeout(timer);
+ timer=setTimeout(()=>{if(busy&&reqState){const st=reqState;reqState=null;st.done([],"Deriv no respondió a la página de ticks a tiempo.")}},20000);
+}
+function parseTicks(m){
+ const times=m.history?.times||[],prices=m.history?.prices||[];
+ return times.map((time,i)=>({time:Number(time),price:Number(prices[i])}))
+  .filter(x=>Number.isFinite(x.time)&&Number.isFinite(x.price)).sort((a,b)=>a.time-b.time);
+}
+function candlesFromTicks(ticks,gran){
+ const map=new Map();
+ for(const t of ticks){
+  const time=Math.floor(t.time/gran)*gran;
+  let c=map.get(time);
+  if(!c)map.set(time,{time,open:t.price,high:t.price,low:t.price,close:t.price});
+  else{c.high=Math.max(c.high,t.price);c.low=Math.min(c.low,t.price);c.close=t.price}
+ }
+ return [...map.values()].sort((a,b)=>a.time-b.time);
+}
+function loadTwoDayTicks(symbol,done){
+ const end=Math.floor(Date.now()/60000)*60,start=end-TEST_DAYS*DAY;
+ reqState={symbol,done,data:[],end:"latest",pages:0,start,targetEnd:end};requestPage();
 }
 function handleHistory(m){
- if(!reqState||m.req_id!==reqState.req)return;clearTimeout(timer);
- const st=reqState,part=parseCandles(m);if(!part.length){reqState=null;st.done(st.data);return}
- st.data=[...part,...st.data].sort((a,b)=>a.time-b.time);st.data=[...new Map(st.data.map(x=>[x.time,x])).values()];st.pages++;
- const now=Date.now()/1000;if(st.data.length&&st.data[st.data.length-1].time+st.gran>now)st.data.pop();
- const days=st.data.length?(st.data[st.data.length-1].time-st.data[0].time)/DAY:0;
- if(days<MAX_DAYS&&part.length>=COUNT&&st.pages<5){st.end=st.data[0].time-1;requestPage();return}
- reqState=null;st.done(st.data);
+ if(!reqState||m.req_id!==reqState.req)return;
+ clearTimeout(timer);
+ const st=reqState,part=parseTicks(m);
+ if(!part.length){reqState=null;st.done([],"Deriv devolvió una página sin ticks históricos.");return}
+ st.data=[...part,...st.data].sort((a,b)=>a.time-b.time);
+ st.data=[...new Map(st.data.map(x=>[x.time,x])).values()];
+ st.pages++;
+ const oldest=st.data[0].time;
+ if(oldest>st.start&&part.length>=COUNT&&st.pages<100){
+  st.end=String(Math.floor(oldest)-1);requestPage();return;
+ }
+ const ticks=st.data.filter(x=>x.time>=st.start&&x.time<st.targetEnd);
+ const m1=candlesFromTicks(ticks,60).filter(c=>c.time>=st.start&&c.time+60<=st.targetEnd);
+ const m30=candlesFromTicks(ticks,30).filter(c=>c.time>=st.start&&c.time+30<=st.targetEnd);
+ const coverage=ticks.length?(ticks[ticks.length-1].time-ticks[0].time)/DAY:0;
+ reqState=null;
+ st.done({m1,m30,tickCount:ticks.length,pages:st.pages,coverage,start:st.start,end:st.targetEnd});
 }
 function runInstrument(){
- if(!busy)return;if(idx>=symbols.length){finish("ANÁLISIS COMPLETADO · M1 + 30 SEGUNDOS");return}
- active=symbols[idx];$("live-detail").textContent="Descargando hasta 5 días M1 y 30 segundos de "+active.name+"…";status("HISTORIAL · "+active.name);
- loadSeries(active.symbol,60,m1=>{
-  if(!busy)return;loadSeries(active.symbol,30,m30=>{
-   if(!busy)return;const days=Math.min(m1.length?(m1.at(-1).time-m1[0].time)/DAY:0,m30.length?(m30.at(-1).time-m30[0].time)/DAY:0);
-   if(days<MIN_DAYS||m1.length<100||m30.length<200){$("live-detail").textContent=active.name+": historial insuficiente ("+days.toFixed(2)+" días). No se publica como resultado válido."}
-   else{hist[active.symbol]={m1,m30};for(const s of strategies){const r=buildTrades(m1,m30,s);results.push({symbol:active.symbol,market:active.name,strategy:s,...r})}$("live-detail").textContent=active.name+": "+days.toFixed(2)+" días · "+m1.length+" velas M1 · "+m30.length+" velas de 30 segundos · "+strategies.length+" estrategias."}
-   idx++;progress();render();runInstrument();
-  });
+ if(!busy)return;
+ if(idx>=symbols.length){finish("ANÁLISIS COMPLETADO · 2 DÍAS · M1 + 30 SEGUNDOS");return}
+ active=symbols[idx];
+ $("live-detail").textContent="Descargando ticks para construir exactamente 2 días de velas M1 y 30 segundos: "+active.name;
+ status("DESCARGANDO · "+active.name);progress();
+ loadTwoDayTicks(active.symbol,(series,error)=>{
+  if(!busy)return;
+  if(error){
+   $("live-detail").textContent=active.name+": ERROR DE HISTORIAL · "+error;
+  }else{
+   const {m1,m30,tickCount,pages,coverage}=series;
+   if(coverage<1.98||m1.length<2800||m30.length<5600){
+    $("live-detail").textContent=active.name+": datos insuficientes. Cobertura "+coverage.toFixed(2)+" días; M1 "+m1.length+" velas; 30s "+m30.length+" velas. No se publican resultados parciales.";
+   }else{
+    hist[active.symbol]={m1,m30};
+    for(const s of strategies){const r=buildTrades(m1,m30,s);results.push({symbol:active.symbol,market:active.name,strategy:s,...r})}
+    $("live-detail").textContent=active.name+": 2 días completos · "+m1.length+" velas M1 · "+m30.length+" velas 30s · "+tickCount.toLocaleString("es-PA")+" ticks descargados en "+pages+" páginas · 11 estrategias probadas.";
+   }
+  }
+  idx++;progress();render();runInstrument();
  });
 }
 function start(){
@@ -155,7 +197,7 @@ function start(){
  socket.onclose=e=>{if(busy)finish("DERIV DESCONECTÓ · CÓDIGO "+e.code)};
  socket.onmessage=e=>{let m;try{m=JSON.parse(e.data)}catch(err){return}
   if(m.error){const msg=m.error.message||"Error de API";if(m.req_id===1){finish("ERROR DE DERIV: "+msg);return}if(reqState&&m.req_id===reqState.req){const st=reqState;reqState=null;clearTimeout(timer);st.done(st.data)}return}
-  if(m.msg_type==="active_symbols"||Array.isArray(m.active_symbols)){connection("DERIV API CONFIRMADA",true);const list=m.active_symbols||[];const found=list.map(s=>({symbol:s.underlying_symbol||s.symbol||"",name:s.underlying_symbol_name||s.display_name||s.symbol||""})).filter(s=>s.symbol&&/volatility/i.test(s.name)&&/1s/i.test(s.name));symbols=[...new Map(found.map(s=>[s.symbol,s])).values()].sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true})).slice(0,10);$("updated").textContent="Deriv devolvió "+list.length+" símbolos · "+symbols.length+" índices 1s";if(!symbols.length){finish("DERIV NO DEVOLVIÓ ÍNDICES VOLATILITY 1s");return}$("live-detail").textContent="Índices encontrados: "+symbols.length+". Se analizarán "+strategies.length+" estrategias por instrumento.";runInstrument();return}
+  if(m.msg_type==="active_symbols"||Array.isArray(m.active_symbols)){connection("DERIV API CONFIRMADA",true);const list=m.active_symbols||[];const found=list.map(s=>({symbol:s.underlying_symbol||s.symbol||"",name:s.underlying_symbol_name||s.display_name||s.symbol||""})).filter(s=>s.symbol&&/volatility/i.test(s.name)&&/1s/i.test(s.name));symbols=[...new Map(found.map(s=>[s.symbol,s])).values()].sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true})).slice(0,INSTRUMENT_LIMIT);$("updated").textContent="Deriv devolvió "+list.length+" símbolos · "+symbols.length+" índices 1s";if(!symbols.length){finish("DERIV NO DEVOLVIÓ ÍNDICES VOLATILITY 1s");return}$("live-detail").textContent="Índices encontrados: "+symbols.length+". Se analizarán "+strategies.length+" estrategias por instrumento.";runInstrument();return}
   if(reqState&&m.req_id===reqState.req){handleHistory(m);return}
  };
 }
