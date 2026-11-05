@@ -147,7 +147,25 @@ function buildSetups(c,liquidityCandles=c,pivotCandles=liquidityCandles,obStruct
  }
  const lastTime=targetRawCandles.length?targetRawCandles[targetRawCandles.length-1].time:0;
  const validZones=obZones.filter(z=>!isOBInvalidated(z,z.side,{price:z.structurePrice,confirmedTime:z.structureConfirmedTime},targetRawCandles,lastTime));
- return{setups,e9,e20,rv,pv:m30Pv,obZones:validZones};
+ // En M1 y M2 se limita a dos OB por zona de precio: evita cinco cajas apiladas
+ // cuando varias velas consecutivas detectan el mismo bloque/área.
+ const lowTfZones=validZones.filter(z=>z.timeframe===1||z.timeframe===2).sort((a,b)=>a.time-b.time);
+ const keepLowTf=new Set(),clusters=[];
+ for(const z of lowTfZones){
+  const width=Math.max(z.high-z.low,0.00000001);
+  let cluster=clusters.find(items=>items.some(q=>{
+   const tolerance=Math.max(width, q.high-q.low)*0.20;
+   return z.side===q.side&&z.low<=q.high+tolerance&&z.high>=q.low-tolerance;
+  }));
+  if(!cluster){cluster=[];clusters.push(cluster);}
+  cluster.push(z);
+ }
+ for(const cluster of clusters){
+  cluster.sort((a,b)=>b.time-a.time);
+  for(const z of cluster.slice(0,2))keepLowTf.add(z);
+ }
+ const limitedZones=validZones.filter(z=>(z.timeframe!==1&&z.timeframe!==2)||keepLowTf.has(z));
+ return{setups,e9,e20,rv,pv:m30Pv,obZones:limitedZones};
 }
 function findValidOBAtTime(c,time,side,tf,pv,structureCandles,raw){
  let lo=0,hi=c.length;
