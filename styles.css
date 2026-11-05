@@ -59,3 +59,6 @@
 .chart-overlay .ob-zone{position:absolute!important;display:flex!important;align-items:center!important;min-height:24px!important;min-width:92px!important;padding:4px 8px!important;font-size:10px!important;font-weight:900!important;opacity:1!important;border:2px solid!important;border-radius:4px!important;white-space:nowrap!important;overflow:visible!important;z-index:10!important}
 .chart-overlay .bull-zone{background:rgba(0,190,145,.32)!important;border-color:#20e6ae!important;color:#b7ffeb!important;box-shadow:0 0 12px rgba(32,230,174,.5)!important}
 .chart-overlay .bear-zone{background:rgba(225,55,75,.34)!important;border-color:#ff5968!important;color:#ffd2d7!important;box-shadow:0 0 12px rgba(255,89,104,.5)!important}
+
+/* BOTDER v47: controles de filtro estructural de OB */
+.ob-settings{border-color:#287c70!important;background:#10251f!important}.ob-toggle{display:flex;align-items:center;gap:9px;color:#d8f4eb;font-size:11px;font-weight:800}.ob-toggle input{width:18px;height:18px;accent-color:#20d69a}.ob-tf-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;color:#c5d6e9;font-size:11px;font-weight:700}.ob-settings .pivot-tf-controls button{min-width:48px}.ob-settings .pivot-tf-controls button.active{background:#087653;border:2px solid #48e0ad;color:#fff}
