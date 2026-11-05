@@ -107,7 +107,7 @@ function draw(c,calc,trades){
   const lineData=values=>values.map((v,i)=>v==null?null:{time:c[i].time,value:v}).filter(Boolean);
   state.series.candle.setData(c);state.series.ema9.setData(lineData(calc.e9));state.series.ema21.setData(lineData(calc.e21));state.series.ema50.setData(lineData(calc.e50));state.series.rsi.setData(lineData(calc.rv));
   drawPivotLines();const markers=[];trades.forEach(t=>{markers.push({time:t.time,position:t.side==='BUY'?'belowBar':'aboveBar',color:t.side==='BUY'?'#20d69a':'#ff5968',shape:t.side==='BUY'?'arrowUp':'arrowDown',text:t.side==='BUY'?'COMPRA':'VENTA'});});if(state.markerPlugin)state.markerPlugin.setMarkers(markers.sort((a,b)=>a.time-b.time));
-  const latest=trades.slice(-1)[0];drawOverlays(latest,c,$('mainChart'));
+  const latest=trades.slice(-1)[0];drawOverlays(trades,c,$('mainChart'));
   if(state.forceFitNext){const visibleFrom=Math.max(0,c.length-120);const visibleRange={from:visibleFrom,to:c.length+3};state.main.timeScale().setVisibleLogicalRange(visibleRange);state.rsi.timeScale().setVisibleLogicalRange(visibleRange);}else if(priorRange){state.main.timeScale().setVisibleLogicalRange(priorRange);state.rsi.timeScale().setVisibleLogicalRange(priorRange);}state.forceFitNext=false;return;
  }
  if(state.main){state.main.remove();if(state.rsi)state.rsi.remove();}state.overlayUpdate=null;state.overlayRangeHandler=null;
@@ -124,7 +124,7 @@ function draw(c,calc,trades){
  });
  if(typeof L.createSeriesMarkers==='function'){state.markerPlugin=L.createSeriesMarkers(candle,markers.sort((a,b)=>a.time-b.time));}else{console.warn('La versión de Lightweight Charts no incluye createSeriesMarkers');}
  const latest=trades.slice(-1)[0];
- drawOverlays(latest,c,main);
+ drawOverlays(trades,c,main);
  const rsiEl=$('rsiChart');rsiEl.innerHTML='';
  state.rsi=L.createChart(rsiEl,{autoSize:true,layout:{background:{type:'solid',color:'#0b121e'},textColor:'#8b9bb0',fontSize:10},grid:{vertLines:{color:'#172235'},horzLines:{color:'#172235'}},rightPriceScale:{borderColor:'#28364a'},timeScale:{visible:false},handleScroll:{mouseWheel:true,pressedMouseMove:true,horzTouchDrag:true},handleScale:{mouseWheel:true,pinch:true}});
  const rs=state.rsi.addSeries(L.LineSeries,{color:'#a36aff',lineWidth:2,priceLineVisible:false,lastValueVisible:true});state.series.rsi=rs;rs.setData(calc.rv.map((v,i)=>v==null?null:{time:c[i].time,value:v}).filter(Boolean));
@@ -162,43 +162,64 @@ function drawPivotLines(){
   state.pivotLines.push(line);
  }
 }
-function drawOverlays(t,c,host){
+function drawOverlays(trades,c,host){
  if(state.overlayResizeObserver){state.overlayResizeObserver.disconnect();state.overlayResizeObserver=null;}
- const old=host.querySelector('.chart-overlay');if(old)old.remove();state.overlayUpdate=null;if(!t)return;
+ const old=host.querySelector('.chart-overlay');if(old)old.remove();state.overlayUpdate=null;
  const overlay=document.createElement('div');overlay.className='chart-overlay';host.appendChild(overlay);
- const zone=document.createElement('div');zone.className='ob-zone '+(t.side==='BUY'?'bull-zone':'bear-zone');zone.innerHTML='<b>'+(t.side==='BUY'?'OB ALCISTA':'OB BAJISTA')+'</b>';overlay.appendChild(zone);
- const levels=[
-  {p:t.entry,label:'ENTRADA',cls:'entry-line',priority:0},
-  {p:t.sl,label:'STOP LOSS',cls:'sl-line',priority:1},
-  {p:t.tp1,label:'TP1 · OBJETIVO',cls:'tp-line',priority:2}
- ];
- if(Math.abs(t.tp2-t.tp1)>1e-10)levels.push({p:t.tp2,label:'TP2 · OBJETIVO',cls:'tp2-line',priority:3});
- const lineEls=levels.map(v=>{
-  const el=document.createElement('div');el.className='level-line '+v.cls;
-  const tag=document.createElement('span');tag.className='level-tag';tag.innerHTML='<b>'+v.label+'</b><strong>'+fmt(v.p)+'</strong>';el.appendChild(tag);
-  overlay.appendChild(el);return{el,tag,...v};
+ // Solo dos OB actuales: el último bloque bajista y el último bloque alcista del historial M5.
+ // No se dibujan OB antiguos de operaciones anteriores.
+ const m5=aggregate(state.rawCandles,5);
+ const latestOB=(side)=>{
+  for(let i=m5.length-1;i>=0;i--){
+   const bar=m5[i],opposite=side==='BUY'?bar.close<bar.open:bar.close>bar.open;
+   if(opposite)return{time:bar.time,high:bar.high,low:bar.low,side};
+  }
+  return null;
+ };
+ const zones=[latestOB('BUY'),latestOB('SELL')].filter(Boolean);
+ const zoneEls=zones.map(ob=>{
+  const el=document.createElement('div');el.className='ob-zone '+(ob.side==='BUY'?'bull-zone':'bear-zone');
+  el.innerHTML='<b>'+(ob.side==='BUY'?'OB ALCISTA · COMPRA':'OB BAJISTA · VENTA')+'</b>';
+  overlay.appendChild(el);return{el,ob};
  });
+ // Mantiene los niveles de la señal más reciente, pero nunca reutiliza sus OB anteriores.
+ const t=[...trades].reverse().find(x=>x.result==='PENDIENTE')||trades[trades.length-1];
+ const lineEls=[];
+ if(t){
+  const levels=[
+   {p:t.entry,label:'ENTRADA',cls:'entry-line',priority:0},
+   {p:t.sl,label:'STOP LOSS',cls:'sl-line',priority:1},
+   {p:t.tp1,label:'TP1 · OBJETIVO',cls:'tp-line',priority:2}
+  ];
+  if(Math.abs(t.tp2-t.tp1)>1e-10)levels.push({p:t.tp2,label:'TP2 · OBJETIVO',cls:'tp2-line',priority:3});
+  levels.forEach(v=>{
+   const el=document.createElement('div');el.className='level-line '+v.cls;
+   const tag=document.createElement('span');tag.className='level-tag';tag.innerHTML='<b>'+v.label+'</b><strong>'+fmt(v.p)+'</strong>';el.appendChild(tag);
+   overlay.appendChild(el);lineEls.push({el,tag,...v});
+  });
+ }
  const update=()=>{
-  const width=host.clientWidth,xOb=state.main.timeScale().timeToCoordinate(t.ob.time),xSignal=state.main.timeScale().timeToCoordinate(t.time);
+  const width=host.clientWidth,scale=state.main.timeScale(),priceScale=state.main.priceScale('right');
+  zoneEls.forEach(({el,ob})=>{
+   const x1=scale.timeToCoordinate(ob.time),x2=scale.timeToCoordinate(ob.time+5*300);
+   const y1=priceScale.priceToCoordinate(ob.high),y2=priceScale.priceToCoordinate(ob.low);
+   if(x1==null||x2==null||y1==null||y2==null){el.style.display='none';return;}
+   // Ancho temporal fijo: cinco velas M5. No se alarga con cada vela nueva.
+   const left=Math.max(0,Math.min(width-4,x1)),right=Math.max(left+24,Math.min(width-2,x2));
+   el.style.display='flex';el.style.left=left+'px';el.style.width=Math.max(24,right-left)+'px';
+   el.style.top=Math.min(y1,y2)+'px';el.style.height=Math.max(18,Math.abs(y2-y1))+'px';
+  });
+  const xSignal=t?scale.timeToCoordinate(t.time):null;
   const xStart=Math.max(0,Math.min(width-8,xSignal==null?width*.45:xSignal));
-  const xZone=Math.max(0,Math.min(width-8,xOb==null?width*.35:xOb));
-  const yHigh=state.main.priceScale('right').priceToCoordinate(t.ob.high),yLow=state.main.priceScale('right').priceToCoordinate(t.ob.low);
-  if(yHigh!=null&&yLow!=null){zone.style.display='flex';zone.style.left=xZone+'px';zone.style.width=Math.max(30,width-xZone-4)+'px';zone.style.top=Math.min(yHigh,yLow)+'px';zone.style.height=Math.max(18,Math.abs(yLow-yHigh))+'px';}else zone.style.display='none';
   const positioned=[];
   lineEls.forEach(v=>{
-   const y=state.main.priceScale('right').priceToCoordinate(v.p);
+   const y=priceScale.priceToCoordinate(v.p);
    if(y==null){v.el.style.display='none';return;}
    v.el.style.display='block';v.el.style.left=xStart+'px';v.el.style.width=Math.max(30,width-xStart-3)+'px';v.el.style.top=y+'px';
    positioned.push({tag:v.tag,y,priority:v.priority});
   });
-  positioned.sort((a,b)=>a.y-b.y);
-  let previous=-Infinity;
-  positioned.forEach(item=>{
-   const desired=Math.max(13,Math.min(host.clientHeight-13,item.y));
-   const placed=Math.max(desired,previous+27);
-   item.tag.style.top=Math.max(2,Math.min(host.clientHeight-27,placed-13))+'px';
-   previous=placed;
-  });
+  positioned.sort((a,b)=>a.y-b.y);let previous=-Infinity;
+  positioned.forEach(item=>{const desired=Math.max(13,Math.min(host.clientHeight-13,item.y));const placed=Math.max(desired,previous+27);item.tag.style.top=Math.max(2,Math.min(host.clientHeight-27,placed-13))+'px';previous=placed;});
  };
  state.overlayUpdate=update;
  if(!state.overlayRangeHandler){state.overlayRangeHandler=()=>{if(state.overlayUpdate)state.overlayUpdate();};state.main.timeScale().subscribeVisibleLogicalRangeChange(state.overlayRangeHandler);}
