@@ -135,34 +135,40 @@ function drawPivotLines(){
  if(!state.series.candle||!state.rawCandles.length)return;
  for(const line of state.pivotLines){try{state.series.candle.removePriceLine(line);}catch{}}
  state.pivotLines=[];
- const raw=state.rawCandles,last=raw[raw.length-1].time,cutoff=last-3600;
+ const raw=state.rawCandles;
  const current=Number(raw[raw.length-1].close);
  if(!Number.isFinite(current))return;
- // Todos los pivotes y resistencias se calculan exclusivamente con velas M10,
- // independientemente de la temporalidad seleccionada para visualizar el gráfico.
- // No se mezclan cálculos M1/M2/M3/M5 ni niveles H1.
- const m10=pivots(aggregate(raw,10),3,600);
- // Buscar el nivel M10 válido más cercano en todo el historial disponible.
- // Si no hay pivote M10 dentro de la última hora, se conserva uno anterior
- // en vez de dejar vacío el lado del soporte o de la resistencia.
- const resistanceCandidates=m10.highs
-  .filter(p=>Number.isFinite(p.price)&&p.price>current)
-  .map(p=>({...p,kind:'resistance-m10'}));
- const supportCandidates=m10.lows
-  .filter(p=>Number.isFinite(p.price)&&p.price<current)
-  .map(p=>({...p,kind:'support-m10'}));
- const resistance=resistanceCandidates.sort((a,b)=>a.price-b.price)[0];
- const support=supportCandidates.sort((a,b)=>b.price-a.price)[0];
- const levels=[...(resistance?[resistance]:[]),...(support?[support]:[])];
+ // Los niveles se calculan exclusivamente con velas de 10 minutos.
+ const m10=aggregate(raw,10);
+ if(!m10.length)return;
+ const detected=pivots(m10,3,600);
+ // Elegir la resistencia M10 más cercana por encima del precio.
+ // Si el precio superó todos los pivotes confirmados, usar el máximo M10 reciente.
+ const highs=detected.highs.filter(p=>Number.isFinite(p.price));
+ const lows=detected.lows.filter(p=>Number.isFinite(p.price));
+ let resistance=highs.filter(p=>p.price>current).sort((a,b)=>a.price-b.price)[0];
+ let support=lows.filter(p=>p.price<current).sort((a,b)=>b.price-a.price)[0];
+ if(!resistance){
+  const candidates=highs.length?highs:m10.map((bar,index)=>({index,time:bar.time,price:bar.high}));
+  resistance=candidates.reduce((best,p)=>!best||p.price>best.price?p:best,null);
+ }
+ if(!support){
+  const candidates=lows.length?lows:m10.map((bar,index)=>({index,time:bar.time,price:bar.low}));
+  support=candidates.reduce((best,p)=>!best||p.price<best.price?p:best,null);
+ }
+ const levels=[];
+ if(resistance)levels.push({...resistance,kind:'resistance'});
+ if(support&&(!resistance||Math.abs(support.price-resistance.price)>1e-10))levels.push({...support,kind:'support'});
  const L=window.LightweightCharts;
  for(const p of levels){
-  const isResistance=p.kind.startsWith('resistance');
+  const isResistance=p.kind==='resistance';
   const line=state.series.candle.createPriceLine({
    price:p.price,
    color:isResistance?'#b98242':'#287f70',
    lineWidth:1,
    lineStyle:L.LineStyle.Dashed,
-   axisLabelVisible:true,title:isResistance?'Resistencia':'Pivote'
+   axisLabelVisible:true,
+   title:isResistance?'Resistencia':'Pivote'
   });
   state.pivotLines.push(line);
  }
