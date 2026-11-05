@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#080d16"><title>BOTDER · Deriv Structural Lab</title>
-<link rel="stylesheet" href="styles.css?v=75">
+<link rel="stylesheet" href="styles.css?v=28fix1">
 <script src="https://unpkg.com/lightweight-charts@5.0.8/dist/lightweight-charts.standalone.production.js" onerror="this.onerror=null;this.src='https://cdn.jsdelivr.net/npm/lightweight-charts@5.0.8/dist/lightweight-charts.standalone.production.js'"></script>
 </head>
 <body>
@@ -34,6 +34,16 @@
       <strong>ORDER BLOCK</strong>
       <small>OB PRINCIPAL</small><div id="obTfControls" class="pivot-tf-controls"><button type="button" data-ob-primary-tf="1">M1</button><button type="button" data-ob-primary-tf="2">M2</button><button type="button" data-ob-primary-tf="3">M3</button><button type="button" data-ob-primary-tf="5">M5</button><button type="button" data-ob-primary-tf="10" class="active" aria-pressed="true">M10</button><button type="button" data-ob-primary-tf="15">M15</button><button type="button" data-ob-primary-tf="30">M30</button><button type="button" data-ob-primary-tf="60">H1</button></div><div class="compact-row"><label class="ob-previous-toggle"><input id="obPreviousEnabled" type="checkbox"> Usar OB anterior (opcional)</label></div><small>OB ANTERIOR</small><div id="obPreviousTfControls" class="pivot-tf-controls"><button type="button" data-ob-previous-tf="1">M1</button><button type="button" data-ob-previous-tf="2">M2</button><button type="button" data-ob-previous-tf="3">M3</button><button type="button" data-ob-previous-tf="5">M5</button><button type="button" data-ob-previous-tf="10">M10</button><button type="button" data-ob-previous-tf="15">M15</button><button type="button" data-ob-previous-tf="30" class="active" aria-pressed="true">M30</button><button type="button" data-ob-previous-tf="60">H1</button></div>
       <div class="compact-row"><div id="pivotStructureTfControls" class="pivot-tf-controls"><button type="button" data-pivot-structure-tf="1" aria-pressed="false">M1</button><button type="button" data-pivot-structure-tf="2" aria-pressed="false">M2</button><button type="button" data-pivot-structure-tf="3" aria-pressed="false">M3</button><button type="button" data-pivot-structure-tf="4" aria-pressed="false">M4</button><button type="button" data-pivot-structure-tf="5" aria-pressed="true" class="active">M5</button><button type="button" data-pivot-structure-tf="10" aria-pressed="false">M10</button><button type="button" data-pivot-structure-tf="30" aria-pressed="false">M30</button><button type="button" data-pivot-structure-tf="60" aria-pressed="false">H1</button></div></div>
+    </section>
+    <section class="pivot-settings compact-settings rsi-level-settings" aria-label="Configuración RSI">
+      <strong>FILTRO RSI · SOLO CANCELA PENDIENTES</strong>
+      <div class="rsi-config-grid">
+        <label>Temporalidad <select id="rsiTimeframe"><option value="1">M1</option><option value="2">M2</option><option value="3">M3</option><option value="5" selected>M5</option><option value="10">M10</option><option value="15">M15</option><option value="30">M30</option><option value="60">H1</option></select></label>
+        <label>Periodo <input id="rsiPeriod" type="number" min="2" max="200" value="14"></label>
+      </div>
+      <div class="rsi-level-group"><label>Nivel bajo <input id="rsiLow" type="number" min="1" max="98" value="40"></label><label>Cancelación <input id="rsiMid" type="number" min="2" max="99" value="50"></label><label>Nivel alto <input id="rsiHigh" type="number" min="3" max="100" value="60"></label></div>
+      <button type="button" id="applyRsiConfig" class="text-btn">Guardar y recalcular historial</button>
+      <small id="rsiSettingsStatus" class="rsi-settings-status">El RSI no abre ni cierra operaciones; cancela pendientes contrarias al cruzar el nivel medio.</small>
     </section>
     <section class="pivot-settings compact-settings" aria-label="Pivotes y resistencias">
       <strong>PIVOTES / RESISTENCIAS</strong>
@@ -74,5 +84,5 @@
   </section>
   <footer>BOTDER · Solo análisis y simulación. No envía órdenes ni garantiza resultados futuros.</footer>
 </main>
-<script src="app.js?v=28"></script>
+<script src="app.js?v=28fix1"></script>
 </body></html>
