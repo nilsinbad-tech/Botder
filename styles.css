@@ -342,3 +342,13 @@ html,body{width:100%;max-width:100%;min-width:0;overflow-x:clip}
 /* Estado visual de entrada: posible antes del toque y confirmada después. */
 .chart-overlay .price-label.possible-entry-line{color:#f1c45b!important;border-style:dashed!important;border-width:1px!important;background:#211a0dee!important}
 .chart-overlay .price-label.confirmed-entry-line{color:#20d69a!important;border-style:solid!important;border-width:2px!important;background:#06251fee!important}
+
+/* Operaciones históricas: etiquetas ancladas a la vela de entrada y de salida. */
+.chart-overlay .historical-trade-label{z-index:14!important;font-size:7px!important;gap:3px!important;padding:2px 4px!important;opacity:.96!important}
+.chart-overlay .historical-trade-label b{font-size:6px!important}
+.chart-overlay .historical-trade-label strong{font-size:7px!important}
+.chart-overlay .historical-entry-label.history-buy{color:#20d69a!important;background:#06251fee!important}
+.chart-overlay .historical-entry-label.history-sell{color:#ff7a86!important;background:#2a1016ee!important}
+.chart-overlay .historical-result-label.history-win{color:#20d69a!important;background:#06251fee!important;border-style:solid!important}
+.chart-overlay .historical-result-label.history-loss{color:#ff5968!important;background:#2a1016ee!important;border-style:solid!important}
+.chart-overlay .historical-result-label.history-cancel{color:#f1c45b!important;background:#211a0dee!important;border-style:dashed!important}
