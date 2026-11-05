@@ -276,7 +276,8 @@ function drawOverlays(trades,c,host,obZones=[],setups=[]){
   overlay.appendChild(el);lineEls.push({key:'entry',p:t.entry,label,cls:'entry-line',el});
   // Recuadro horizontal de la zona exacta del OB donde se espera el retroceso para entrar.
   const zone=document.createElement('div');zone.className='entry-search-zone '+(t.side==='BUY'?'entry-buy':'entry-sell');
-  zone.innerHTML='<b>'+label+'</b>';overlay.appendChild(zone);entryZoneEl=zone;
+  // El recuadro solo resalta la zona; la única etiqueta de entrada queda fija a la derecha.
+  zone.setAttribute('aria-label','Zona de búsqueda de entrada');overlay.appendChild(zone);entryZoneEl=zone;
  }
  const update=()=>{
   const width=host.clientWidth,scale=state.main.timeScale(),candleSeries=state.series.candle;
