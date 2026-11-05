@@ -208,7 +208,7 @@ function draw(c,calc,trades,obZones=[],setups=[]){
  drawOverlays(trades,c,main,obZones,setups);
  const rsiEl=$('rsiChart');rsiEl.innerHTML='';
  state.rsi=L.createChart(rsiEl,{autoSize:true,layout:{background:{type:'solid',color:'#0b121e'},textColor:'#8b9bb0',fontSize:10},grid:{vertLines:{color:'#172235'},horzLines:{color:'#172235'}},rightPriceScale:{borderColor:'#28364a'},timeScale:{visible:false},handleScroll:{mouseWheel:true,pressedMouseMove:true,horzTouchDrag:true},handleScale:{mouseWheel:true,pinch:true}});
- const rs=state.rsi.addSeries(L.LineSeries,{color:'#a36aff',lineWidth:2,priceLineVisible:false,lastValueVisible:true});state.series.rsi=rs;rs.setData(calc.rv.map((v,i)=>v==null?null:{time:c[i].time,value:v}).filter(Boolean));
+ const rs=state.rsi.addSeries(L.LineSeries,{color:'#b58aff',lineWidth:2,priceLineVisible:false,lastValueVisible:true,priceFormat:{type:'price',precision:1,minMove:.1},autoscaleInfoProvider:()=>({priceRange:{minValue:0,maxValue:100}})});state.series.rsi=rs;rs.setData(calc.rv.map((v,i)=>v==null?null:{time:c[i].time,value:v}).filter(Boolean));
  [30,50,70].forEach(v=>rs.createPriceLine({price:v,color:'#45536b',lineStyle:L.LineStyle.Dashed,lineWidth:1,axisLabelVisible:true,title:''}));
  if(preserveRange){state.main.timeScale().setVisibleLogicalRange(priorRange);state.rsi.timeScale().setVisibleLogicalRange(priorRange);}else{const visibleFrom=Math.max(0,c.length-120);const visibleRange={from:visibleFrom,to:c.length+3};state.main.timeScale().setVisibleLogicalRange(visibleRange);state.rsi.timeScale().setVisibleLogicalRange(visibleRange);}let syncingRange=false;state.main.timeScale().subscribeVisibleLogicalRangeChange(range=>{if(!range||syncingRange)return;syncingRange=true;state.rsi.timeScale().setVisibleLogicalRange(range);syncingRange=false;});state.rsi.timeScale().subscribeVisibleLogicalRangeChange(range=>{if(!range||syncingRange)return;syncingRange=true;state.main.timeScale().setVisibleLogicalRange(range);syncingRange=false;});state.forceFitNext=false;
 }
@@ -275,15 +275,26 @@ function drawOverlays(trades,c,host,obZones=[],setups=[]){
  // Conserva las entradas históricas del backtest en su vela y precio originales.
  const entryRecords=(trades||[]).filter(x=>Number.isFinite(x.entry)&&Number.isFinite(x.entryTime)&&x.entryIndex>=0&&x.result!=='CANCELADA');
  const currentPending=t&&t.entryIndex<0&&!Number.isFinite(t.entryTime)?[t]:[];
- const visibleEntries=[...entryRecords,...currentPending].slice(-100);
- state.overlayPriceLevels=t?[t.entry].filter(Number.isFinite):[];
+ const visibleEntries=[...entryRecords,...currentPending].slice(-550);
+ state.overlayPriceLevels=t?[t.entry,t.sl,t.tp1,t.tp2].filter(Number.isFinite):[];
+ const levelLineEls=[];
  visibleEntries.forEach((trade,index)=>{
+  const time=Number.isFinite(trade.entryTime)?trade.entryTime:trade.time;
   const label=trade.side==='BUY'?'COMPRA':'VENTA';
   const el=document.createElement('div');el.className='price-label entry-line';
   el.setAttribute('aria-label','Entrada '+label+' '+fmt(trade.entry));
   el.innerHTML='<b>'+label+'</b><strong>'+fmt(trade.entry)+'</strong><small>RSI '+fmt(Number.isFinite(trade.entryRsi)?trade.entryRsi:trade.rsi)+'</small>';
   overlay.appendChild(el);
-  lineEls.push({key:'entry-'+index,p:trade.entry,label,cls:'entry-line',el,time:Number.isFinite(trade.entryTime)?trade.entryTime:trade.time,side:trade.side});
+  lineEls.push({key:'entry-'+index,p:trade.entry,label,cls:'entry-line',el,time,side:trade.side});
+  [['SL',trade.sl,'sl-line'],['TP1',trade.tp1,'tp-line'],['TP2',trade.tp2,'tp2-line']].forEach(([name,price,cls])=>{
+   if(!Number.isFinite(Number(price)))return;
+   const rule=document.createElement('div');rule.className='trade-level-rule '+cls;
+   const tag=document.createElement('div');tag.className='price-label '+cls;
+   tag.setAttribute('aria-label',name+' '+fmt(Number(price)));
+   tag.innerHTML='<b>'+name+'</b><strong>'+fmt(Number(price))+'</strong>';
+   overlay.appendChild(rule);overlay.appendChild(tag);
+   levelLineEls.push({p:Number(price),time,rule,tag});
+  });
  });
  const update=()=>{
   const width=host.clientWidth,scale=state.main.timeScale(),candleSeries=state.series.candle;
@@ -305,9 +316,16 @@ function drawOverlays(trades,c,host,obZones=[],setups=[]){
    if(y==null||anchor==null||anchor<0||anchor>width){v.el.style.display='none';return;}
    v.el.style.display='flex';v.el.style.right='auto';v.el.style.width='max-content';
    const labelWidth=v.el.offsetWidth||100;
-   // Centrada sobre la vela exacta de entrada; al desplazar el gráfico acompaña esa vela.
    v.el.style.left=Math.max(0,Math.min(width-labelWidth,anchor-labelWidth/2))+'px';
    v.el.style.top=(y-(v.el.offsetHeight/2))+'px';
+  });
+  levelLineEls.forEach(v=>{
+   const y=candleSeries.priceToCoordinate(v.p);
+   const anchor=scale.timeToCoordinate(v.time);
+   if(y==null||anchor==null||anchor<0||anchor>=width){v.rule.style.display='none';v.tag.style.display='none';return;}
+   const left=Math.max(0,anchor);
+   v.rule.style.display='block';v.rule.style.left=left+'px';v.rule.style.top=y+'px';v.rule.style.width=Math.max(0,width-left)+'px';
+   v.tag.style.display='flex';v.tag.style.left=Math.max(0,width-(v.tag.offsetWidth||75)-4)+'px';v.tag.style.top=(y-(v.tag.offsetHeight/2))+'px';
   });
  };
  state.overlayUpdate=update;
@@ -344,9 +362,10 @@ function showLatest(calc,trades,c,raw=state.rawCandles){
  $('rsiLegend').textContent='Valor actual: '+fmt(rv);
 }
 function renderHistory(trades){
- const source=state.marketBacktests.length?state.marketBacktests:trades;
+ const source=mergeTrades(state.marketBacktests,state.savedChartTrades.length?state.savedChartTrades:(trades||[]),2000);
  const rows=[...source].sort((a,b)=>Number(a.time)-Number(b.time)).slice(-550).reverse();
- $('historyCount').textContent=source.length+' operaciones · +'+fmt(source.filter(t=>t.result==='GANADA'&&Number.isFinite(t.points)).reduce((a,t)=>a+Math.max(0,t.points),0))+' / -'+fmt(source.filter(t=>t.result==='PERDIDA'&&Number.isFinite(t.points)).reduce((a,t)=>a+Math.abs(Math.min(0,t.points)),0))+' pts';
+ const shown=Math.min(rows.length,550);
+ $('historyCount').textContent='Mostrando '+shown+' de '+source.length+' · +'+fmt(source.filter(t=>t.result==='GANADA'&&Number.isFinite(t.points)).reduce((a,t)=>a+Math.max(0,t.points),0))+' / -'+fmt(source.filter(t=>t.result==='PERDIDA'&&Number.isFinite(t.points)).reduce((a,t)=>a+Math.abs(Math.min(0,t.points)),0))+' pts';
  $('historyBody').innerHTML=rows.length?rows.map(t=>'<tr><td>'+new Date(t.time*1000).toLocaleTimeString('es-PA',{hour:'2-digit',minute:'2-digit'})+'</td><td>'+esc(state.symbols.find(x=>x.symbol===t.symbol)?.name||t.symbol||state.selected)+'</td><td style="color:'+(t.side==='BUY'?'#20d69a':'#ff6876')+'">'+(t.side==='BUY'?'COMPRA':'VENTA')+'</td><td>'+fmt(t.entry)+'</td><td>'+fmt(Number.isFinite(t.entryRsi)?t.entryRsi:t.rsi)+'</td><td>'+fmt(t.sl)+'</td><td>'+fmt(t.tp1)+'</td><td>'+fmt(t.tp2)+'</td><td>'+t.result+'</td><td style="color:'+(t.points==null?'#8b9bb0':t.points>=0?'#20d69a':'#ff6876')+'">'+(t.points==null?'—':(t.points>0?'+':'')+fmt(t.points)+' pts')+'</td></tr>').join(''):'<tr><td colspan="10" class="empty-cell">No hay operaciones detectadas en este período.</td></tr>';
  const closed=source.filter(t=>t.result==='GANADA'||t.result==='PERDIDA');
  $('wins').textContent=closed.filter(t=>t.result==='GANADA').length;$('losses').textContent=closed.filter(t=>t.result==='PERDIDA').length;$('pending').textContent=source.filter(t=>t.result==='PENDIENTE').length;$('expired').textContent=source.filter(t=>t.result==='CANCELADA').length;
