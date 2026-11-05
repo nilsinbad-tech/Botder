@@ -80,7 +80,7 @@ function buildSetups(c,liquidityCandles=c,pivotCandles=liquidityCandles,obStruct
   let lo=0,hi=m30Bars.length;
   while(lo<hi){const mid=(lo+hi)>>1;if(m30Bars[mid].time+1800<=time)lo=mid+1;else hi=mid;}
   const k=lo-1;
-  if(k<29)return null;
+  if(k<49)return null;
   return m30E20[k]>m30E50[k]?'BUY':m30E20[k]<m30E50[k]?'SELL':null;
  };
  const m2Bars=aggregate(targetRawCandles,2),m2Close=m2Bars.map(v=>v.close);
@@ -93,6 +93,22 @@ function buildSetups(c,liquidityCandles=c,pivotCandles=liquidityCandles,obStruct
   latestZones.push({...ob,side,timeframe:tf,structureTime:ob.time,structureType:side==='BUY'?'SOPORTE':'RESISTENCIA'});
   zoneKeys.add(key);
  };
+ // Detecta OB históricos por desplazamiento/ruptura estructural, sin exigir un cruce EMA.
+ // Así las zonas se dibujan aunque todavía no haya una entrada M2.
+ for(let i=3;i<primaryCandles.length;i++){
+  const impulse=primaryCandles[i];
+  const prior=primaryCandles.slice(Math.max(0,i-3),i);
+  const bullishBreak=prior.length===3&&impulse.close>Math.max(...prior.map(v=>v.high));
+  const bearishBreak=prior.length===3&&impulse.close<Math.min(...prior.map(v=>v.low));
+  if(!bullishBreak&&!bearishBreak)continue;
+  const side=bullishBreak?'BUY':'SELL';
+  for(let j=i-1;j>=Math.max(0,i-9);j--){
+   const q=primaryCandles[j],opposite=side==='BUY'?q.close<q.open:q.close>q.open;
+   if(!opposite)continue;
+   addZone({time:q.time,high:q.high,low:q.low,entry:(q.high+q.low)/2},side,primaryTf);
+   break;
+  }
+ }
  for(let i=50;i<m2Bars.length;i++){
   const bar=m2Bars[i],prior=m2E9[i-1]-m2E50[i-1],current=m2E9[i]-m2E50[i];
   const side=prior<=0&&current>0?'BUY':prior>=0&&current<0?'SELL':null;
@@ -221,7 +237,7 @@ function draw(c,calc,trades,obZones=[],setups=[]){
  state.rsi=L.createChart(rsiEl,{autoSize:true,layout:{background:{type:'solid',color:'#0b121e'},textColor:'#8b9bb0',fontSize:10},grid:{vertLines:{color:'#172235'},horzLines:{color:'#172235'}},rightPriceScale:{borderColor:'#28364a'},timeScale:{visible:false},handleScroll:{mouseWheel:true,pressedMouseMove:true,horzTouchDrag:true},handleScale:{mouseWheel:true,pinch:true}});
  const rs=state.rsi.addSeries(L.LineSeries,{color:'#b58aff',lineWidth:2,priceLineVisible:false,lastValueVisible:true,priceFormat:{type:'price',precision:1,minMove:.1},autoscaleInfoProvider:()=>({priceRange:{minValue:0,maxValue:100}})});state.series.rsi=rs;rs.setData(calc.rv.map((v,i)=>v==null?null:{time:c[i].time,value:v}).filter(Boolean));
  [30,50,70].forEach(v=>rs.createPriceLine({price:v,color:'#45536b',lineStyle:L.LineStyle.Dashed,lineWidth:1,axisLabelVisible:true,title:''}));
- if(preserveRange){state.main.timeScale().setVisibleLogicalRange(priorRange);state.rsi.timeScale().setVisibleLogicalRange(priorRange);}else{const visibleFrom=Math.max(0,c.length-120);const visibleRange={from:visibleFrom,to:c.length+3};state.main.timeScale().setVisibleLogicalRange(visibleRange);state.rsi.timeScale().setVisibleLogicalRange(visibleRange);}let syncingRange=false;state.main.timeScale().subscribeVisibleLogicalRangeChange(range=>{if(!range||syncingRange)return;syncingRange=true;state.rsi.timeScale().setVisibleLogicalRange(range);syncingRange=false;});state.rsi.timeScale().subscribeVisibleLogicalRangeChange(range=>{if(!range||syncingRange)return;syncingRange=true;state.main.timeScale().setVisibleLogicalRange(range);syncingRange=false;});state.forceFitNext=false;
+ if(preserveRange){state.main.timeScale().setVisibleLogicalRange(priorRange);state.rsi.timeScale().setVisibleLogicalRange(priorRange);}else{const visibleFrom=Math.max(0,c.length-550);const visibleRange={from:visibleFrom,to:c.length+3};state.main.timeScale().setVisibleLogicalRange(visibleRange);state.rsi.timeScale().setVisibleLogicalRange(visibleRange);}let syncingRange=false;state.main.timeScale().subscribeVisibleLogicalRangeChange(range=>{if(!range||syncingRange)return;syncingRange=true;state.rsi.timeScale().setVisibleLogicalRange(range);syncingRange=false;});state.rsi.timeScale().subscribeVisibleLogicalRangeChange(range=>{if(!range||syncingRange)return;syncingRange=true;state.main.timeScale().setVisibleLogicalRange(range);syncingRange=false;});state.forceFitNext=false;
 }
 function drawPivotLines(){
  if(!state.series.candle||!state.rawCandles.length)return;
@@ -306,7 +322,14 @@ function drawOverlays(trades,c,host,obZones=[],setups=[]){
   const update=()=>{
     const width=host.clientWidth,scale=state.main.timeScale(),candleSeries=state.series.candle;
     zoneEls.forEach(({el,ob})=>{
-      const x=scale.timeToCoordinate(ob.time);
+      const exactX=scale.timeToCoordinate(ob.time);
+      let x=exactX;
+      if(x==null){
+        let lo=0,hi=c.length;
+        while(lo<hi){const mid=(lo+hi)>>1;if(c[mid].time<=ob.time)lo=mid+1;else hi=mid;}
+        const nearest=c[Math.max(0,lo-1)];
+        if(nearest&&ob.time>=c[0].time&&ob.time<=c[c.length-1].time)x=scale.timeToCoordinate(nearest.time);
+      }
       const y1=candleSeries.priceToCoordinate(ob.high),y2=candleSeries.priceToCoordinate(ob.low);
       // Si la vela no está visible, se oculta: nunca se pega el OB al borde del gráfico.
       if(x==null||x<0||x>width||y1==null||y2==null){el.style.display='none';return;}
@@ -344,7 +367,7 @@ function fmt(n){return Number.isFinite(n)?Number(n).toFixed(2):'—';}
 function getTrend30(raw){
  const m30=aggregate(raw,30),latest=raw.length?raw[raw.length-1].time:0;
  const closed=m30.filter(bar=>bar.time+1800<=latest);
- if(closed.length<30)return{trend:'SIN DATOS M30',side:null,ob:null,m30:closed};
+ if(closed.length<50)return{trend:'SIN DATOS M30',side:null,ob:null,m30:closed};
  const close=closed.map(x=>x.close),fast=ema(close,20),slow=ema(close,50);
  const side=fast.at(-1)>slow.at(-1)?'BUY':fast.at(-1)<slow.at(-1)?'SELL':null;
  const trend=side==='BUY'?'ALCISTA':side==='SELL'?'BAJISTA':'LATERAL';
