@@ -193,7 +193,7 @@ if(historyPage){d=[...d,...pendingHistory].sort((a,b)=>a.time-b.time);historyPag
 if(d.length&&d[d.length-1].time+activeTf>Date.now()/1000)d.pop();
 const coverage=d.length?(d[d.length-1].time-d[0].time)/DAY:0;
 const target=Math.ceil(TARGET_DAYS*DAY/activeTf)+100,minimum=Math.ceil(MIN_DAYS*DAY/activeTf)+100;
-if(d.length<target&&coverage<TARGET_DAYS&&(receivedRows>0||!historyPage)){
+if(d.length>0&&d.length<target&&coverage<TARGET_DAYS&&(receivedRows>0||!wasHistoryPage)){
  historyPage=true;pendingHistory=d;req++;socket.send(JSON.stringify({ticks_history:active.symbol,count:COUNT,end:d[0].time-1,style:'candles',granularity:activeTf,req_id:req}));
  clearTimeout(requestTimer);requestTimer=setTimeout(()=>{if(busy&&historyPage){historyPage=false;const oldData=pendingHistory;pendingHistory=[];const days=oldData.length?(oldData[oldData.length-1].time-oldData[0].time)/DAY:0;if(days>=MIN_DAYS&&oldData.length>=minimum){$('live-detail').textContent='Deriv dejó de entregar historial adicional. Se analizarán '+days.toFixed(2)+' días disponibles de '+active.name+' en '+(activeTf===120?'M2':'M5')+'.';process(active,oldData,activeTf)}else{$('live-detail').textContent='Historial insuficiente: '+active.name+' solo entregó '+days.toFixed(2)+' días; el mínimo es 2 días.'}idx++;prog();render();next()}},30000);return;
 }
