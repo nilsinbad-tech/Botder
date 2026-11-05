@@ -76,6 +76,11 @@ function buildSetups(c,liquidityCandles=c,pivotCandles=liquidityCandles,obStruct
   const x=c[i],prevRsi=rv[i-1],currRsi=rv[i];
   if(!Number.isFinite(prevRsi)||!Number.isFinite(currRsi)||!Number.isFinite(e9[i-1])||!Number.isFinite(e20[i-1]))continue;
   // El RSI toca/cruza 60 con vela alcista o 40 con vela bajista.
+  const range=Math.max(0,x.high-x.low),body=Math.abs(x.close-x.open),strongCandle=range>0&&body/range>=.70;
+  const candleSeconds=i>0?Math.max(60,x.time-c[i-1].time):120;
+  const forming=i===c.length-1&&Date.now()/1000<x.time+candleSeconds;
+  // Vela fuerte (cuerpo >=70% del rango): permite disparo intravela; si no, espera al cierre.
+  if(forming&&!strongCandle)continue;
   const buyTrigger=prevRsi<60&&currRsi>=60&&x.close>x.open&&e9[i-1]<=e20[i-1]&&e9[i]>e20[i]&&x.close>e20[i];
   const sellTrigger=prevRsi>40&&currRsi<=40&&x.close<x.open&&e9[i-1]>=e20[i-1]&&e9[i]<e20[i]&&x.close<e20[i];
   for(const side of (buyTrigger?['BUY']:sellTrigger?['SELL']:[])){
@@ -100,7 +105,6 @@ function buildSetups(c,liquidityCandles=c,pivotCandles=liquidityCandles,obStruct
    const slPivot=stopCandidates[0]||null,tp1Pivot=levels[0],tp2Pivot=levels[1]||null;
    const slBuffer=(ob.high-ob.low)*.12;
    const sl=slPivot?(side==='BUY'?slPivot.price-slBuffer:slPivot.price+slBuffer):(side==='BUY'?ob.low-slBuffer:ob.high+slBuffer);
-   const range=Math.max(0,x.high-x.low),body=Math.abs(x.close-x.open),strongCandle=range>0&&body/range>=.70;
    setups.push({side,index:i,time:x.time,entry:x.close,sl,tp1:tp1Pivot.price,tp2:tp2Pivot?tp2Pivot.price:tp1Pivot.price,ob,structureTime:structure.time,structurePrice:structure.price,slPivot,tp1Pivot,tp2Pivot,rsi:rv[i],strongCandle,state:'PREPARADA'});
    usedOBs.add(key);usedZones.add(zoneKey);
   }
