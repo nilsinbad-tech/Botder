@@ -5,7 +5,7 @@ const HISTORY_CANDLES = 1440;
 const REQUEST_TIMEOUT_MS = 45000;
 const API_URL = 'wss://api.derivws.com/trading/v1/options/ws/public';
 const $ = id => document.getElementById(id);
-const state = { ws:null, req:0, pending:new Map(), symbols:[], selected:null, tf:1, candles:[], rawCandles:[], rawBySymbol:new Map(), marketBacktests:[], trades:[], liveSub:null, main:null, rsi:null, markerPlugin:null, overlayResizeObserver:null, overlayUpdate:null, overlayRangeHandler:null, pivotLines:[], chartKey:null, series:{}, busy:false, analyzeQueued:false, forceFitNext:true, lastRecalcBucket:null, pendingLiveTick:null, liveFrame:0, overlayFrame:0 };
+const state = { ws:null, req:0, pending:new Map(), symbols:[], selected:null, tf:1, candles:[], rawCandles:[], rawBySymbol:new Map(), marketBacktests:[], trades:[], liveSub:null, main:null, rsi:null, markerPlugin:null, overlayResizeObserver:null, overlayUpdate:null, overlayRangeHandler:null, pivotLines:[], pivotTfEnabled:{1:false,2:false,3:false,4:false,5:true,10:false}, chartKey:null, series:{}, busy:false, analyzeQueued:false, forceFitNext:true, lastRecalcBucket:null, pendingLiveTick:null, liveFrame:0, overlayFrame:0 };
 const CANDIDATES = [
  ['1HZ10V','Volatility 10 (1s)'],['1HZ15V','Volatility 15 (1s)'],['1HZ25V','Volatility 25 (1s)'],['1HZ30V','Volatility 30 (1s)'],['1HZ50V','Volatility 50 (1s)'],['1HZ75V','Volatility 75 (1s)'],['1HZ90V','Volatility 90 (1s)'],['1HZ100V','Volatility 100 (1s)'],['1HZ150V','Volatility 150 (1s)'],['1HZ250V','Volatility 250 (1s)'],
  ['R_10','Volatility 10'],['R_25','Volatility 25'],['R_50','Volatility 50'],['R_75','Volatility 75'],['R_100','Volatility 100'],
@@ -135,42 +135,36 @@ function drawPivotLines(){
  if(!state.series.candle||!state.rawCandles.length)return;
  for(const line of state.pivotLines){try{state.series.candle.removePriceLine(line);}catch{}}
  state.pivotLines=[];
- const raw=state.rawCandles;
- const current=Number(raw[raw.length-1].close);
+ const raw=state.rawCandles,current=Number(raw[raw.length-1].close);
  if(!Number.isFinite(current))return;
- // Los niveles se calculan exclusivamente con velas de 5 minutos.
- const m10=aggregate(raw,5);
- if(!m10.length)return;
- const detected=pivots(m10,3,300);
- // Elegir la resistencia M5 más cercana por encima del precio.
- // Si el precio superó todos los pivotes confirmados, usar el máximo M5 reciente.
- const highs=detected.highs.filter(p=>Number.isFinite(p.price));
- const lows=detected.lows.filter(p=>Number.isFinite(p.price));
- let resistance=highs.filter(p=>p.price>current).sort((a,b)=>a.price-b.price)[0];
- let support=lows.filter(p=>p.price<current).sort((a,b)=>b.price-a.price)[0];
- if(!resistance){
-  const candidates=highs.length?highs:m10.map((bar,index)=>({index,time:bar.time,price:bar.high}));
-  resistance=candidates.reduce((best,p)=>!best||p.price>best.price?p:best,null);
- }
- if(!support){
-  const candidates=lows.length?lows:m10.map((bar,index)=>({index,time:bar.time,price:bar.low}));
-  support=candidates.reduce((best,p)=>!best||p.price<best.price?p:best,null);
- }
- const levels=[];
- if(resistance)levels.push({...resistance,kind:'resistance'});
- if(support&&(!resistance||Math.abs(support.price-resistance.price)>1e-10))levels.push({...support,kind:'support'});
+ const colors={1:'#8b9cff',2:'#d18cff',3:'#55c9d8',4:'#e2b65c',5:'#35c99a',10:'#ff8b65'};
  const L=window.LightweightCharts;
- for(const p of levels){
-  const isResistance=p.kind==='resistance';
-  const line=state.series.candle.createPriceLine({
-   price:p.price,
-   color:isResistance?'#b98242':'#287f70',
-   lineWidth:1,
-   lineStyle:L.LineStyle.Dashed,
-   axisLabelVisible:true,
-   title:isResistance?'Resistencia':'Pivote'
-  });
-  state.pivotLines.push(line);
+ for(const mins of [1,2,3,4,5,10]){
+  if(!state.pivotTfEnabled[mins])continue;
+  const candles=aggregate(raw,mins);
+  if(!candles.length)continue;
+  const detected=pivots(candles,3,mins*60);
+  const highs=detected.highs.filter(p=>Number.isFinite(p.price)&&p.price>current);
+  const lows=detected.lows.filter(p=>Number.isFinite(p.price)&&p.price<current);
+  let resistance=highs.sort((a,b)=>a.price-b.price)[0];
+  let support=lows.sort((a,b)=>b.price-a.price)[0];
+  if(!resistance){
+   const candidates=candles.map(bar=>({time:bar.time,price:bar.high}));
+   resistance=candidates.reduce((best,p)=>!best||p.price>best.price?p:best,null);
+   if(resistance&&resistance.price<=current)resistance=null;
+  }
+  if(!support){
+   const candidates=candles.map(bar=>({time:bar.time,price:bar.low}));
+   support=candidates.reduce((best,p)=>!best||p.price<best.price?p:best,null);
+   if(support&&support.price>=current)support=null;
+  }
+  const color=colors[mins];
+  for(const pair of [[resistance,true],[support,false]]){
+   const p=pair[0],isResistance=pair[1];
+   if(!p||!Number.isFinite(p.price))continue;
+   const line=state.series.candle.createPriceLine({price:p.price,color,lineWidth:1,lineStyle:isResistance?L.LineStyle.Dashed:L.LineStyle.Dotted,axisLabelVisible:true,title:(isResistance?'Resistencia ':'Pivote ')+mins+'m'});
+   state.pivotLines.push(line);
+  }
  }
 }
 function drawOverlays(trades,c,host){
@@ -302,7 +296,15 @@ function onLiveTick(tick){
 }
 function subscribeLive(){if(state.liveSub){try{state.ws.send(JSON.stringify({forget:state.liveSub}));}catch{}}request({ticks:state.selected,subscribe:1}).then(r=>{state.liveSub=r.subscription?.id||null;}).catch(()=>{});}
 function selectSymbol(symbol){if(!state.symbols.some(s=>s.symbol===symbol))return;state.selected=symbol;state.forceFitNext=true;$('symbolSelect').value=symbol;document.querySelectorAll('.instrument-chip').forEach(b=>b.classList.toggle('selected',b.dataset.symbol===symbol));analyze();subscribeLive();}
+function bindPivotControls(){
+ const root=$('pivotTfControls');if(!root)return;
+ try{const saved=JSON.parse(localStorage.getItem('botder-pivot-tfs')||'null');if(saved&&typeof saved==='object'){for(const mins of [1,2,3,4,5,10])if(typeof saved[mins]==='boolean')state.pivotTfEnabled[mins]=saved[mins];}}catch{}
+ const sync=()=>{root.querySelectorAll('button[data-pivot-tf]').forEach(button=>{const mins=Number(button.dataset.pivotTf),enabled=!!state.pivotTfEnabled[mins];button.classList.toggle('active',enabled);button.setAttribute('aria-pressed',String(enabled));});};
+ sync();
+ root.addEventListener('click',event=>{const button=event.target.closest('button[data-pivot-tf]');if(!button)return;const mins=Number(button.dataset.pivotTf);state.pivotTfEnabled[mins]=!state.pivotTfEnabled[mins];try{localStorage.setItem('botder-pivot-tfs',JSON.stringify(state.pivotTfEnabled));}catch{}sync();drawPivotLines();});
+}
 function bind(){
+ bindPivotControls();
  $('instrumentList').addEventListener('click',e=>{const b=e.target.closest('button[data-symbol]');if(b)selectSymbol(b.dataset.symbol);});
  $('symbolSelect').addEventListener('change',e=>selectSymbol(e.target.value));
  $('timeframes').addEventListener('click',async e=>{const b=e.target.closest('button[data-tf]');if(!b)return;state.tf=+b.dataset.tf;state.forceFitNext=true;document.querySelectorAll('#timeframes button').forEach(x=>x.classList.toggle('active',x===b));await analyze();});
