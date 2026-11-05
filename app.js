@@ -1,7 +1,9 @@
 /* BOTDER · motor de análisis y backtesting. Sin ejecución de órdenes. */
 (() => {
 'use strict';
-const HISTORY_CANDLES = 5000;
+const HISTORY_CANDLES = 20000;
+const HISTORY_PAGE_SIZE = 5000;
+const HISTORY_DISPLAY_LIMIT = 550;
 const REQUEST_TIMEOUT_MS = 45000;
 const API_URL = 'wss://api.derivws.com/trading/v1/options/ws/public';
 const $ = id => document.getElementById(id);
@@ -56,10 +58,22 @@ async function loadSymbols(){
 
 function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
 async function getCandles(symbol,preferredCount=HISTORY_CANDLES){
- let lastError=null;const counts=[...new Set([Math.min(preferredCount,5000),HISTORY_CANDLES])];
- for(const count of counts){
-  try{const r=await request({ticks_history:symbol,adjust_start_time:1,count,end:'latest',granularity:60,style:'candles'});const candles=(r.candles||[]).map(c=>({time:Number(c.epoch),open:+c.open,high:+c.high,low:+c.low,close:+c.close})).filter(c=>Number.isFinite(c.time)&&Number.isFinite(c.open)&&Number.isFinite(c.high)&&Number.isFinite(c.low)&&Number.isFinite(c.close));if(candles.length)return candles;lastError=new Error('Deriv devolvió 0 velas para '+symbol);}catch(e){lastError=e;}
+ const target=Math.min(Math.max(1,preferredCount),HISTORY_CANDLES),byTime=new Map();let end='latest',lastError=null;
+ while(byTime.size<target){
+  const count=Math.min(HISTORY_PAGE_SIZE,target-byTime.size);
+  try{
+   const r=await request({ticks_history:symbol,adjust_start_time:1,count,end,granularity:60,style:'candles'});
+   const page=(r.candles||[]).map(c=>({time:Number(c.epoch),open:+c.open,high:+c.high,low:+c.low,close:+c.close})).filter(c=>Number.isFinite(c.time)&&Number.isFinite(c.open)&&Number.isFinite(c.high)&&Number.isFinite(c.low)&&Number.isFinite(c.close));
+   if(!page.length){if(!byTime.size)lastError=new Error('Deriv devolvió 0 velas para '+symbol);break;}
+   const before=byTime.size;for(const candle of page)byTime.set(candle.time,candle);
+   const oldest=Math.min(...page.map(c=>c.time));
+   if(byTime.size===before||!Number.isFinite(oldest))break;
+   end=oldest-1;
+   if(page.length<count)break;
+  }catch(e){lastError=e;break;}
  }
+ const candles=[...byTime.values()].sort((a,b)=>a.time-b.time).slice(-target);
+ if(candles.length)return candles;
  throw new Error('No se pudo descargar el historial de '+symbol+': '+(lastError?.message||'sin datos'));
 }
 function aggregate(candles,mins){if(mins===1)return candles;const groups=new Map();for(const candle of candles){const bucket=Math.floor(candle.time/(mins*60))*(mins*60);let g=groups.get(bucket);if(!g){g={time:bucket,open:candle.open,high:candle.high,low:candle.low,close:candle.close,count:0};groups.set(bucket,g);}g.high=Math.max(g.high,candle.high);g.low=Math.min(g.low,candle.low);g.close=candle.close;g.count++;}const lastBucket=candles.length?Math.floor(candles.at(-1).time/(mins*60))*(mins*60):null;return [...groups.values()].filter(g=>g.count===mins||g.time===lastBucket).map(({count,...bar})=>bar).sort((a,b)=>a.time-b.time);}
@@ -368,14 +382,14 @@ function showLatest(calc,trades,c,raw=state.rawCandles){
 }
 function renderHistory(trades){
  const source=mergeTrades(state.marketBacktests,state.savedChartTrades.length?state.savedChartTrades:(trades||[]),2000);
- const rows=[...source].sort((a,b)=>Number(a.time)-Number(b.time)).slice(-550).reverse();
- const shown=Math.min(rows.length,550);
+ const rows=[...source].sort((a,b)=>Number(a.time)-Number(b.time)).slice(-HISTORY_DISPLAY_LIMIT).reverse();
+ const shown=Math.min(rows.length,HISTORY_DISPLAY_LIMIT);
  const realized=source.filter(t=>(t.result==='GANADA'||t.result==='PERDIDA')&&Number.isFinite(t.exitPrice)).map(t=>tradeMoney(t,t.exitPrice)).filter(Number.isFinite);const moneyTotal=realized.reduce((a,v)=>a+v,0);$('historyCount').textContent='Mostrando '+shown+' de '+source.length+' · resultado estimado '+moneyText(moneyTotal)+' USD';$('historyBody').innerHTML=rows.length?rows.map(t=>{const spec=cfdSpec(t.symbol),slMoney=tradeMoney(t,t.sl),tp1Money=tradeMoney(t,t.tp1),tp2Money=tradeMoney(t,t.tp2),resultMoney=t.exitPrice==null?null:tradeMoney(t,t.exitPrice);return '<tr><td>'+new Date(t.time*1000).toLocaleTimeString('es-PA',{hour:'2-digit',minute:'2-digit'})+'</td><td>'+esc(state.symbols.find(x=>x.symbol===t.symbol)?.name||t.symbol||state.selected)+'</td><td style="color:'+(t.side==='BUY'?'#20d69a':'#ff6876')+'">'+(t.side==='BUY'?'COMPRA':'VENTA')+'</td><td>'+fmt(t.entry)+'</td><td>'+fmt(Number.isFinite(t.entryRsi)?t.entryRsi:t.rsi)+'</td><td>'+fmt(t.sl)+'</td><td>'+fmt(t.tp1)+'</td><td>'+fmt(t.tp2)+'</td><td>'+t.result+'</td><td style="color:'+(t.points==null?'#8b9bb0':t.points>=0?'#20d69a':'#ff6876')+'">'+(t.points==null?'—':(t.points>0?'+':'')+fmt(t.points)+' pts')+'</td><td>'+(spec?spec.minLot+' lotes':'—')+'</td><td>'+moneyText(slMoney)+'</td><td>'+moneyText(tp1Money)+'</td><td>'+moneyText(tp2Money)+'</td><td>'+moneyText(resultMoney)+'</td></tr>';}).join(''):'<tr><td colspan="15" class="empty-cell">No hay operaciones detectadas en este período.</td></tr>';
  const closed=source.filter(t=>t.result==='GANADA'||t.result==='PERDIDA');
  $('wins').textContent=closed.filter(t=>t.result==='GANADA').length;$('losses').textContent=closed.filter(t=>t.result==='PERDIDA').length;$('pending').textContent=source.filter(t=>t.result==='PENDIENTE').length;$('expired').textContent=source.filter(t=>t.result==='CANCELADA').length;
 }
 async function runUniverseBacktest(refresh=false){
- if(!state.rawCandles.length)$('dataStatus').textContent='Preparando análisis de 24 horas…';
+ if(!state.rawCandles.length)$('dataStatus').textContent='Preparando historial ampliado para encontrar las últimas 550 operaciones…';
  if(refresh){state.rawBySymbol.clear();state.downloadErrors=[];}else if(!state.downloadErrors)state.downloadErrors=[];
  let cursor=0,done=0;const workers=Array.from({length:Math.min(4,state.symbols.length)},async()=>{
   while(cursor<state.symbols.length){const item=state.symbols[cursor++];try{if(refresh||!state.rawBySymbol.has(item.symbol)||(state.rawBySymbol.get(item.symbol)||[]).length<HISTORY_CANDLES){const raw=await getCandles(item.symbol,HISTORY_CANDLES);state.rawBySymbol.set(item.symbol,raw);}done++;$('backtestInfo').textContent='Descargando historial: '+done+' / '+state.symbols.length+' instrumentos…';}catch(e){state.rawBySymbol.set(item.symbol,[]);if(!state.downloadErrors)state.downloadErrors=[];state.downloadErrors.push(item.name+': '+e.message);if(!state.rawBySymbol.has(item.symbol))state.rawBySymbol.set(item.symbol,[]);done++;$('backtestInfo').textContent='Descargas '+done+' / '+state.symbols.length+' · falló '+item.name;}}
