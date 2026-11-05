@@ -36,3 +36,6 @@
 
 /* v37: selector de pivotes destacado y visible encima del gráfico */
 .pivot-settings{display:flex;flex-direction:column;align-items:flex-start;gap:9px;padding:12px;margin:0 0 10px;background:#14243a;border:2px solid #3d78b5;border-radius:10px}.pivot-settings strong{font-size:12px;letter-spacing:.35px;color:#fff}.pivot-settings .pivot-tf-controls{display:flex;gap:8px;width:100%}.pivot-settings .pivot-tf-controls button{min-width:44px;min-height:38px;font-size:13px;border:1px solid #66809e;background:#081321;color:#fff}.pivot-settings .pivot-tf-controls button.active{background:#087653;border:2px solid #48e0ad;color:#fff;box-shadow:0 0 0 2px #48e0ad44}.pivot-settings small{font-size:11px;color:#c5d6e9}
+
+.fvg-zone{border-style:dotted;opacity:.55;background:transparent}
+.chart-mode{color:var(--muted);font-size:10px}
