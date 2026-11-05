@@ -70,7 +70,7 @@ function rsi(values,period=14){const out=Array(values.length).fill(null);let gai
 function pivots(c,span=3,candleSeconds=600){const highs=[],lows=[];for(let i=span;i<c.length-span;i++){let hi=true,lo=true;for(let j=1;j<=span;j++){if(c[i].high<=c[i-j].high||c[i].high<=c[i+j].high)hi=false;if(c[i].low>=c[i-j].low||c[i].low>=c[i+j].low)lo=false;}if(hi)highs.push({index:i,time:c[i].time,confirmedTime:c[i+span].time+candleSeconds,price:c[i].high});if(lo)lows.push({index:i,time:c[i].time,confirmedTime:c[i+span].time+candleSeconds,price:c[i].low});}const sample=c.slice(-30),avgRange=sample.length?sample.reduce((sum,v)=>sum+(v.high-v.low),0)/sample.length:0,tolerance=avgRange*.45;const merge=items=>{const kept=[];for(const p of items){const near=kept.findIndex(q=>Math.abs(q.price-p.price)<=tolerance);if(near<0)kept.push(p);else if(p.confirmedTime>kept[near].confirmedTime)kept[near]=p;}return kept.sort((a,b)=>a.time-b.time);};return{highs:merge(highs),lows:merge(lows)};}
 function buildSetups(c,liquidityCandles=c,pivotCandles=liquidityCandles){
  const close=c.map(x=>x.close),e3=ema(close,3),e9=ema(close,9),e13=ema(close,13),e50=ema(close,50),rv=rsi(close),pv=pivots(pivotCandles,3,600);
- const setups=[],usedOBs=new Set();
+ const setups=[],usedOBs=new Set(),obZones=[],usedZones=new Set();
  for(let i=55;i<c.length-1;i++){
   const x=c[i],bodies=c.slice(Math.max(0,i-10),i).map(v=>Math.abs(v.close-v.open));
   const avgBody=bodies.length?bodies.reduce((a,b)=>a+b,0)/bodies.length:0;
@@ -79,6 +79,9 @@ function buildSetups(c,liquidityCandles=c,pivotCandles=liquidityCandles){
   const bullCross=e3[i-1]<=e13[i-1]&&e3[i-1]<=e50[i-1]&&e3[i]>e13[i]&&e3[i]>e50[i];
   const bearCross=e3[i-1]>=e13[i-1]&&e3[i-1]>=e50[i-1]&&e3[i]<e13[i]&&e3[i]<e50[i];
   const bullFvg=i>=2&&x.low>c[i-2].high,bearFvg=i>=2&&x.high<c[i-2].low;
+  // Zonas OB candidatas ligadas a FVG confirmado; se reutilizan en el gráfico y en las señales.
+  if(bullFvg){const candidate=findOBAtTime(liquidityCandles,x.time,'BUY');if(candidate){const key='BUY:'+candidate.time;if(!usedZones.has(key)){usedZones.add(key);obZones.push({...candidate,side:'BUY'});}}}
+  if(bearFvg){const candidate=findOBAtTime(liquidityCandles,x.time,'SELL');if(candidate){const key='SELL:'+candidate.time;if(!usedZones.has(key)){usedZones.add(key);obZones.push({...candidate,side:'SELL'});}}}
   if(bullCross&&slopeUp&&separated&&bullFvg){
    const ob=findOBAtTime(liquidityCandles,x.time,'BUY');if(!ob)continue;
    const targets=pv.highs.filter(p=>p.confirmedTime<=x.time&&p.price>ob.entry).sort((a,b)=>a.price-b.price);if(!targets.length)continue;
@@ -92,13 +95,39 @@ function buildSetups(c,liquidityCandles=c,pivotCandles=liquidityCandles){
    setups.push({side:'SELL',index:i,time:x.time,entry:ob.entry,sl,tp1:targets[0].price,tp2:(targets[1]||targets[0]).price,ob,rsi:rv[i],fvg:{low:x.high,high:c[i-2].low},state:'PREPARADA'});
   }
  }
- return{setups,e3,e9,e13,e50,rv,pv};
+ return{setups,e3,e9,e13,e50,rv,pv,obZones};
 }
 function findOBAtTime(c,time,side){const completed=c.filter(bar=>bar.time+120<=time);return findOB(completed,completed.length,side);}
 function findOB(c,i,side){for(let j=i-1;j>=Math.max(0,i-9);j--){const q=c[j],opposite=side==='BUY'?q.close<q.open:q.close>q.open;if(opposite){const entry=(q.high+q.low)/2;return{time:q.time,high:q.high,low:q.low,entry};}}return null;}
 function simulate(c,setups){
- const trades=[];for(const s of setups){let entered=false,result='PENDIENTE',entryIndex=-1,exitTime=null;for(let j=s.index+1;j<c.length;j++){const k=c[j];if(!entered){const entryHit=k.low<=s.entry&&k.high>=s.entry;if(!entryHit){if((s.side==='BUY'&&k.low<s.sl)||(s.side==='SELL'&&k.high>s.sl)){result='CANCELADA';exitTime=k.time;break;}if(j-s.index>=5){result='CANCELADA';exitTime=k.time;break;}continue;}entered=true;entryIndex=j;}const slHit=s.side==='BUY'?k.low<=s.sl:k.high>=s.sl;const tp1Hit=s.side==='BUY'?k.high>=s.tp1:k.low<=s.tp1;const tp2Hit=s.side==='BUY'?k.high>=s.tp2:k.low<=s.tp2;if(slHit){result='PERDIDA';exitTime=k.time;break;}if(tp1Hit||tp2Hit){result='GANADA';exitTime=k.time;break;}}trades.push({...s,result,entryIndex,exitTime});}return trades;}
-function draw(c,calc,trades){
+ const trades=[];
+ for(const s of setups){
+  let entered=false,result='PENDIENTE',entryIndex=-1,exitTime=null,exitPrice=null;
+  for(let j=s.index+1;j<c.length;j++){
+   const k=c[j];
+   if(!entered){
+    const entryHit=k.low<=s.entry&&k.high>=s.entry;
+    if(!entryHit){
+     if((s.side==='BUY'&&k.low<s.sl)||(s.side==='SELL'&&k.high>s.sl)){result='CANCELADA';exitTime=k.time;break;}
+     if(j-s.index>=5){result='CANCELADA';exitTime=k.time;break;}
+     continue;
+    }
+    entered=true;entryIndex=j;
+   }
+   const slHit=s.side==='BUY'?k.low<=s.sl:k.high>=s.sl;
+   const tp1Hit=s.side==='BUY'?k.high>=s.tp1:k.low<=s.tp1;
+   const tp2Hit=s.side==='BUY'?k.high>=s.tp2:k.low<=s.tp2;
+   // Si SL y TP aparecen dentro de la misma vela, se cuenta SL primero (criterio conservador).
+   if(slHit){result='PERDIDA';exitPrice=s.sl;exitTime=k.time;break;}
+   if(tp2Hit){result='GANADA';exitPrice=s.tp2;exitTime=k.time;break;}
+   if(tp1Hit){result='GANADA';exitPrice=s.tp1;exitTime=k.time;break;}
+  }
+  const points=exitPrice==null?null:(s.side==='BUY'?exitPrice-s.entry:s.entry-exitPrice);
+  trades.push({...s,result,entryIndex,exitTime,exitPrice,points});
+ }
+ return trades;
+}
+function draw(c,calc,trades,obZones=[]){
  // Limpieza defensiva: ninguna EMA puede permanecer como serie visual del precio.
  for(const key of ['ema3','ema9','ema13','ema20','ema21','ema50']){if(state.series[key]&&state.main){try{state.main.removeSeries(state.series[key]);}catch{}}delete state.series[key];}
  const chartKey=state.selected+'|'+state.tf;const priorRange=state.main?state.main.timeScale().getVisibleLogicalRange():null;const preserveRange=!!priorRange&&!state.forceFitNext;
@@ -108,7 +137,7 @@ function draw(c,calc,trades){
   const lineData=values=>values.map((v,i)=>v==null?null:{time:c[i].time,value:v}).filter(Boolean);
   state.series.candle.setData(c);state.series.rsi.setData(lineData(calc.rv));
   drawPivotLines();const markers=[];trades.forEach(t=>{markers.push({time:t.time,position:t.side==='BUY'?'belowBar':'aboveBar',color:t.side==='BUY'?'#20d69a':'#ff5968',shape:t.side==='BUY'?'arrowUp':'arrowDown',text:t.side==='BUY'?'COMPRA':'VENTA'});});if(state.markerPlugin)state.markerPlugin.setMarkers(markers.sort((a,b)=>a.time-b.time));
-  const latest=trades.slice(-1)[0];drawOverlays(trades,c,$('mainChart'));
+  const latest=trades.slice(-1)[0];drawOverlays(trades,c,$('mainChart'),obZones);
   if(state.forceFitNext){const visibleFrom=Math.max(0,c.length-120);const visibleRange={from:visibleFrom,to:c.length+3};state.main.timeScale().setVisibleLogicalRange(visibleRange);state.rsi.timeScale().setVisibleLogicalRange(visibleRange);}else if(priorRange){state.main.timeScale().setVisibleLogicalRange(priorRange);state.rsi.timeScale().setVisibleLogicalRange(priorRange);}state.forceFitNext=false;return;
  }
  if(state.main){state.main.remove();if(state.rsi)state.rsi.remove();}state.overlayUpdate=null;state.overlayRangeHandler=null;
@@ -123,7 +152,7 @@ function draw(c,calc,trades){
  });
  if(typeof L.createSeriesMarkers==='function'){state.markerPlugin=L.createSeriesMarkers(candle,markers.sort((a,b)=>a.time-b.time));}else{console.warn('La versión de Lightweight Charts no incluye createSeriesMarkers');}
  const latest=trades.slice(-1)[0];
- drawOverlays(trades,c,main);
+ drawOverlays(trades,c,main,obZones);
  const rsiEl=$('rsiChart');rsiEl.innerHTML='';
  state.rsi=L.createChart(rsiEl,{autoSize:true,layout:{background:{type:'solid',color:'#0b121e'},textColor:'#8b9bb0',fontSize:10},grid:{vertLines:{color:'#172235'},horzLines:{color:'#172235'}},rightPriceScale:{borderColor:'#28364a'},timeScale:{visible:false},handleScroll:{mouseWheel:true,pressedMouseMove:true,horzTouchDrag:true},handleScale:{mouseWheel:true,pinch:true}});
  const rs=state.rsi.addSeries(L.LineSeries,{color:'#a36aff',lineWidth:2,priceLineVisible:false,lastValueVisible:true});state.series.rsi=rs;rs.setData(calc.rv.map((v,i)=>v==null?null:{time:c[i].time,value:v}).filter(Boolean));
@@ -166,22 +195,20 @@ function drawPivotLines(){
   }
  }
 }
-function drawOverlays(trades,c,host){
+function drawOverlays(trades,c,host,obZones=[]){
  if(state.overlayResizeObserver){state.overlayResizeObserver.disconnect();state.overlayResizeObserver=null;}
  const old=host.querySelector('.chart-overlay');if(old)old.remove();state.overlayUpdate=null;
  const overlay=document.createElement('div');overlay.className='chart-overlay';host.appendChild(overlay);
- const m5=aggregate(state.rawCandles,2);
- const latestOB=(side)=>{
-  for(let i=m5.length-1;i>=0;i--){
-   const bar=m5[i],opposite=side==='BUY'?bar.close<bar.open:bar.close>bar.open;
-   if(opposite)return{time:bar.time,high:bar.high,low:bar.low,side};
-  }
-  return null;
- };
- const zones=[latestOB('BUY'),latestOB('SELL')].filter(Boolean);const signal=[...trades].reverse().find(x=>x.fvg);if(signal)zones.push({time:signal.time-240,high:signal.fvg.high,low:signal.fvg.low,side:signal.side,fvg:true});
+ // Dibuja los OB candidatos calculados en M2; son las mismas zonas que alimentan las señales.
+ const unique=new Map();
+ (obZones||[]).forEach(ob=>{if(ob&&Number.isFinite(ob.time)&&Number.isFinite(ob.high)&&Number.isFinite(ob.low))unique.set(ob.side+':'+ob.time,ob);});
+ const zones=[...unique.values()].slice(-12).map(ob=>({...ob,fvg:false}));
+ // Los FVG se toman de las mismas señales simuladas, nunca de una vela arbitraria.
+ const fvgs=[...trades].filter(t=>t.fvg).slice(-4).map(t=>({time:t.time-240,high:t.fvg.high,low:t.fvg.low,side:t.side,fvg:true}));
+ zones.push(...fvgs);
  const zoneEls=zones.map(ob=>{
   const el=document.createElement('div');el.className='ob-zone '+(ob.fvg?'fvg-zone ':'')+(ob.side==='BUY'?'bull-zone':'bear-zone');
-  el.innerHTML='<b>'+(ob.fvg?(ob.side==='BUY'?'FVG ALCISTA':'FVG BAJISTA'):(ob.side==='BUY'?'OB ALCISTA · COMPRA':'OB BAJISTA · VENTA'))+'</b>';
+  el.innerHTML='<b>'+(ob.fvg?(ob.side==='BUY'?'FVG ALCISTA':'FVG BAJISTA'):(ob.side==='BUY'?'OB ALCISTA':'OB BAJISTA'))+'</b>';
   overlay.appendChild(el);return{el,ob};
  });
  const t=[...trades].reverse().find(x=>x.result==='PENDIENTE')||trades[trades.length-1];
@@ -200,7 +227,7 @@ function drawOverlays(trades,c,host){
    const y1=priceScale.priceToCoordinate(ob.high),y2=priceScale.priceToCoordinate(ob.low);
    if(y1==null||y2==null){el.style.display='none';return;}
    if(x1==null){if(firstTime!=null&&ob.time<firstTime)x1=0;else{el.style.display='none';return;}}
-   const left=Math.max(0,Math.min(width-30,x1)),mid=(y1+y2)/2,height=Math.max(30,Math.abs(y2-y1));
+   const left=Math.max(0,Math.min(width-30,x1)),mid=(y1+y2)/2,height=Math.max(12,Math.abs(y2-y1));
    el.style.display='flex';el.style.left=left+'px';el.style.width=Math.max(30,width-left-2)+'px';el.style.top=Math.max(0,mid-height/2)+'px';el.style.height=height+'px';
   });
   const xSignal=t?scale.timeToCoordinate(t.time):null,xStart=Math.max(0,Math.min(width-8,xSignal==null?width*.45:xSignal)),positioned=[];
@@ -210,12 +237,8 @@ function drawOverlays(trades,c,host){
  };
  state.overlayUpdate=update;
  if(!state.overlayRangeHandler){state.overlayRangeHandler=()=>{
-  // Limita el trabajo del overlay a una ejecución por frame durante el desplazamiento.
   if(state.overlayFrame)return;
-  state.overlayFrame=requestAnimationFrame(()=>{
-   state.overlayFrame=0;
-   if(state.overlayUpdate)state.overlayUpdate();
-  });
+  state.overlayFrame=requestAnimationFrame(()=>{state.overlayFrame=0;if(state.overlayUpdate)state.overlayUpdate();});
  };state.main.timeScale().subscribeVisibleLogicalRangeChange(state.overlayRangeHandler);}
  if(window.ResizeObserver){state.overlayResizeObserver=new ResizeObserver(update);state.overlayResizeObserver.observe(host);}
  requestAnimationFrame(update);
@@ -252,7 +275,7 @@ async function analyze(){
  if(state.busy){state.analyzeQueued=true;return;}state.busy=true;$('dataStatus').textContent='Cargando gráfico…';
  try{const raw=state.rawBySymbol.get(state.selected)||await getCandles(state.selected,1440);if(!raw.length)throw new Error('No llegaron velas para '+state.selected);state.rawBySymbol.set(state.selected,raw);
  state.rawCandles=raw;state.lastRecalcBucket=Math.floor(raw.at(-1).time/120);const c=aggregate(raw,state.tf);state.candles=c;const signalCandles=aggregate(raw,2);const signalCalc=buildSetups(signalCandles,signalCandles,aggregate(raw,10));const chartCalc=buildSetups(c,c,aggregate(raw,10));state.trades=simulate(signalCandles,signalCalc.setups);
- draw(c,chartCalc,state.trades);showLatest(signalCalc,state.trades,signalCandles);renderHistory(state.trades);
+ draw(c,chartCalc,state.trades,signalCalc.obZones);showLatest(signalCalc,state.trades,signalCandles);renderHistory(state.trades);
  $('chartTitle').textContent=(state.symbols.find(s=>s.symbol===state.selected)?.name||state.selected)+' · M'+state.tf;
  $('chartSubtitle').textContent='Velas '+c.length+' · últimas 24 horas · señales proyectadas';
  $('chartRange').textContent='Últimas 24 horas · '+new Date(c[0].time*1000).toLocaleTimeString('es-PA')+' — '+new Date(c.at(-1).time*1000).toLocaleTimeString('es-PA');
