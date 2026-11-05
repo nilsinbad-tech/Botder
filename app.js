@@ -67,7 +67,8 @@ function pivots(c,span=3,candleSeconds=600){const highs=[],lows=[];for(let i=spa
 function buildSetups(c,liquidityCandles=c,pivotCandles=liquidityCandles,obStructureCandles=pivotCandles,trendSide=null,targetRawCandles=pivotCandles){
  const close=c.map(x=>x.close),e3=ema(close,3),e9=ema(close,9),e13=ema(close,13),e50=ema(close,50),rv=rsi(close);
  const pv=pivots(pivotCandles,3,state.pivotTf*60);
- // La estructura que valida los OB queda fija en M10, independiente del selector visual de pivotes.
+ // La estructura que valida cada OB usa la temporalidad elegida en PIVOTES / RESISTENCIAS.
+ const structureCandles=aggregate(targetRawCandles,state.pivotTf),structurePv=pivots(structureCandles,3,state.pivotTf*60);
  const m10Candles=aggregate(targetRawCandles,10),m10Pv=fixedM10Pivots(m10Candles,3);
  const stopPivots=state.slTfs.map(mins=>({mins,pv:pivots(aggregate(targetRawCandles,mins),3,mins*60)}));
  const setups=[],latestZones=[],zoneKeys=new Set(),usedOBs=new Set(),usedZones=new Set();
@@ -76,9 +77,9 @@ function buildSetups(c,liquidityCandles=c,pivotCandles=liquidityCandles,obStruct
  for(let i=55;i<c.length;i++){
   const x=c[i];
   for(const side of (trendSide?[trendSide]:[])){
-   const primary=findValidOBAtTime(primaryCandles,x.time,side,primaryTf,m10Pv,m10Candles,targetRawCandles);
+   const primary=findValidOBAtTime(primaryCandles,x.time,side,primaryTf,structurePv,structureCandles,targetRawCandles);
    if(!primary)continue;
-   const previous=state.obPreviousEnabled?findValidOBAtTime(previousCandles,x.time,side,previousTf,m10Pv,m10Candles,targetRawCandles):null;
+   const previous=state.obPreviousEnabled?findValidOBAtTime(previousCandles,x.time,side,previousTf,structurePv,structureCandles,targetRawCandles):null;
    if(state.obPreviousEnabled&&!previous)continue;
    for(const item of [{...primary,tf:primaryTf},...(previous?[{...previous,tf:previousTf}]:[])]){const zoneKey=side+':'+item.tf+':'+item.ob.time;if(!zoneKeys.has(zoneKey)){latestZones.push({...item.ob,side,timeframe:item.tf,structurePrice:item.structure.price,structureTime:item.structure.time,structureType:side==='BUY'?'SOPORTE':'RESISTENCIA'});zoneKeys.add(zoneKey);}}
    const {ob,structure}=primary,key=side+':'+ob.time,zoneKey=side+':'+structure.time;
@@ -115,20 +116,20 @@ function fixedM10Pivots(c,span=3){
  }
  return{highs,lows};
 }
-function findValidOBAtTime(c,time,side,tf,pv,m10Candles,raw){
+function findValidOBAtTime(c,time,side,tf,pv,structureCandles,raw){
  let lo=0,hi=c.length;
  while(lo<hi){const mid=(lo+hi)>>1;if(c[mid].time+tf*60<=time)lo=mid+1;else hi=mid;}
  for(let j=lo-1;j>=Math.max(0,lo-12);j--){
   const q=c[j],opposite=side==='BUY'?q.close<q.open:q.close>q.open;
   if(!opposite)continue;
   const ob={time:q.time,high:q.high,low:q.low,entry:(q.high+q.low)/2};
-  const structure=findM10Structure(ob,side,pv,m10Candles,time);
+  const structure=findPivotStructure(ob,side,pv,structureCandles,time);
   if(structure&&!isOBInvalidated(ob,side,structure,raw,time))return{ob,structure};
  }
  return null;
 }
-function findM10Structure(ob,side,pv,candles,time){
- // Exige que ya existan dos máximos (venta) o dos mínimos (compra) confirmados.
+function findPivotStructure(ob,side,pv,candles,time){
+ // Exige dos pivotes confirmados de la temporalidad elegida: resistencia para venta y soporte para compra.
  // El OB se ancla al más reciente de esos dos extremos, no a cualquier pivote antiguo.
  const levels=(side==='BUY'?pv.lows:pv.highs)
   .filter(p=>p.confirmedTime<=time)
@@ -420,7 +421,7 @@ function bindPivotControls(){
 function bindOBControls(){
  const obRoot=$('obTfControls'),previousRoot=$('obPreviousTfControls'),previousToggle=$('obPreviousEnabled'),pivotRoot=$('pivotStructureTfControls'),tpRoot=$('tpTfControls'),slRoot=$('slTfControls');
  const obTfs=[1,2,3,5,10,15,30,60];
- try{const saved=JSON.parse(localStorage.getItem('botder-ob-settings')||'null');if(saved&&typeof saved==='object'){if(obTfs.includes(Number(saved.obPrimaryTf)))state.obPrimaryTf=Number(saved.obPrimaryTf);if(obTfs.includes(Number(saved.obPreviousTf)))state.obPreviousTf=Number(saved.obPreviousTf);if(typeof saved.obPreviousEnabled==='boolean')state.obPreviousEnabled=saved.obPreviousEnabled;if([1,2,3,4,5].includes(Number(saved.obTf)))state.obTf=Number(saved.obTf);if([1,2,3,4,5,10].includes(Number(saved.pivotTf)))state.pivotTf=Number(saved.pivotTf);if(Array.isArray(saved.tpTfs))state.tpTfs=saved.tpTfs.map(Number).filter(v=>[1,3,5,10,15,30].includes(v));if(Array.isArray(saved.slTfs))state.slTfs=saved.slTfs.map(Number).filter(v=>[1,3,5,10,15,30].includes(v));}}catch{}
+ try{const saved=JSON.parse(localStorage.getItem('botder-ob-settings')||'null');if(saved&&typeof saved==='object'){if(obTfs.includes(Number(saved.obPrimaryTf)))state.obPrimaryTf=Number(saved.obPrimaryTf);if(obTfs.includes(Number(saved.obPreviousTf)))state.obPreviousTf=Number(saved.obPreviousTf);if(typeof saved.obPreviousEnabled==='boolean')state.obPreviousEnabled=saved.obPreviousEnabled;if([1,2,3,4,5].includes(Number(saved.obTf)))state.obTf=Number(saved.obTf);if([1,2,3,4,5,10,30,60].includes(Number(saved.pivotTf)))state.pivotTf=Number(saved.pivotTf);if(Array.isArray(saved.tpTfs))state.tpTfs=saved.tpTfs.map(Number).filter(v=>[1,3,5,10,15,30].includes(v));if(Array.isArray(saved.slTfs))state.slTfs=saved.slTfs.map(Number).filter(v=>[1,3,5,10,15,30].includes(v));}}catch{}
  if(!state.tpTfs.length)state.tpTfs=[1,3,5,10];if(!state.slTfs.length)state.slTfs=[1,3,5,10];
  const save=()=>{try{localStorage.setItem('botder-ob-settings',JSON.stringify({obTf:state.obTf,obPrimaryTf:state.obPrimaryTf,obPreviousTf:state.obPreviousTf,obPreviousEnabled:state.obPreviousEnabled,pivotTf:state.pivotTf,tpTfs:state.tpTfs,slTfs:state.slTfs}));}catch{}};
  const sync=(root,attr,value)=>{if(!root)return;root.querySelectorAll('button['+attr+']').forEach(b=>{const active=Number(b.getAttribute(attr))===value;b.classList.toggle('active',active);b.setAttribute('aria-pressed',String(active));});};
