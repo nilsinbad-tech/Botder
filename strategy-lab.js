@@ -67,7 +67,7 @@ function backtest(d,symbol,strategy){
    if(two){t.tp1Reached=true;t.tp2Reached=true;t.result="TP2";t.exitTime=c.time;t.exitPrice=t.tp2;t.r=tp1Reached?(t.rr1*.5+t.rr2*.5):t.rr2;break;}
    if(one&&!tp1Reached){tp1Reached=true;t.tp1Reached=true;}
   }
-  if(t.result==="ABIERTA"){t.result="SIN_CIERRE";t.exitTime=d.at(-1).time;t.exitPrice=d.at(-1).close;t.r=0;}
+  if(t.result==="ABIERTA"){t.result=tp1Reached?"TP1":"SIN_CIERRE";t.exitTime=d.at(-1).time;t.exitPrice=tp1Reached?t.entry:d.at(-1).close;t.r=tp1Reached?t.rr1*.5:0;}
   trades.push(t);nextAllowed=Math.max(i+1,d.findIndex((c,j)=>j>i&&c.time>=t.exitTime));
  }
  return trades;
@@ -83,7 +83,7 @@ function render(){
  const ranking=$("lab-ranking");if(ranking)ranking.innerHTML=all.slice(0,10).map((r,i)=>'<div class="lab-rank-row"><b>#'+(i+1)+' '+escapeHtml(r.market)+'</b><span>'+escapeHtml(r.name)+'</span><strong>'+(r.test>=20?fmt(r.testRate)+'%':"MUESTRA BAJA")+'</strong></div>').join("")||"Esperando resultados.";
  const stats=$("lab-summary");if(stats){const m=rows.length;stats.textContent=m+" instrumentos · "+results.length+" pruebas estrategia/instrumento";}
 }
-function csvDownload(){if(!results.length)return;const cols=["market","symbol","name","candles","total","closed","test","wins","losses","tp1","tp2","rate","testRate","expectancy","testExpectancy","profitFactor"];const q=v=>'"'+String(v??"").replace(/"/g,'""')+'"';const lines=[cols.join(","),...results.map(r=>cols.map(k=>q(r[k])).join(","))];const trades=results.flatMap(r=>r.trades.map(t=>({...t,market:r.market})));const tradeCols=["market","symbol","strategy","direction","signalTime","entryTime","entry","sl","tp1","tp2","result","exitTime","exitPrice","r","split"];lines.push("","DETALLE_OPERACIONES",tradeCols.join(","),...trades.map(t=>tradeCols.map(k=>q(t[k])).join(",")));const blob=new Blob(["\ufeff"+lines.join("\r\n")],{type:"text/csv;charset=utf-8"}),url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;a.download="BOTDER_LAB_10_ESTRATEGIAS.csv";a.click();URL.revokeObjectURL(url);}
+function csvDownload(){if(!results.length)return;const cols=["market","symbol","name","candles","total","closed","test","wins","losses","tp1","tp2","tp1Rate","tp2Rate","testTp1Rate","testTp2Rate","rate","testRate","expectancy","testExpectancy","profitFactor"];const q=v=>'"'+String(v??"").replace(/"/g,'""')+'"';const lines=[cols.join(","),...results.map(r=>cols.map(k=>q(r[k])).join(","))];const trades=results.flatMap(r=>r.trades.map(t=>({...t,market:r.market})));const tradeCols=["market","symbol","strategy","direction","signalTime","entryTime","entry","sl","tp1","tp2","tp1Reached","tp2Reached","result","exitTime","exitPrice","r","split"];lines.push("","DETALLE_OPERACIONES",tradeCols.join(","),...trades.map(t=>tradeCols.map(k=>q(t[k])).join(",")));const blob=new Blob(["\ufeff"+lines.join("\r\n")],{type:"text/csv;charset=utf-8"}),url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;a.download="BOTDER_LAB_10_ESTRATEGIAS.csv";a.click();URL.revokeObjectURL(url);}
 function closeSocket(){if(socket){try{socket.close();}catch{}socket=null;}}
 function finish(){busy=false;closeSocket();status("ANÁLISIS TERMINADO · "+results.length+" pruebas calculadas");progress();render();const b=$("lab-start");if(b)b.disabled=false;}
 function runScan(){
