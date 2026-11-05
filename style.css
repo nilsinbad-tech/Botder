@@ -278,3 +278,6 @@ footer{padding:18px 3px 6px}
 .chart-fullscreen-btn:active{transform:scale(.94)}
 #chart-area:fullscreen .chart-fullscreen-btn{top:max(10px,env(safe-area-inset-top));right:max(10px,env(safe-area-inset-right))}
 @media(max-width:700px){.chart-fullscreen-btn{width:40px;height:40px;font-size:25px}}
+
+/* Interfaz SMC: sin panel RSI ni cuadrícula. */
+.rsi-strip{display:none!important}
