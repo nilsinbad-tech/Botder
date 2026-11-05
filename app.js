@@ -223,8 +223,9 @@ function drawOverlays(trades,c,host,obZones=[],setups=[]){
  const bySide={BUY:[],SELL:[]};
  (obZones||[]).forEach(ob=>{if(ob&&bySide[ob.side]&&Number.isFinite(ob.time))bySide[ob.side].push({...ob,fvg:false});});
  (trades||[]).forEach(t=>{if(t.ob&&bySide[t.side])bySide[t.side].push({...t.ob,side:t.side,fvg:false});});
- const latestBySide=side=>{const unique=new Map();bySide[side].forEach(ob=>unique.set(String(ob.time),ob));return [...unique.values()].sort((x,y)=>x.time-y.time).slice(-1)[0];};
- const zones=['BUY','SELL'].map(latestBySide).filter(Boolean);
+ const uniqueOBs=new Map();
+ ['BUY','SELL'].forEach(side=>bySide[side].forEach(ob=>uniqueOBs.set(side+':'+String(ob.time),ob)));
+ const zones=[...uniqueOBs.values()].sort((x,y)=>x.time-y.time).slice(-2);
  const zoneEls=zones.map(ob=>{
   const el=document.createElement('div');el.className='ob-zone '+(ob.fvg?'fvg-zone ':'')+(ob.side==='BUY'?'bull-zone':'bear-zone');
   el.innerHTML='<b>'+(ob.fvg?(ob.side==='BUY'?'FVG ALCISTA':'FVG BAJISTA'):(ob.side==='BUY'?'OB COMPRA':'OB VENTA'))+'</b>';
@@ -239,7 +240,7 @@ function drawOverlays(trades,c,host,obZones=[],setups=[]){
   const levels=[{key:'entry',p:t.entry,label:t.side==='BUY'?'ENTRADA · ZONA COMPRA':'ENTRADA · ZONA VENTA',cls:'entry-line',priority:0},{key:'sl',p:t.sl,label:t.side==='BUY'?'STOP LOSS · PIVOTE SOPORTE':'STOP LOSS · PIVOTE RESISTENCIA',cls:'sl-line',priority:1},{key:'tp1',p:t.tp1,label:'TP1 · OBJETIVO',cls:'tp-line',priority:2}];
   if(Math.abs(t.tp2-t.tp1)>1e-10)levels.push({key:'tp2',p:t.tp2,label:'TP2 · OBJETIVO',cls:'tp2-line',priority:3});
   state.series.candle.setData(c);
-  levels.forEach(v=>{const el=document.createElement('div');el.className='level-line '+v.cls;el.setAttribute('aria-label',v.label+' '+fmt(v.p));el.innerHTML='<span class="level-tag"><b>'+v.label+'</b><strong>'+fmt(v.p)+'</strong></span>';overlay.appendChild(el);lineEls.push({...v,el});});
+  levels.forEach(v=>{const el=document.createElement('div');el.className='price-label '+v.cls;el.setAttribute('aria-label',v.label+' '+fmt(v.p));el.innerHTML='<b>'+v.label+'</b><strong>'+fmt(v.p)+'</strong>';overlay.appendChild(el);lineEls.push({...v,el});});
  }
  const update=()=>{
   const width=host.clientWidth,scale=state.main.timeScale(),candleSeries=state.series.candle;
@@ -255,7 +256,7 @@ function drawOverlays(trades,c,host,obZones=[],setups=[]){
    el.style.display='flex';el.style.left=left+'px';el.style.width=Math.min(window.innerWidth<=600?126:150,Math.max(112,width-left-8))+'px';el.style.top=Math.max(0,mid-15)+'px';el.style.height='30px';
   });
   const xSignal=t?scale.timeToCoordinate(Number.isFinite(t.entryTime)?t.entryTime:t.time):null,xStart=Math.max(0,Math.min(width-8,xSignal==null?width*.35:xSignal)),positioned=[];
-  lineEls.forEach(v=>{const y=candleSeries.priceToCoordinate(v.p);if(y==null){v.el.style.display='none';return;}v.el.style.display='block';v.el.style.left='6px';v.el.style.width='max-content';v.el.style.top=(y-11)+'px';});
+  lineEls.forEach(v=>{const y=candleSeries.priceToCoordinate(v.p);if(y==null){v.el.style.display='none';return;}v.el.style.display='flex';v.el.style.left='6px';v.el.style.width='max-content';v.el.style.top=(y-11)+'px';});
  };
  state.overlayUpdate=update;
  if(!state.overlayRangeHandler){state.overlayRangeHandler=()=>{
