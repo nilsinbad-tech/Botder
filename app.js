@@ -186,7 +186,7 @@ function buildTradeMarkers(trades,c){
   while(lo<hi){const mid=(lo+hi)>>1;if(c[mid].time<=target)lo=mid+1;else hi=mid;}
   const bar=c[Math.max(0,lo-1)];
   if(!bar)continue;
-  markers.push({time:bar.time,position:t.side==='BUY'?'belowBar':'aboveBar',color:t.side==='BUY'?'#20d69a':'#ff5968',shape:t.side==='BUY'?'arrowUp':'arrowDown',text:t.result==='GANADA'?'GANADA':t.result==='PERDIDA'?'PERDIDA':t.side==='BUY'?'COMPRA':'VENTA'});
+  markers.push({time:bar.time,position:t.side==='BUY'?'belowBar':'aboveBar',color:t.side==='BUY'?'#20d69a':'#ff5968',shape:t.side==='BUY'?'arrowUp':'arrowDown',text:t.result==='GANADA'?'GANADA':t.result==='PERDIDA'?'PERDIDA':t.result==='ESPERANDO DOJI'?'ESPERA DOJI':t.result==='ESPERANDO CAMBIO'?'ESPERA CAMBIO':t.side==='BUY'?'COMPRA':'VENTA'});
  }
  return markers.sort((a,b)=>a.time-b.time);
 }
@@ -261,19 +261,20 @@ function drawOverlays(trades,c,host,obZones=[],setups=[]){
  // Elimina las capas anteriores y muestra el último OB válido de compra y el último de venta.
  host.querySelectorAll('.chart-overlay').forEach(node=>node.remove());state.overlayUpdate=null;
  const overlay=document.createElement('div');overlay.className='chart-overlay';host.appendChild(overlay);
- const zones=(obZones||[]).filter(ob=>ob&&Number.isFinite(ob.time)).sort((x,y)=>x.time-y.time);
+ const lockedTrade=[...(trades||[])].reverse().find(x=>['ESPERANDO DOJI','ESPERANDO CAMBIO','PENDIENTE'].includes(x.result));
+ const zones=[...(obZones||[]),...(lockedTrade&&lockedTrade.ob?[{...lockedTrade.ob,side:lockedTrade.side,timeframe:state.obPrimaryTf,structureTime:lockedTrade.structureTime}]:[])].filter((ob,i,all)=>ob&&Number.isFinite(ob.time)&&all.findIndex(q=>q.time===ob.time&&q.side===ob.side)===i).sort((x,y)=>x.time-y.time);
  const zoneEls=zones.map(ob=>{
   const el=document.createElement('div');el.className='ob-zone '+(ob.fvg?'fvg-zone ':'')+(ob.side==='BUY'?'bull-zone':'bear-zone');
   el.innerHTML='<b>'+(ob.side==='BUY'?'OB COMPRA':'OB VENTA')+'</b>';
   overlay.appendChild(el);return{el,ob};
  });
- const t=[...trades].reverse().find(x=>x.result==='PENDIENTE')||[...setups].reverse()[0]||trades[trades.length-1];
+ const t=[...trades].reverse().find(x=>['ESPERANDO DOJI','ESPERANDO CAMBIO','PENDIENTE'].includes(x.result))||[...setups].reverse()[0]||trades[trades.length-1];
  const lineEls=[];
  const overrideKey=t?String(state.selected||'')+':'+String(t.time)+':'+t.side:null;
  if(t&&overrideKey&&state.levelOverrides[overrideKey])Object.assign(t,state.levelOverrides[overrideKey]);
  state.overlayPriceLevels=t?[t.entry].filter(Number.isFinite):[];
  if(t){
-  const label=t.side==='BUY'?'ENTRADA COMPRA':'ENTRADA VENTA';
+  const label=t.result==='ESPERANDO DOJI'?'OB · ESPERANDO DOJI':t.result==='ESPERANDO CAMBIO'?'OB · ESPERANDO VELA DE CAMBIO':t.side==='BUY'?'ENTRADA COMPRA':'ENTRADA VENTA';
   const el=document.createElement('div');el.className='price-label entry-line';
   el.setAttribute('aria-label',label+' '+fmt(t.entry));
   el.innerHTML='<b>'+label+'</b><strong>'+fmt(t.entry)+'</strong>';
@@ -368,7 +369,7 @@ async function analyze(){
  state.savedChartTrades=mergeTrades(state.savedChartTrades,freshTrades,2000);
  state.trades=state.savedChartTrades.filter(t=>t.symbol===state.selected);
  savePersistentState();
- draw(c,chartCalc,state.trades,alignedZones,alignedSetups);showLatest(signalCalc,freshTrades,signalCandles);renderHistory(state.trades);
+ draw(c,chartCalc,state.trades,alignedZones,alignedSetups);showLatest(signalCalc,state.trades.filter(t=>t.symbol===state.selected),signalCandles);renderHistory(state.trades);
  $('chartTitle').textContent=(state.symbols.find(s=>s.symbol===state.selected)?.name||state.selected)+' · M'+state.tf;
  $('chartSubtitle').textContent='Velas '+c.length+' · últimas 24 horas · señales proyectadas';
  $('chartRange').textContent='Últimas 24 horas · '+new Date(c[0].time*1000).toLocaleTimeString('es-PA')+' — '+new Date(c.at(-1).time*1000).toLocaleTimeString('es-PA');
