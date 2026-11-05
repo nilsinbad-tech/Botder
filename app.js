@@ -281,15 +281,22 @@ function drawOverlays(trades,c,host,obZones=[],setups=[]){
     entry.setAttribute('aria-label','Entrada '+label+' '+fmt(trade.entry));
     entry.innerHTML='<b>'+label+'</b><strong>'+fmt(trade.entry)+'</strong><small>RSI '+fmt(Number.isFinite(trade.entryRsi)?trade.entryRsi:trade.rsi)+'</small>';
     overlay.appendChild(entry);entryEls.push({p:trade.entry,time,el:entry});
-    const tp2Reached=trade.result==='GANADA'&&Number.isFinite(trade.exitPrice)&&Math.abs(trade.exitPrice-trade.tp1)<=Math.max(1e-10,Math.abs(trade.tp1)*1e-8);
-    const levels=[['SL',trade.sl,'sl-line'],['TP1',trade.tp1,'tp-line']];
-    if(Number.isFinite(Number(trade.tp2))&&!tp2Reached&&Math.abs(Number(trade.tp2)-Number(trade.tp1))>Math.max(1e-10,Math.abs(Number(trade.tp1))*1e-8))levels.push(['TP2',trade.tp2,'tp2-line']);
-    levels.forEach(([name,price,cls])=>{
+    const closed=trade.result==='GANADA'||trade.result==='PERDIDA';
+    let levels=[];
+    if(closed&&Number.isFinite(trade.exitPrice)&&Number.isFinite(trade.exitTime)){
+      const isTp2=trade.result==='GANADA'&&Number.isFinite(Number(trade.tp2))&&Math.abs(trade.exitPrice-Number(trade.tp2))<=Math.max(1e-10,Math.abs(Number(trade.tp2))*1e-8);
+      const resultText=trade.result==='PERDIDA'?'PÉRDIDA':(isTp2?'GANADA TP2':'GANADA TP1');
+      levels=[[resultText,trade.exitPrice,'result-line',trade.exitTime]];
+    }else if(!closed){
+      levels=[['SL',trade.sl,'sl-line',time],['TP1',trade.tp1,'tp-line',time]];
+      if(Number.isFinite(Number(trade.tp2))&&Math.abs(Number(trade.tp2)-Number(trade.tp1))>Math.max(1e-10,Math.abs(Number(trade.tp1))*1e-8))levels.push(['TP2',trade.tp2,'tp2-line',time]);
+    }
+    levels.forEach(([name,price,cls,anchorTime])=>{
       if(!Number.isFinite(Number(price)))return;
       const tag=document.createElement('div');tag.className='price-label '+cls;
       tag.setAttribute('aria-label',name+' '+fmt(Number(price)));
       tag.innerHTML='<b>'+name+'</b><strong>'+fmt(Number(price))+'</strong>';
-      overlay.appendChild(tag);levelEls.push({p:Number(price),time,tag});
+      overlay.appendChild(tag);levelEls.push({p:Number(price),time:anchorTime,tag});
     });
   });
   const update=()=>{
@@ -317,7 +324,7 @@ function drawOverlays(trades,c,host,obZones=[],setups=[]){
       if(y==null||x==null||x<0||x>width){v.tag.style.display='none';return;}
       v.tag.style.display='flex';v.tag.style.width='max-content';
       const w=v.tag.offsetWidth||70;
-      v.tag.style.left=Math.max(0,Math.min(width-w,x+7))+'px';
+      v.tag.style.left=Math.max(0,Math.min(width-w,x-w/2))+'px';
       v.tag.style.top=(y-(v.tag.offsetHeight/2))+'px';
     });
   };
