@@ -5,7 +5,7 @@ const HISTORY_CANDLES = 1440;
 const REQUEST_TIMEOUT_MS = 45000;
 const API_URL = 'wss://api.derivws.com/trading/v1/options/ws/public';
 const $ = id => document.getElementById(id);
-const state = { ws:null, req:0, pending:new Map(), symbols:[], selected:null, tf:1, candles:[], rawCandles:[], rawBySymbol:new Map(), marketBacktests:[], trades:[], liveSub:null, main:null, rsi:null, markerPlugin:null, overlayResizeObserver:null, overlayUpdate:null, overlayRangeHandler:null, pivotLines:[], pivotTfEnabled:{1:false,2:false,3:false,4:false,5:true,10:false}, obStructureOnly:true, obStructureTf:5, chartKey:null, series:{}, busy:false, analyzeQueued:false, forceFitNext:true, lastRecalcBucket:null, pendingLiveTick:null, liveFrame:0, overlayFrame:0 };
+const state = { ws:null, req:0, pending:new Map(), symbols:[], selected:null, tf:1, candles:[], rawCandles:[], rawBySymbol:new Map(), marketBacktests:[], trades:[], liveSub:null, main:null, rsi:null, markerPlugin:null, overlayResizeObserver:null, overlayUpdate:null, overlayRangeHandler:null, pivotLines:[], tradePriceLines:[], pivotTfEnabled:{1:false,2:false,3:false,4:false,5:true,10:false}, obStructureOnly:true, obStructureTf:5, chartKey:null, series:{}, busy:false, analyzeQueued:false, forceFitNext:true, lastRecalcBucket:null, pendingLiveTick:null, liveFrame:0, overlayFrame:0 };
 const CANDIDATES = [
  ['1HZ10V','Volatility 10 (1s)'],['1HZ15V','Volatility 15 (1s)'],['1HZ25V','Volatility 25 (1s)'],['1HZ30V','Volatility 30 (1s)'],['1HZ50V','Volatility 50 (1s)'],['1HZ75V','Volatility 75 (1s)'],['1HZ90V','Volatility 90 (1s)'],['1HZ100V','Volatility 100 (1s)'],['1HZ150V','Volatility 150 (1s)'],['1HZ250V','Volatility 250 (1s)'],
  ['R_10','Volatility 10'],['R_25','Volatility 25'],['R_50','Volatility 50'],['R_75','Volatility 75'],['R_100','Volatility 100'],
@@ -213,6 +213,8 @@ function drawPivotLines(){
  }
 }
 function drawOverlays(trades,c,host,obZones=[]){
+  for(const line of state.tradePriceLines){try{state.series.candle.removePriceLine(line);}catch{}}
+  state.tradePriceLines=[];
  const activeSide=getHourlyBias(state.rawCandles).side;
  if(state.overlayResizeObserver){state.overlayResizeObserver.disconnect();state.overlayResizeObserver=null;}
  // Elimina TODAS las capas anteriores para que no queden OB viejos superpuestos.
@@ -245,7 +247,7 @@ function drawOverlays(trades,c,host,obZones=[]){
  if(t){
   const levels=[{p:t.entry,label:'ENTRADA · OB',detail:t.side==='BUY'?'ZONA DE COMPRA':'ZONA DE VENTA',cls:'entry-line',priority:0},{p:t.sl,label:'STOP LOSS',detail:t.slPivot?(t.side==='BUY'?'PIVOTE SOPORTE':'PIVOTE RESISTENCIA'):'LÍMITE DEL OB',cls:'sl-line',priority:1},{p:t.tp1,label:'TP1 · OBJETIVO',detail:t.side==='BUY'?'RESISTENCIA M10':'PIVOTE M10',cls:'tp-line',priority:2}];
   if(Math.abs(t.tp2-t.tp1)>1e-10)levels.push({p:t.tp2,label:'TP2 · OBJETIVO',detail:t.side==='BUY'?'RESISTENCIA M10':'PIVOTE M10',cls:'tp2-line',priority:3});
-  levels.forEach(v=>{const el=document.createElement('div');el.className='level-line '+v.cls;const tag=document.createElement('span');tag.className='level-tag';tag.innerHTML='<span class="level-copy"><b>'+v.label+'</b><small>'+v.detail+'</small></span><strong>'+fmt(v.p)+'</strong>';el.appendChild(tag);overlay.appendChild(el);lineEls.push({el,tag,...v});});
+  levels.forEach(v=>{const el=document.createElement('div');el.className='level-line '+v.cls;const tag=document.createElement('span');tag.className='level-tag';tag.innerHTML='<span class="level-copy"><b>'+v.label+'</b><small>'+v.detail+'</small></span><strong>'+fmt(v.p)+'</strong>';el.appendChild(tag);overlay.appendChild(el);lineEls.push({el,tag,...v});try{const color=v.cls==='entry-line'?'#f1c45b':v.cls==='sl-line'?'#ff5968':v.cls==='tp-line'?'#20d69a':'#46b6ff';state.tradePriceLines.push(state.series.candle.createPriceLine({price:v.p,color,lineWidth:2,axisLabelVisible:true,title:v.label+' · '+v.detail}));}catch(error){console.warn('No se pudo dibujar nivel de operación',error);}});
  }
  const update=()=>{
   const width=host.clientWidth,scale=state.main.timeScale(),candleSeries=state.series.candle;
