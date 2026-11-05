@@ -369,7 +369,7 @@ function drawOverlays(trades,c,host,obZones=[],setups=[]){
   const label=trade.side==='BUY'?'COMPRA':'VENTA';
   const el=document.createElement('div');el.className='price-label '+(confirmed?'entry-line confirmed-entry-line':'entry-line possible-entry-line');
   el.setAttribute('aria-label',(confirmed?'Entrada confirmada ':'Posible entrada ')+label+' '+fmt(trade.entry));
-  const lotSpec=cfdSpec(trade.symbol||state.selected);el.innerHTML='<b>'+(confirmed?'CONFIRMADA':'POSIBLE '+label)+'</b><strong>'+fmt(trade.entry)+'</strong><small>RSI '+fmt(Number.isFinite(trade.entryRsi)?trade.entryRsi:trade.rsi)+'</small>'+(lotSpec?'<small>LOTE '+lotSpec.minLot+'</small>':'');
+  const lotSpec=cfdSpec(trade.symbol||state.selected);el.innerHTML='<b>'+(confirmed?label+' CONFIRMADA':'POSIBLE '+label)+'</b><strong>'+fmt(trade.entry)+'</strong><small>RSI '+fmt(Number.isFinite(trade.entryRsi)?trade.entryRsi:trade.rsi)+'</small>'+(lotSpec?'<small>LOTE '+lotSpec.minLot+'</small>':'');
   overlay.appendChild(el);
   lineEls.push({key:'entry-'+index,p:trade.entry,label,cls:'entry-line',el,time,side:trade.side});
   [['SL',trade.sl,'sl-line'],['TP1',trade.tp1,'tp-line'],['TP2',trade.tp2,'tp2-line']].forEach(([name,price,cls])=>{
