@@ -151,7 +151,7 @@ function runStructuralBacktest(symbol,market,candles,displayTf){
  const complete=()=>{if(runId!==structuralBacktestRunId)return;if(typeof selectedSymbol!=="undefined"&&selectedSymbol&&selectedSymbol!==symbol){structuralBacktestRunningKey="";return;}if(Number(document.getElementById("timeframe")?.value||tf)!==tf){structuralBacktestRunningKey="";return;}
   if(typeof backtestTrades!=="undefined")backtestTrades.splice(0,backtestTrades.length,...trades);
   setBacktestTrades(trades);if(typeof setStructureOverlay==="function")const cv=d.map(c=>c.close),ema=[{name:"EMA 9",color:"#ffd166",values:botderEma(cv,9)},{name:"EMA 20",color:"#61b7ff",values:botderEma(cv,20)},{name:"EMA 50",color:"#bd8cff",values:botderEma(cv,50)}].map(x=>({name:x.name,color:x.color,points:x.values.map((price,k)=>price==null?null:{time:d[k].time,price}).filter(Boolean).slice(-180)}));
-  setStructureOverlay({items:botderAnnotations(d,d.length-1,tf),lines:[],ema,projection:null,activeTf:tf});
+  const livePlan=buildStructuralPlan(raw,tf);\n  setStructureOverlay({items:livePlan.items,lines:[],ema:livePlan.ema||ema,projection:livePlan.projection,activeTf:tf});
   structuralBacktestValidatedKey=key;structuralBacktestRunningKey="";backtestSymbol=symbol;backtestReady=true;
   setText("chart-message","BACKTEST "+botderLabel(tf)+" · "+d.length+" velas · "+trades.length+" operaciones evaluadas.");
   if(typeof renderStrategyJournal==="function")renderStrategyJournal();
