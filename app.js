@@ -253,6 +253,12 @@ function drawOverlays(trades,c,host,obZones=[],setups=[]){
  // Elimina las capas anteriores y muestra el último OB válido de compra y el último de venta.
  host.querySelectorAll('.chart-overlay').forEach(node=>node.remove());state.overlayUpdate=null;
  const overlay=document.createElement('div');overlay.className='chart-overlay';host.appendChild(overlay);
+ const closedTrades=(trades||[]).filter(x=>(x.result==='GANADA'||x.result==='PERDIDA')&&Number.isFinite(x.points));
+ const wonPoints=closedTrades.filter(x=>x.result==='GANADA').reduce((sum,x)=>sum+Math.max(0,x.points),0);
+ const lostPoints=closedTrades.filter(x=>x.result==='PERDIDA').reduce((sum,x)=>sum+Math.abs(Math.min(0,x.points)),0);
+ const wonEl=$('chartWonPoints'),lostEl=$('chartLostPoints');
+ if(wonEl)wonEl.textContent='+'+fmt(wonPoints)+' pts';
+ if(lostEl)lostEl.textContent='-'+fmt(lostPoints)+' pts';
  const lockedTrade=[...(trades||[])].reverse().find(x=>['ESPERANDO DOJI','ESPERANDO CAMBIO','PENDIENTE'].includes(x.result));
  const zones=[...(obZones||[]),...(lockedTrade&&lockedTrade.ob?[{...lockedTrade.ob,side:lockedTrade.side,timeframe:state.obPrimaryTf,structureTime:lockedTrade.structureTime}]:[])].filter((ob,i,all)=>ob&&Number.isFinite(ob.time)&&all.findIndex(q=>q.time===ob.time&&q.side===ob.side)===i).sort((x,y)=>x.time-y.time);
  const zoneEls=zones.map(ob=>{
@@ -270,9 +276,9 @@ function drawOverlays(trades,c,host,obZones=[],setups=[]){
  const visibleEntries=[...entryRecords,...currentPending].slice(-100);
  state.overlayPriceLevels=t?[t.entry].filter(Number.isFinite):[];
  visibleEntries.forEach((trade,index)=>{
-  const label='ENTRADA';
+  const label=trade.side==='BUY'?'COMPRA':'VENTA';
   const el=document.createElement('div');el.className='price-label entry-line';
-  el.setAttribute('aria-label','Punto de entrada '+fmt(trade.entry));
+  el.setAttribute('aria-label','Entrada '+label+' '+fmt(trade.entry));
   el.innerHTML='<b>'+label+'</b><strong>'+fmt(trade.entry)+'</strong>';
   overlay.appendChild(el);
   lineEls.push({key:'entry-'+index,p:trade.entry,label,cls:'entry-line',el,time:Number.isFinite(trade.entryTime)?trade.entryTime:trade.time,side:trade.side});
