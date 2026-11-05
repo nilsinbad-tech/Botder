@@ -251,90 +251,83 @@ function drawPivotLines(){
 function drawOverlays(trades,c,host,obZones=[],setups=[]){
   for(const line of state.tradePriceLines){try{state.series.candle.removePriceLine(line);}catch{}}
   state.tradePriceLines=[];
- if(state.overlayResizeObserver){state.overlayResizeObserver.disconnect();state.overlayResizeObserver=null;}
- // Elimina las capas anteriores y muestra el último OB válido de compra y el último de venta.
- host.querySelectorAll('.chart-overlay').forEach(node=>node.remove());state.overlayUpdate=null;
- const overlay=document.createElement('div');overlay.className='chart-overlay';host.appendChild(overlay);
- const closedTrades=(trades||[]).filter(x=>(x.result==='GANADA'||x.result==='PERDIDA')&&Number.isFinite(x.points));
- const wonPoints=closedTrades.filter(x=>x.result==='GANADA').reduce((sum,x)=>sum+Math.max(0,x.points),0);
- const lostPoints=closedTrades.filter(x=>x.result==='PERDIDA').reduce((sum,x)=>sum+Math.abs(Math.min(0,x.points)),0);
- const wonEl=$('chartWonPoints'),lostEl=$('chartLostPoints');
- if(wonEl)wonEl.textContent='+'+fmt(wonPoints)+' pts';
- if(lostEl)lostEl.textContent='-'+fmt(lostPoints)+' pts';
- const lockedTrade=[...(trades||[])].reverse().find(x=>['ESPERANDO DOJI','ESPERANDO CAMBIO','PENDIENTE'].includes(x.result));
- const zones=[...(obZones||[]),...(lockedTrade&&lockedTrade.ob?[{...lockedTrade.ob,side:lockedTrade.side,timeframe:state.obPrimaryTf,structureTime:lockedTrade.structureTime}]:[])].filter((ob,i,all)=>ob&&Number.isFinite(ob.time)&&all.findIndex(q=>q.time===ob.time&&q.side===ob.side)===i).sort((x,y)=>x.time-y.time);
- const zoneEls=zones.map(ob=>{
-  const el=document.createElement('div');el.className='ob-zone '+(ob.fvg?'fvg-zone ':'')+(ob.side==='BUY'?'bull-zone':'bear-zone');
-  el.innerHTML='';
-  overlay.appendChild(el);return{el,ob};
- });
- const t=[...trades].reverse().find(x=>['ESPERANDO DOJI','ESPERANDO CAMBIO','PENDIENTE'].includes(x.result))||[...setups].reverse()[0]||trades[trades.length-1];
- const lineEls=[];
- const overrideKey=t?String(state.selected||'')+':'+String(t.time)+':'+t.side:null;
- if(t&&overrideKey&&state.levelOverrides[overrideKey])Object.assign(t,state.levelOverrides[overrideKey]);
- // Conserva las entradas históricas del backtest en su vela y precio originales.
- const entryRecords=(trades||[]).filter(x=>Number.isFinite(x.entry)&&Number.isFinite(x.entryTime)&&x.entryIndex>=0&&x.result!=='CANCELADA');
- const currentPending=t&&t.entryIndex<0&&!Number.isFinite(t.entryTime)?[t]:[];
- const visibleEntries=[...entryRecords,...currentPending].slice(-550);
- state.overlayPriceLevels=t?[t.entry,t.sl,t.tp1,t.tp2].filter(Number.isFinite):[];
- const levelLineEls=[];
- visibleEntries.forEach((trade,index)=>{
-  const time=Number.isFinite(trade.entryTime)?trade.entryTime:trade.time;
-  const label=trade.side==='BUY'?'COMPRA':'VENTA';
-  const el=document.createElement('div');el.className='price-label entry-line';
-  el.setAttribute('aria-label','Entrada '+label+' '+fmt(trade.entry));
-  el.innerHTML='<b>'+label+'</b><strong>'+fmt(trade.entry)+'</strong><small>RSI '+fmt(Number.isFinite(trade.entryRsi)?trade.entryRsi:trade.rsi)+'</small>';
-  overlay.appendChild(el);
-  lineEls.push({key:'entry-'+index,p:trade.entry,label,cls:'entry-line',el,time,side:trade.side});
-  [['SL',trade.sl,'sl-line'],['TP1',trade.tp1,'tp-line'],['TP2',trade.tp2,'tp2-line']].forEach(([name,price,cls])=>{
-   if(!Number.isFinite(Number(price)))return;
-   const rule=document.createElement('div');rule.className='trade-level-rule '+cls;
-   const tag=document.createElement('div');tag.className='price-label '+cls;
-   tag.setAttribute('aria-label',name+' '+fmt(Number(price)));
-   tag.innerHTML='<b>'+name+'</b><strong>'+fmt(Number(price))+'</strong>';
-   overlay.appendChild(rule);overlay.appendChild(tag);
-   levelLineEls.push({p:Number(price),time,rule,tag});
+  if(state.overlayResizeObserver){state.overlayResizeObserver.disconnect();state.overlayResizeObserver=null;}
+  host.querySelectorAll('.chart-overlay').forEach(node=>node.remove());state.overlayUpdate=null;
+  const overlay=document.createElement('div');overlay.className='chart-overlay';host.appendChild(overlay);
+  const closedTrades=(trades||[]).filter(x=>(x.result==='GANADA'||x.result==='PERDIDA')&&Number.isFinite(x.points));
+  const wonPoints=closedTrades.filter(x=>x.result==='GANADA').reduce((sum,x)=>sum+Math.max(0,x.points),0);
+  const lostPoints=closedTrades.filter(x=>x.result==='PERDIDA').reduce((sum,x)=>sum+Math.abs(Math.min(0,x.points)),0);
+  const wonEl=$('chartWonPoints'),lostEl=$('chartLostPoints');
+  if(wonEl)wonEl.textContent='+'+fmt(wonPoints)+' pts';
+  if(lostEl)lostEl.textContent='-'+fmt(lostPoints)+' pts';
+  const lockedTrade=[...(trades||[])].reverse().find(x=>['ESPERANDO DOJI','ESPERANDO CAMBIO','PENDIENTE'].includes(x.result));
+  const zones=[...(obZones||[]),...(lockedTrade&&lockedTrade.ob?[{...lockedTrade.ob,side:lockedTrade.side,timeframe:state.obPrimaryTf,structureTime:lockedTrade.structureTime}]:[])].filter((ob,i,all)=>ob&&Number.isFinite(ob.time)&&all.findIndex(q=>q.time===ob.time&&q.side===ob.side)===i).sort((x,y)=>x.time-y.time);
+  const zoneEls=zones.map(ob=>{
+    const el=document.createElement('div');el.className='ob-zone '+(ob.fvg?'fvg-zone ':'')+(ob.side==='BUY'?'bull-zone':'bear-zone');
+    el.innerHTML='';overlay.appendChild(el);return{el,ob};
   });
- });
- const update=()=>{
-  const width=host.clientWidth,scale=state.main.timeScale(),candleSeries=state.series.candle;
-  const range=scale.getVisibleLogicalRange(),first=range?Math.max(0,Math.floor(range.from)):0,last=range?Math.min(c.length-1,Math.ceil(range.to)):c.length-1;
-  const firstTime=c[first]?.time;
-  zoneEls.forEach(({el,ob})=>{
-   let x1=scale.timeToCoordinate(ob.time);
-   if(x1==null){let match=null;for(let i=c.length-1;i>=0;i--){if(c[i].time<=ob.time){match=c[i];break;}}if(match)x1=scale.timeToCoordinate(match.time);}
-   const y1=candleSeries.priceToCoordinate(ob.high),y2=candleSeries.priceToCoordinate(ob.low);
-   if(y1==null||y2==null){el.style.display='none';return;}
-   if(x1==null){if(firstTime!=null&&ob.time<firstTime)x1=0;else{el.style.display='none';return;}}
-   const left=Math.max(0,Math.min(width-8,x1)),mid=(y1+y2)/2,boxWidth=Math.min(window.innerWidth<=600?126:150,Math.max(0,width-left-8));
-   if(boxWidth<24){el.style.display='none';return;}
-   el.style.display='flex';el.style.left=left+'px';el.style.width=boxWidth+'px';el.style.top=Math.max(0,mid-15)+'px';el.style.height='30px';
+  const t=[...trades].reverse().find(x=>['ESPERANDO DOJI','ESPERANDO CAMBIO','PENDIENTE'].includes(x.result))||[...setups].reverse()[0]||trades[trades.length-1];
+  const overrideKey=t?String(state.selected||'')+':'+String(t.time)+':'+t.side:null;
+  if(t&&overrideKey&&state.levelOverrides[overrideKey])Object.assign(t,state.levelOverrides[overrideKey]);
+  const entryRecords=(trades||[]).filter(x=>Number.isFinite(x.entry)&&Number.isFinite(x.entryTime)&&x.entryIndex>=0&&x.result!=='CANCELADA');
+  const currentPending=t&&t.entryIndex<0&&!Number.isFinite(t.entryTime)?[t]:[];
+  const visibleEntries=[...entryRecords,...currentPending].slice(-550);
+  state.overlayPriceLevels=t?[t.entry,t.sl,t.tp1,t.tp2].filter(Number.isFinite):[];
+  const entryEls=[],levelEls=[];
+  visibleEntries.forEach((trade,index)=>{
+    const time=Number.isFinite(trade.entryTime)?trade.entryTime:trade.time;
+    const label=trade.side==='BUY'?'COMPRA':'VENTA';
+    const entry=document.createElement('div');entry.className='price-label entry-line';
+    entry.setAttribute('aria-label','Entrada '+label+' '+fmt(trade.entry));
+    entry.innerHTML='<b>'+label+'</b><strong>'+fmt(trade.entry)+'</strong><small>RSI '+fmt(Number.isFinite(trade.entryRsi)?trade.entryRsi:trade.rsi)+'</small>';
+    overlay.appendChild(entry);entryEls.push({p:trade.entry,time,el:entry});
+    const tp2Reached=trade.result==='GANADA'&&Number.isFinite(trade.exitPrice)&&Math.abs(trade.exitPrice-trade.tp1)<=Math.max(1e-10,Math.abs(trade.tp1)*1e-8);
+    const levels=[['SL',trade.sl,'sl-line'],['TP1',trade.tp1,'tp-line']];
+    if(Number.isFinite(Number(trade.tp2))&&!tp2Reached&&Math.abs(Number(trade.tp2)-Number(trade.tp1))>Math.max(1e-10,Math.abs(Number(trade.tp1))*1e-8))levels.push(['TP2',trade.tp2,'tp2-line']);
+    levels.forEach(([name,price,cls])=>{
+      if(!Number.isFinite(Number(price)))return;
+      const tag=document.createElement('div');tag.className='price-label '+cls;
+      tag.setAttribute('aria-label',name+' '+fmt(Number(price)));
+      tag.innerHTML='<b>'+name+'</b><strong>'+fmt(Number(price))+'</strong>';
+      overlay.appendChild(tag);levelEls.push({p:Number(price),time,tag});
+    });
   });
-  lineEls.forEach(v=>{
-   const y=candleSeries.priceToCoordinate(v.p);
-   const anchor=scale.timeToCoordinate(v.time);
-   if(y==null||anchor==null||anchor<0||anchor>width){v.el.style.display='none';return;}
-   v.el.style.display='flex';v.el.style.right='auto';v.el.style.width='max-content';
-   const labelWidth=v.el.offsetWidth||100;
-   v.el.style.left=Math.max(0,Math.min(width-labelWidth,anchor-labelWidth/2))+'px';
-   v.el.style.top=(y-(v.el.offsetHeight/2))+'px';
-  });
-  levelLineEls.forEach(v=>{
-   const y=candleSeries.priceToCoordinate(v.p);
-   const anchor=scale.timeToCoordinate(v.time);
-   if(y==null||anchor==null||anchor<0||anchor>=width){v.rule.style.display='none';v.tag.style.display='none';return;}
-   const left=Math.max(0,anchor);
-   v.rule.style.display='block';v.rule.style.left=left+'px';v.rule.style.top=y+'px';v.rule.style.width=Math.max(0,width-left)+'px';
-   v.tag.style.display='flex';v.tag.style.left=Math.max(0,width-(v.tag.offsetWidth||75)-4)+'px';v.tag.style.top=(y-(v.tag.offsetHeight/2))+'px';
-  });
- };
- state.overlayUpdate=update;
- if(!state.overlayRangeHandler){state.overlayRangeHandler=()=>{
-  if(state.overlayFrame)return;
-  state.overlayFrame=requestAnimationFrame(()=>{state.overlayFrame=0;if(state.overlayUpdate)state.overlayUpdate();});
- };state.main.timeScale().subscribeVisibleLogicalRangeChange(state.overlayRangeHandler);}
- if(window.ResizeObserver){state.overlayResizeObserver=new ResizeObserver(update);state.overlayResizeObserver.observe(host);}
- requestAnimationFrame(update);
+  const update=()=>{
+    const width=host.clientWidth,scale=state.main.timeScale(),candleSeries=state.series.candle;
+    zoneEls.forEach(({el,ob})=>{
+      const x=scale.timeToCoordinate(ob.time);
+      const y1=candleSeries.priceToCoordinate(ob.high),y2=candleSeries.priceToCoordinate(ob.low);
+      // Si la vela no está visible, se oculta: nunca se pega el OB al borde del gráfico.
+      if(x==null||x<0||x>width||y1==null||y2==null){el.style.display='none';return;}
+      const boxWidth=Math.min(window.innerWidth<=600?126:150,Math.max(0,width-x-8));
+      if(boxWidth<24){el.style.display='none';return;}
+      el.style.display='flex';el.style.left=x+'px';el.style.width=boxWidth+'px';
+      el.style.top=((y1+y2)/2-15)+'px';el.style.height='30px';
+    });
+    entryEls.forEach(v=>{
+      const y=candleSeries.priceToCoordinate(v.p),x=scale.timeToCoordinate(v.time);
+      if(y==null||x==null||x<0||x>width){v.el.style.display='none';return;}
+      v.el.style.display='flex';v.el.style.width='max-content';
+      const w=v.el.offsetWidth||100;
+      v.el.style.left=Math.max(0,Math.min(width-w,x-w/2))+'px';
+      v.el.style.top=(y-(v.el.offsetHeight/2))+'px';
+    });
+    levelEls.forEach(v=>{
+      const y=candleSeries.priceToCoordinate(v.p),x=scale.timeToCoordinate(v.time);
+      if(y==null||x==null||x<0||x>width){v.tag.style.display='none';return;}
+      v.tag.style.display='flex';v.tag.style.width='max-content';
+      const w=v.tag.offsetWidth||70;
+      v.tag.style.left=Math.max(0,Math.min(width-w,x+7))+'px';
+      v.tag.style.top=(y-(v.tag.offsetHeight/2))+'px';
+    });
+  };
+  state.overlayUpdate=update;
+  if(!state.overlayRangeHandler){state.overlayRangeHandler=()=>{
+    if(state.overlayFrame)return;
+    state.overlayFrame=requestAnimationFrame(()=>{state.overlayFrame=0;if(state.overlayUpdate)state.overlayUpdate();});
+  };state.main.timeScale().subscribeVisibleLogicalRangeChange(state.overlayRangeHandler);}
+  if(window.ResizeObserver){state.overlayResizeObserver=new ResizeObserver(update);state.overlayResizeObserver.observe(host);}
+  requestAnimationFrame(update);
 }
 function fmt(n){return Number.isFinite(n)?Number(n).toFixed(2):'—';}
 function getHourlyBias(raw){
