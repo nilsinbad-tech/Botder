@@ -5,7 +5,12 @@ const HISTORY_CANDLES = 1440;
 const REQUEST_TIMEOUT_MS = 45000;
 const API_URL = 'wss://api.derivws.com/trading/v1/options/ws/public';
 const $ = id => document.getElementById(id);
-const state = { ws:null, req:0, pending:new Map(), symbols:[], selected:null, tf:1, candles:[], rawCandles:[], rawBySymbol:new Map(), marketBacktests:[], trades:[], liveSub:null, main:null, rsi:null, markerPlugin:null, overlayResizeObserver:null, overlayUpdate:null, overlayRangeHandler:null, pivotLines:[], tradePriceLines:[], overlayPriceLevels:[],levelOverrides:{}, pivotTfEnabled:{1:false,2:false,3:false,4:false,5:true,10:false}, tpTfs:[1,3,5,10], slTfs:[1,3,5,10], obStructureOnly:true, obTf:1, pivotTf:5, chartKey:null, series:{}, busy:false, analyzeQueued:false, forceFitNext:true, lastRecalcBucket:null, pendingLiveTick:null, liveFrame:0, overlayFrame:0 };
+const state = { ws:null, req:0, pending:new Map(), symbols:[], selected:null, tf:1, candles:[], rawCandles:[], rawBySymbol:new Map(), marketBacktests:[], savedChartTrades:[], trades:[], liveSub:null, main:null, rsi:null, markerPlugin:null, overlayResizeObserver:null, overlayUpdate:null, overlayRangeHandler:null, pivotLines:[], tradePriceLines:[], overlayPriceLevels:[],levelOverrides:{}, pivotTfEnabled:{1:false,2:false,3:false,4:false,5:true,10:false}, tpTfs:[1,3,5,10], slTfs:[1,3,5,10], obStructureOnly:true, obTf:1, pivotTf:5, chartKey:null, series:{}, busy:false, analyzeQueued:false, forceFitNext:true, lastRecalcBucket:null, pendingLiveTick:null, liveFrame:0, overlayFrame:0 };
+const PERSIST_KEY='botder-history-v2';
+function tradeKey(t){return String(t.symbol||'')+'|'+String(t.time)+'|'+String(t.side||'');}
+function mergeTrades(oldItems,newItems,limit=2000){const map=new Map();for(const t of [...(oldItems||[]),...(newItems||[])]){if(!t||!Number.isFinite(Number(t.time))||!t.side)continue;map.set(tradeKey(t),t);}return [...map.values()].sort((a,b)=>a.time-b.time).slice(-limit);}
+function savePersistentState(){try{localStorage.setItem(PERSIST_KEY,JSON.stringify({version:2,selected:state.selected,marketBacktests:state.marketBacktests.slice(-2000),savedChartTrades:state.savedChartTrades.slice(-2000)}));}catch(e){console.warn('No se pudo guardar el historial local',e);}}
+function restorePersistentState(){try{const saved=JSON.parse(localStorage.getItem(PERSIST_KEY)||'null');if(!saved||saved.version!==2)return;state.savedSelected=saved.selected||null;state.marketBacktests=Array.isArray(saved.marketBacktests)?saved.marketBacktests:[];state.savedChartTrades=Array.isArray(saved.savedChartTrades)?saved.savedChartTrades:[];renderHistory(state.marketBacktests);}catch(e){console.warn('No se pudo restaurar el historial local',e);}}
 const CANDIDATES = [
  ['1HZ10V','Volatility 10 (1s)'],['1HZ15V','Volatility 15 (1s)'],['1HZ25V','Volatility 25 (1s)'],['1HZ30V','Volatility 30 (1s)'],['1HZ50V','Volatility 50 (1s)'],['1HZ75V','Volatility 75 (1s)'],['1HZ90V','Volatility 90 (1s)'],['1HZ100V','Volatility 100 (1s)'],['1HZ150V','Volatility 150 (1s)'],['1HZ250V','Volatility 250 (1s)'],
  ['R_10','Volatility 10'],['R_25','Volatility 25'],['R_50','Volatility 50'],['R_75','Volatility 75'],['R_100','Volatility 100'],
@@ -184,7 +189,7 @@ function buildTradeMarkers(trades,c){
   while(lo<hi){const mid=(lo+hi)>>1;if(c[mid].time<=target)lo=mid+1;else hi=mid;}
   const bar=c[Math.max(0,lo-1)];
   if(!bar)continue;
-  markers.push({time:bar.time,position:t.side==='BUY'?'belowBar':'aboveBar',color:t.side==='BUY'?'#20d69a':'#ff5968',shape:t.side==='BUY'?'arrowUp':'arrowDown',text:t.side==='BUY'?'COMPRAR':'VENDER'});
+  markers.push({time:bar.time,position:t.side==='BUY'?'belowBar':'aboveBar',color:t.side==='BUY'?'#20d69a':'#ff5968',shape:t.side==='BUY'?'arrowUp':'arrowDown',text:t.result==='GANADA'?'GANADA':t.result==='PERDIDA'?'PERDIDA':t.side==='BUY'?'COMPRA':'VENTA'});
  }
  return markers.sort((a,b)=>a.time-b.time);
 }
@@ -262,7 +267,7 @@ function drawOverlays(trades,c,host,obZones=[],setups=[]){
  const zones=(obZones||[]).filter(ob=>ob&&Number.isFinite(ob.time)).sort((x,y)=>x.time-y.time);
  const zoneEls=zones.map(ob=>{
   const el=document.createElement('div');el.className='ob-zone '+(ob.fvg?'fvg-zone ':'')+(ob.side==='BUY'?'bull-zone':'bear-zone');
-  el.innerHTML='<b>'+(ob.side==='BUY'?'OB COMPRA':'OB VENTA')+' · M1 · '+(ob.structureType||'M10')+'</b>';
+  el.innerHTML='<b>'+(ob.side==='BUY'?'OB COMPRA':'OB VENTA')+'</b>';
   overlay.appendChild(el);return{el,ob};
  });
  const t=[...trades].reverse().find(x=>x.result==='PENDIENTE')||[...setups].reverse()[0]||trades[trades.length-1];
@@ -270,17 +275,12 @@ function drawOverlays(trades,c,host,obZones=[],setups=[]){
  const overrideKey=t?String(state.selected||'')+':'+String(t.time)+':'+t.side:null;
  if(t&&overrideKey&&state.levelOverrides[overrideKey])Object.assign(t,state.levelOverrides[overrideKey]);
  state.overlayPriceLevels=t?[t.entry].filter(Number.isFinite):[];
- let entryZoneEl=null;
  if(t){
   const label=t.side==='BUY'?'ENTRADA COMPRA':'ENTRADA VENTA';
   const el=document.createElement('div');el.className='price-label entry-line';
   el.setAttribute('aria-label',label+' '+fmt(t.entry));
   el.innerHTML='<b>'+label+'</b><strong>'+fmt(t.entry)+'</strong>';
   overlay.appendChild(el);lineEls.push({key:'entry',p:t.entry,label,cls:'entry-line',el});
-  // Recuadro horizontal de la zona exacta del OB donde se espera el retroceso para entrar.
-  const zone=document.createElement('div');zone.className='entry-search-zone '+(t.side==='BUY'?'entry-buy':'entry-sell');
-  // El recuadro solo resalta la zona; la única etiqueta de entrada queda fija a la derecha.
-  zone.setAttribute('aria-label','Zona de búsqueda de entrada');overlay.appendChild(zone);entryZoneEl=zone;
  }
  const update=()=>{
   const width=host.clientWidth,scale=state.main.timeScale(),candleSeries=state.series.candle;
@@ -295,13 +295,7 @@ function drawOverlays(trades,c,host,obZones=[],setups=[]){
    const left=Math.max(0,Math.min(width-112,x1)),mid=(y1+y2)/2;
    el.style.display='flex';el.style.left=left+'px';el.style.width=Math.min(window.innerWidth<=600?126:150,Math.max(112,width-left-8))+'px';el.style.top=Math.max(0,mid-15)+'px';el.style.height='30px';
   });
-  const xSignal=t?scale.timeToCoordinate(Number.isFinite(t.entryTime)?t.entryTime:t.time):null,xStart=Math.max(0,Math.min(width-8,xSignal==null?width*.35:xSignal)),positioned=[];
   lineEls.forEach(v=>{const y=candleSeries.priceToCoordinate(v.p);if(y==null){v.el.style.display='none';return;}v.el.style.display='flex';v.el.style.left='auto';v.el.style.right='4px';v.el.style.width='max-content';v.el.style.top=(y-11)+'px';});
-  if(entryZoneEl&&t){
-   const top=candleSeries.priceToCoordinate(t.ob?.high??t.entry),bottom=candleSeries.priceToCoordinate(t.ob?.low??t.entry);
-   if(top==null||bottom==null){entryZoneEl.style.display='none';}
-   else{entryZoneEl.style.display='block';entryZoneEl.style.left='0px';entryZoneEl.style.width=Math.max(0,width-2)+'px';entryZoneEl.style.top=Math.min(top,bottom)+'px';entryZoneEl.style.height=Math.max(3,Math.abs(bottom-top))+'px';}
-  }
  };
  state.overlayUpdate=update;
  if(!state.overlayRangeHandler){state.overlayRangeHandler=()=>{
@@ -353,8 +347,12 @@ async function runUniverseBacktest(refresh=false){
  await Promise.all(workers);
  const allTrades=[],shortHistory=[];
  for(const item of state.symbols){const source=state.rawBySymbol.get(item.symbol)||[];if(!source.length)continue;const cutoff=Math.floor(Date.now()/1000)-86400;const raw=source.filter(v=>v.time>=cutoff);if(raw.length<HISTORY_CANDLES)shortHistory.push(item.name+' ('+raw.length+' velas/24h)');const candles=aggregate(raw,2);if(candles.length<70)continue;const hourly=getHourlyBias(raw),obCandles=raw,pivotCandles=aggregate(raw,state.pivotTf),calc=buildSetups(candles,obCandles,pivotCandles,pivotCandles,hourly.side,raw),setups=hourly.side?calc.setups.filter(x=>x.side===hourly.side):[],trades=simulate(candles,setups);allTrades.push(...trades.map(t=>({...t,symbol:item.symbol})));}
- state.marketBacktests=allTrades;
- renderHistory(allTrades);
+ state.marketBacktests=mergeTrades(state.marketBacktests,allTrades,2000);
+ state.savedChartTrades=mergeTrades(state.savedChartTrades,allTrades,2000);
+ state.trades=state.savedChartTrades.filter(t=>t.symbol===state.selected);
+ if(state.markerPlugin&&state.candles.length)state.markerPlugin.setMarkers(buildTradeMarkers(state.trades,state.candles));
+ savePersistentState();
+ renderHistory(state.marketBacktests);
  const closed=allTrades.filter(t=>t.result==='GANADA'||t.result==='PERDIDA');
  $('wins').textContent=closed.filter(t=>t.result==='GANADA').length;$('losses').textContent=closed.filter(t=>t.result==='PERDIDA').length;
  $('pending').textContent=allTrades.filter(t=>t.result==='PENDIENTE').length;$('expired').textContent=allTrades.filter(t=>t.result==='CANCELADA').length;
@@ -368,8 +366,11 @@ async function analyze(){
  // Una sola dirección gobierna las señales y los OB visibles: la tendencia H1.
  const alignedSetups=activeSide?signalCalc.setups.filter(setup=>setup.side===activeSide):[];
  const alignedZones=chartCalc.obZones;
- state.trades=simulate(signalCandles,alignedSetups);
- draw(c,chartCalc,state.trades,alignedZones,alignedSetups);showLatest(signalCalc,state.trades,signalCandles);renderHistory(state.trades);
+ const freshTrades=simulate(signalCandles,alignedSetups).map(t=>({...t,symbol:state.selected}));
+ state.savedChartTrades=mergeTrades(state.savedChartTrades,freshTrades,2000);
+ state.trades=state.savedChartTrades.filter(t=>t.symbol===state.selected);
+ savePersistentState();
+ draw(c,chartCalc,state.trades,alignedZones,alignedSetups);showLatest(signalCalc,freshTrades,signalCandles);renderHistory(state.trades);
  $('chartTitle').textContent=(state.symbols.find(s=>s.symbol===state.selected)?.name||state.selected)+' · M'+state.tf;
  $('chartSubtitle').textContent='Velas '+c.length+' · últimas 24 horas · señales proyectadas';
  $('chartRange').textContent='Últimas 24 horas · '+new Date(c[0].time*1000).toLocaleTimeString('es-PA')+' — '+new Date(c.at(-1).time*1000).toLocaleTimeString('es-PA');
@@ -411,7 +412,7 @@ function onLiveTick(tick){
  });
 }
 function subscribeLive(){if(state.liveSub){try{state.ws.send(JSON.stringify({forget:state.liveSub}));}catch{}}request({ticks:state.selected,subscribe:1}).then(r=>{state.liveSub=r.subscription?.id||null;}).catch(()=>{});}
-function selectSymbol(symbol){if(!state.symbols.some(s=>s.symbol===symbol))return;state.selected=symbol;state.forceFitNext=true;$('symbolSelect').value=symbol;document.querySelectorAll('.instrument-chip').forEach(b=>b.classList.toggle('selected',b.dataset.symbol===symbol));analyze();subscribeLive();}
+function selectSymbol(symbol){if(!state.symbols.some(s=>s.symbol===symbol))return;state.selected=symbol;savePersistentState();state.forceFitNext=true;$('symbolSelect').value=symbol;document.querySelectorAll('.instrument-chip').forEach(b=>b.classList.toggle('selected',b.dataset.symbol===symbol));analyze();subscribeLive();}
 function bindPivotControls(){
  const root=$('pivotTfControls');if(!root)return;
  try{const saved=JSON.parse(localStorage.getItem('botder-pivot-tfs')||'null');if(saved&&typeof saved==='object'){for(const mins of [1,2,3,4,5,10])if(typeof saved[mins]==='boolean')state.pivotTfEnabled[mins]=saved[mins];}}catch{}
@@ -439,6 +440,6 @@ function bind(){
  $('timeframes').addEventListener('click',async e=>{const b=e.target.closest('button[data-tf]');if(!b)return;state.tf=+b.dataset.tf;state.forceFitNext=true;document.querySelectorAll('#timeframes button').forEach(x=>x.classList.toggle('active',x===b));await analyze();});
  $('refreshBtn').addEventListener('click',async()=>{state.rawBySymbol.delete(state.selected);await analyze();runUniverseBacktest(true).catch(e=>{$('backtestInfo').textContent='Error al actualizar: '+e.message;});});$('runBacktest').addEventListener('click',async()=>{runUniverseBacktest(true).catch(e=>{$('backtestInfo').textContent='Error al actualizar: '+e.message;});});
 }
-async function start(){bind();try{await loadSymbols();setConnection(false,'Catálogo recibido · cargando velas…');$('dataStatus').textContent='Instrumentos listos · cargando gráfico principal…';await analyze();if(!state.rawCandles.length||!state.main)throw new Error($('dataStatus').textContent||'Deriv no entregó velas para dibujar');setConnection(true,'Deriv conectada · datos recibidos');subscribeLive();$('backtestInfo').textContent='Gráfico listo. Calculando las últimas 24 horas en segundo plano…';runUniverseBacktest(false).catch(e=>{$('backtestInfo').textContent='Error en análisis de 24 horas: '+e.message;});}catch(e){setConnection(false,'Sin datos de Deriv');$('dataStatus').textContent='No se pudo iniciar: '+e.message;$('signalDetails').textContent=e.message;}}
+async function start(){restorePersistentState();bind();try{await loadSymbols();if(state.savedSelected&&state.symbols.some(s=>s.symbol===state.savedSelected)){state.selected=state.savedSelected;$('symbolSelect').value=state.selected;document.querySelectorAll('.instrument-chip').forEach(b=>b.classList.toggle('selected',b.dataset.symbol===state.selected));}setConnection(false,'Catálogo recibido · cargando velas…');$('dataStatus').textContent='Instrumentos listos · cargando gráfico principal…';await analyze();if(!state.rawCandles.length||!state.main)throw new Error($('dataStatus').textContent||'Deriv no entregó velas para dibujar');setConnection(true,'Deriv conectada · datos recibidos');subscribeLive();$('backtestInfo').textContent='Gráfico listo. Calculando las últimas 24 horas en segundo plano…';runUniverseBacktest(false).catch(e=>{$('backtestInfo').textContent='Error en análisis de 24 horas: '+e.message;});}catch(e){setConnection(false,'Sin datos de Deriv');$('dataStatus').textContent='No se pudo iniciar: '+e.message;$('signalDetails').textContent=e.message;}}
 start();
 })();
