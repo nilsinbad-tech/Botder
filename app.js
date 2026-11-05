@@ -361,6 +361,15 @@ async function runUniverseBacktest(refresh=false){
  state.marketBacktests=mergeTrades(state.marketBacktests,allTrades,2000);
  state.savedChartTrades=mergeTrades(state.savedChartTrades,allTrades,2000);
  state.trades=state.savedChartTrades.filter(t=>t.symbol===state.selected);
+ // Al terminar el backtest, vuelve a pintar el gráfico con las entradas históricas recién guardadas.
+ const currentRaw=state.rawBySymbol.get(state.selected)||state.rawCandles;
+ if(currentRaw.length&&state.main){
+  state.rawCandles=currentRaw;const chartCandles=aggregate(currentRaw,state.tf),signalCandles=aggregate(currentRaw,2),pivotCandles=aggregate(currentRaw,state.pivotTf),hourly=getHourlyBias(currentRaw);
+  const chartCalc=buildSetups(chartCandles,currentRaw,pivotCandles,pivotCandles,hourly.side,currentRaw);
+  const signalCalc=buildSetups(signalCandles,currentRaw,pivotCandles,pivotCandles,hourly.side,currentRaw);
+  const aligned=hourly.side?signalCalc.setups.filter(x=>x.side===hourly.side):[];
+  state.candles=chartCandles;draw(chartCandles,chartCalc,state.trades,chartCalc.obZones,aligned);showLatest(signalCalc,state.trades,signalCandles);
+ }
  if(state.markerPlugin)state.markerPlugin.setMarkers([]);
  savePersistentState();
  renderHistory(state.marketBacktests);
