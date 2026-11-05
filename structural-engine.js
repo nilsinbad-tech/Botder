@@ -83,7 +83,7 @@ function botderTradeAt(d,i,tf){
   const ob=zones.ob.filter(z=>z.side===side&&Math.abs(z.index-pool.index)<55&&botderOverlap(z,{low:pool.low-pad,high:pool.high+pad},pad)).at(-1);
   const gap=zones.fvg.filter(z=>z.side===side&&Math.abs(z.index-pool.index)<55&&botderOverlap(z,{low:pool.low-pad,high:pool.high+pad},pad)).at(-1);
   if(!ob||!gap||(isBuy?!emaBull:!emaBear))return null;
-  const entry=pool.level;
+  const entry=pool.level;if(!(c.low<=entry&&c.high>=entry))return null;
   const opposite=(isBuy?liq.bsl:liq.ssl).filter(p=>isBuy?p.level>entry:p.level<entry).sort((a,b)=>isBuy?a.level-b.level:b.level-a.level);
   if(opposite.length<2)return null;
   const sl=isBuy?pool.low-Math.max(range*.35,liq.tolerance*.5):pool.high+Math.max(range*.35,liq.tolerance*.5);
