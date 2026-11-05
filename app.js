@@ -59,7 +59,7 @@ function rsi(values,period=14){const out=Array(values.length).fill(null);let gai
 function pivots(c,span=3){const highs=[],lows=[];for(let i=span;i<c.length-span;i++){let hi=true,lo=true;for(let j=1;j<=span;j++){if(c[i].high<=c[i-j].high||c[i].high<=c[i+j].high)hi=false;if(c[i].low>=c[i-j].low||c[i].low>=c[i+j].low)lo=false;}if(hi)highs.push({index:i,time:c[i].time,confirmedTime:c[i+span].time+300,price:c[i].high});if(lo)lows.push({index:i,time:c[i].time,confirmedTime:c[i+span].time+300,price:c[i].low});}return{highs,lows};}
 function buildSetups(c,liquidityCandles=c){
  const close=c.map(x=>x.close),e9=ema(close,9),e21=ema(close,21),e50=ema(close,50),rv=rsi(close),pv=pivots(liquidityCandles);
- const setups=[];
+ const setups=[],usedOBs=new Set();
  for(let i=55;i<c.length-5;i++){
   const x=c[i],prev=c[i-1],body=Math.abs(x.close-x.open),avg=c.slice(i-8,i).reduce((s,v)=>s+Math.abs(v.close-v.open),0)/8;
   const bull=e9[i-1]<=e21[i-1]&&e9[i]>e21[i]&&e21[i]>e50[i],bear=e9[i-1]>=e21[i-1]&&e9[i]<e21[i]&&e21[i]<e50[i];
@@ -70,6 +70,7 @@ function buildSetups(c,liquidityCandles=c){
    const targets=pv.highs.filter(p=>p.confirmedTime<=x.time&&p.price>ob.entry).sort((a,b)=>a.price-b.price);
    if(targets.length<2)continue;
    const sl=ob.low-(ob.high-ob.low)*.12;if(targets[0].price-ob.entry<=(ob.entry-sl)*1.5)continue;
+   const obKey='BUY:'+ob.time;if(usedOBs.has(obKey))continue;usedOBs.add(obKey);
    setups.push({side:'BUY',index:i,time:x.time,entry:ob.entry,sl,tp1:targets[0].price,tp2:targets[1].price,ob, rsi:rv[i],state:'PREPARADA'});
   }
   if(bear&&sellRsi&&strongBear){
@@ -77,6 +78,7 @@ function buildSetups(c,liquidityCandles=c){
    const targets=pv.lows.filter(p=>p.confirmedTime<=x.time&&p.price<ob.entry).sort((a,b)=>b.price-a.price);
    if(targets.length<2)continue;
    const sl=ob.high+(ob.high-ob.low)*.12;if(ob.entry-targets[0].price<=(sl-ob.entry)*1.5)continue;
+   const obKey='SELL:'+ob.time;if(usedOBs.has(obKey))continue;usedOBs.add(obKey);
    setups.push({side:'SELL',index:i,time:x.time,entry:ob.entry,sl,tp1:targets[0].price,tp2:targets[1].price,ob,rsi:rv[i],state:'PREPARADA'});
   }
  }
@@ -141,7 +143,7 @@ function showLatest(calc,trades,c){
  $('trendValue').textContent=trend;$('trendValue').style.color=trend==='BAJISTA'?'#ff6876':trend==='ALCISTA'?'#20d69a':'#d5b35b';
  $('signalValue').textContent=t?(t.side==='BUY'?'COMPRA':'VENTA'):'ESPERANDO';$('signalValue').style.color=t?(t.side==='BUY'?'#20d69a':'#ff6876'):'#aab8ca';
  $('entryValue').textContent=t?fmt(t.entry):'—';$('slValue').textContent=t?fmt(t.sl):'—';$('tp1Value').textContent=t?fmt(t.tp1):'—';$('tp2Value').textContent=t?fmt(t.tp2):'—';$('rsiValue').textContent=fmt(rv);
- const confirms=t&&((t.side==='BUY'&&t.rsi>=50&&t.rsi<=65)||(t.side==='SELL'&&t.rsi<=55&&t.rsi>=35));
+ const confirms=t&&((t.side==='BUY'&&t.rsi>=50&&t.rsi<=60)||(t.side==='SELL'&&t.rsi<=55&&t.rsi>=40));
  $('rsiConfirm').textContent=t?(confirms?'CONFIRMA '+(t.side==='BUY'?'COMPRA':'VENTA'):'NO CONFIRMA'):'Sin señal';$('rsiConfirm').style.color=confirms?'#20d69a':'#ff6876';
  $('signalState').textContent=t?(t.entryIndex>=0?'ACTIVA':'PREPARADA'):'ESPERANDO';$('signalDetails').textContent=t?(t.entryIndex>=0?'Operación ACTIVA. ':'')+(t.side==='BUY'?'OB alcista':'OB bajista')+' detectado. Entrada proyectada '+fmt(t.entry)+', SL '+fmt(t.sl)+', TP1 en pivote '+fmt(t.tp1)+' y TP2 '+fmt(t.tp2)+'.':'No hay una señal completa en la última vela. El motor sigue analizando.';
  $('rsiLegend').textContent='Valor actual: '+fmt(rv);
