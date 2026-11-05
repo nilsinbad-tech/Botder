@@ -83,9 +83,16 @@ function buildSetups(c,liquidityCandles=c,pivotCandles=liquidityCandles,obStruct
  const setups=[],latestZones=[],zoneKeys=new Set(),usedOBs=new Set(),usedZones=new Set();
  const primaryTf=state.obPrimaryTf,previousTf=state.obPreviousTf;
  const primaryCandles=aggregate(targetRawCandles,primaryTf),previousCandles=aggregate(targetRawCandles,previousTf);
+ // Dirección obligatoria de los OB: EMA 20 frente a EMA 50, ambas calculadas en M5.
+ // Solo se usa la última vela M5 cerrada para evitar cambios intravela.
+ const m5TrendCandles=aggregate(targetRawCandles,5),m5TrendClose=m5TrendCandles.map(bar=>bar.close),m5Trend20=ema(m5TrendClose,20),m5Trend50=ema(m5TrendClose,50);
+ let m5TrendIndex=-1,m5TrendSide=null;
  for(let i=55;i<c.length;i++){
   const x=c[i];
+  while(m5TrendIndex+1<m5TrendCandles.length&&m5TrendCandles[m5TrendIndex+1].time+300<=x.time){m5TrendIndex++;const fast=m5Trend20[m5TrendIndex],slow=m5Trend50[m5TrendIndex];m5TrendSide=Number.isFinite(fast)&&Number.isFinite(slow)?(fast>slow?'BUY':fast<slow?'SELL':null):null;}
+  if(!m5TrendSide)continue;
   for(const side of ['BUY','SELL']){
+   if(side!==m5TrendSide)continue;
 const primary=findValidOBAtTime(primaryCandles,x.time,side,primaryTf,structurePv,structureCandles,targetRawCandles);
    if(!primary)continue;
    const previous=state.obPreviousEnabled?findValidOBAtTime(previousCandles,x.time,side,previousTf,structurePv,structureCandles,targetRawCandles):null;
