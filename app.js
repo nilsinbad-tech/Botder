@@ -73,17 +73,20 @@ function buildSetups(c,liquidityCandles=c,pivotCandles=liquidityCandles,obStruct
  const pv=pivots(pivotCandles,3,state.pivotTf*60),obPv=pivots(obStructureCandles,3,state.pivotTf*60);
  // Objetivos calculados con estructura independiente de M3, M5 y M10.
  const targetPivots=[3,5,10].map(mins=>({mins,pv:pivots(aggregate(targetRawCandles,mins),3,mins*60)}));
- const setups=[],obZones=[],usedOBs=new Set(),usedZones=new Set();
+ const setups=[],obZones=[],usedOBs=new Set(),usedZones=new Set(),higherOBs=new Map();
+ const higherOBTf=state.obTf*2,higherOBCandles=aggregate(targetRawCandles,higherOBTf);
  for(let i=55;i<c.length;i++){
   const x=c[i];
   for(const side of ['BUY','SELL']){
-   const ob=findOBAtTime(liquidityCandles,x.time,side);
+   const ob=findOBAtTime(liquidityCandles,x.time,side,state.obTf);
    if(!ob)continue;
+   const higherOB=findOBAtTime(higherOBCandles,x.time,side,higherOBTf);
+   if(higherOB){const higherKey=side+':'+higherOB.time;if(!higherOBs.has(higherKey))higherOBs.set(higherKey,{...higherOB,side,timeframe:higherOBTf});}
    // Los OB contra la tendencia H1 solo se permiten si son estrechos.
    if(!trendSide||side!==trendSide)continue;
    const key=side+':'+ob.time;
    if(state.obStructureOnly&&!isOBAtStructure(ob,side,obPv,obStructureCandles,x.time))continue;
-   if(!usedZones.has(key)){usedZones.add(key);obZones.push({...ob,side});}
+   if(!usedZones.has(key)){usedZones.add(key);obZones.push({...ob,side,timeframe:state.obTf});}
    if(usedOBs.has(key))continue;
    const targets=targetPivots.flatMap(({mins,pv:targetPv})=>(side==='BUY'?targetPv.highs:targetPv.lows)
     .filter(p=>p.confirmedTime<=x.time&&(side==='BUY'?p.price>ob.entry:p.price<ob.entry))
@@ -100,7 +103,9 @@ function buildSetups(c,liquidityCandles=c,pivotCandles=liquidityCandles,obStruct
    usedOBs.add(key);
   }
  }
- return{setups,e3,e9,e13,e50,rv,pv,obZones};
+ const latestCurrent=new Map();obZones.forEach(z=>{const k=z.side;if(!latestCurrent.has(k)||z.time>latestCurrent.get(k).time)latestCurrent.set(k,z);});
+ const latestHigher=new Map();[...higherOBs.values()].forEach(z=>{const k=z.side;if(!latestHigher.has(k)||z.time>latestHigher.get(k).time)latestHigher.set(k,z);});
+ return{setups,e3,e9,e13,e50,rv,pv,obZones:[...latestCurrent.values(),...latestHigher.values()]};
 }
 function isOBAtStructure(ob,side,pv,pivotCandles,time){
  const levels=side==='BUY'?pv.lows:pv.highs;
@@ -110,7 +115,7 @@ function isOBAtStructure(ob,side,pv,pivotCandles,time){
  const tolerance=Math.max(avg*.45,(ob.high-ob.low)*1.5);
  return valid.some(p=>p.price>=ob.low-tolerance&&p.price<=ob.high+tolerance);
 }
-function findOBAtTime(c,time,side){const completed=c.filter(bar=>bar.time+state.obTf*60<=time);return findOB(completed,completed.length,side);}
+function findOBAtTime(c,time,side,tf=state.obTf){const completed=c.filter(bar=>bar.time+tf*60<=time);return findOB(completed,completed.length,side);}
 function findOB(c,i,side){for(let j=i-1;j>=Math.max(0,i-9);j--){const q=c[j],opposite=side==='BUY'?q.close<q.open:q.close>q.open;if(opposite){const entry=(q.high+q.low)/2;return{time:q.time,high:q.high,low:q.low,entry};}}return null;}
 function simulate(c,setups){
  const trades=[];
@@ -224,15 +229,10 @@ function drawOverlays(trades,c,host,obZones=[],setups=[]){
  // Elimina las capas anteriores y muestra el OB más reciente de cada dirección.
  host.querySelectorAll('.chart-overlay').forEach(node=>node.remove());state.overlayUpdate=null;
  const overlay=document.createElement('div');overlay.className='chart-overlay';host.appendChild(overlay);
- const bySide={BUY:[],SELL:[]};
- (obZones||[]).forEach(ob=>{if(ob&&bySide[ob.side]&&Number.isFinite(ob.time))bySide[ob.side].push({...ob,fvg:false});});
- (trades||[]).forEach(t=>{if(t.ob&&bySide[t.side])bySide[t.side].push({...t.ob,side:t.side,fvg:false});});
- const uniqueOBs=new Map();
- ['BUY','SELL'].forEach(side=>bySide[side].forEach(ob=>uniqueOBs.set(side+':'+String(ob.time),ob)));
- const zones=[...uniqueOBs.values()].sort((x,y)=>x.time-y.time).slice(-2);
+ const zones=(obZones||[]).filter(ob=>ob&&Number.isFinite(ob.time)).sort((x,y)=>(x.timeframe||0)-(y.timeframe||0));
  const zoneEls=zones.map(ob=>{
   const el=document.createElement('div');el.className='ob-zone '+(ob.fvg?'fvg-zone ':'')+(ob.side==='BUY'?'bull-zone':'bear-zone');
-  el.innerHTML='<b>'+(ob.fvg?(ob.side==='BUY'?'FVG ALCISTA':'FVG BAJISTA'):(ob.side==='BUY'?'OB COMPRA':'OB VENTA'))+'</b>';
+  el.innerHTML='<b>'+(ob.fvg?(ob.side==='BUY'?'FVG ALCISTA':'FVG BAJISTA'):(ob.side==='BUY'?'OB COMPRA':'OB VENTA')+' · M'+(ob.timeframe||state.obTf))+'</b>';
   overlay.appendChild(el);return{el,ob};
  });
  const t=[...trades].reverse().find(x=>x.result==='PENDIENTE')||[...setups].reverse()[0]||trades[trades.length-1];
