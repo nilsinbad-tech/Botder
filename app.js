@@ -32,7 +32,7 @@ async function loadSymbols(){
    .filter(s=>!chosen.some(x=>x.symbol===s.symbol))
    .sort((a,b)=>{
      const rank=n=>/step index/i.test(n)?0:/crash 300|boom 300/i.test(n)?1:/volatility/i.test(n)?2:/crash|boom/i.test(n)?3:4;
-     const num=n=>parseInt((n.match(/\\d+/)||['9999'])[0],10);return rank(a.display_name)-rank(b.display_name)||num(a.display_name)-num(b.display_name)||a.display_name.localeCompare(b.display_name);
+     const num=n=>parseInt((n.match(/\d+/)||['9999'])[0],10);return rank(a.display_name)-rank(b.display_name)||num(a.display_name)-num(b.display_name)||a.display_name.localeCompare(b.display_name);
    }).map(s=>({symbol:s.symbol,name:s.display_name,market:s.market,submarket:s.submarket}));
  // Prioriza Step Index y los Crash/Boom con el número más bajo disponible.
  const ordered=[...chosen].sort((a,b)=>{
