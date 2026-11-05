@@ -54,11 +54,25 @@ async function loadSymbols(){
 
 function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
 async function getCandles(symbol,preferredCount=HISTORY_CANDLES){
- let lastError=null;const counts=[...new Set([Math.min(preferredCount,HISTORY_CANDLES),HISTORY_CANDLES])];
- for(const count of counts){
-  try{const r=await request({ticks_history:symbol,adjust_start_time:1,count,end:'latest',granularity:60,style:'candles'});const candles=(r.candles||[]).map(c=>({time:Number(c.epoch),open:+c.open,high:+c.high,low:+c.low,close:+c.close})).filter(c=>Number.isFinite(c.time)&&Number.isFinite(c.open)&&Number.isFinite(c.high)&&Number.isFinite(c.low)&&Number.isFinite(c.close));if(candles.length)return candles;lastError=new Error('Deriv devolvió 0 velas para '+symbol);}catch(e){lastError=e;}
+ const target=Math.min(Math.max(1,Number(preferredCount)||HISTORY_CANDLES),HISTORY_CANDLES);
+ const chunks=[],seen=new Set();let end='latest',lastError=null,total=0;
+ // Descarga por bloques para completar las 48 horas aunque Deriv limite cada respuesta.
+ while(total<target){
+  const count=Math.min(1440,target-total);
+  try{
+   const r=await request({ticks_history:symbol,adjust_start_time:1,count,end,granularity:60,style:'candles'});
+   const part=(r.candles||[]).map(c=>({time:Number(c.epoch),open:+c.open,high:+c.high,low:+c.low,close:+c.close})).filter(c=>Number.isFinite(c.time)&&Number.isFinite(c.open)&&Number.isFinite(c.high)&&Number.isFinite(c.low)&&Number.isFinite(c.close)).sort((a,b)=>a.time-b.time);
+   if(!part.length)break;
+   let added=0;for(const bar of part){if(!seen.has(bar.time)){seen.add(bar.time);chunks.push(bar);added++;}}
+   total=chunks.length;
+   const oldest=part[0].time;
+   if(added===0||part.length<count||oldest<=0)break;
+   end=oldest-1;
+  }catch(e){lastError=e;break;}
  }
- throw new Error('No se pudo descargar el historial de '+symbol+': '+(lastError?.message||'sin datos'));
+ const candles=chunks.sort((a,b)=>a.time-b.time).slice(-target);
+ if(candles.length)return candles;
+ throw new Error('No se pudo descargar el historial de '+symbol+': '+(lastError?.message||'Deriv no devolvió velas'));
 }
 function aggregate(candles,mins){if(mins===1)return candles;const groups=new Map();for(const candle of candles){const bucket=Math.floor(candle.time/(mins*60))*(mins*60);let g=groups.get(bucket);if(!g){g={time:bucket,open:candle.open,high:candle.high,low:candle.low,close:candle.close,count:0};groups.set(bucket,g);}g.high=Math.max(g.high,candle.high);g.low=Math.min(g.low,candle.low);g.close=candle.close;g.count++;}const lastBucket=candles.length?Math.floor(candles.at(-1).time/(mins*60))*(mins*60):null;return [...groups.values()].filter(g=>g.count===mins||g.time===lastBucket).map(({count,...bar})=>bar).sort((a,b)=>a.time-b.time);}
 function ema(values,period){const out=Array(values.length).fill(null),k=2/(period+1);let prev=null;values.forEach((v,i)=>{prev=prev===null?v:v*k+prev*(1-k);out[i]=prev;});return out;}
