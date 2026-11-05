@@ -425,7 +425,8 @@ function drawOverlays(trades,c,host,obZones=[],setups=[]){
   }));
   if(cluster)cluster.items.push({...ob,height});else obClusters.push({side,items:[{...ob,height}]});
  }
- const zones=obClusters.flatMap(group=>group.items.sort((x,y)=>x.time-y.time).slice(-2)).sort((x,y)=>x.time-y.time);
+ // Conserva los OB históricos de zonas distintas; dentro de una misma zona deja el más reciente para evitar duplicados.
+ const zones=obClusters.map(group=>group.items.sort((x,y)=>x.time-y.time).at(-1)).filter(Boolean).sort((x,y)=>x.time-y.time);
  const zoneEls=zones.map(ob=>{
   const el=document.createElement('div');el.className='ob-zone '+(ob.fvg?'fvg-zone ':'')+(ob.side==='BUY'?'bull-zone':'bear-zone');
   const tag=document.createElement('b');tag.textContent=(ob.side==='BUY'?'OB ALCISTA':'OB BAJISTA')+' · M'+ob.timeframe;el.appendChild(tag);
@@ -439,7 +440,8 @@ function drawOverlays(trades,c,host,obZones=[],setups=[]){
  // Las anteriores quedan dibujadas en su vela con su resultado definitivo.
  const visibleEntries=t?[t]:[];
  const historicalEls=[];
- (trades||[]).filter(x=>x.result==='GANADA'||x.result==='PERDIDA').forEach((trade,index)=>{
+ // Dibuja las últimas 500 operaciones cerradas para conservar el backtesting visual al desplazarse por el gráfico.
+ [...(trades||[])].filter(x=>x.result==='GANADA'||x.result==='PERDIDA').slice(-500).forEach((trade,index)=>{
   const confirmed=trade.entryIndex>=0&&Number.isFinite(trade.entryTime);
   const entryTime=confirmed?trade.entryTime:(trade.exitTime||trade.time);
   const entryPrice=Number.isFinite(trade.entry)?trade.entry:Number.isFinite(trade.exitPrice)?trade.exitPrice:null;
@@ -499,14 +501,34 @@ function drawOverlays(trades,c,host,obZones=[],setups=[]){
    v.el.style.top=Math.max(2,y+v.offset)+'px';
   });
   zoneEls.forEach(({el,ob})=>{
-   let x1=scale.timeToCoordinate(ob.time);
-   if(x1==null){let match=null;for(let i=c.length-1;i>=0;i--){if(c[i].time<=ob.time){match=c[i];break;}}if(match)x1=scale.timeToCoordinate(match.time);}
+   // El OB queda anclado a su vela y ocupa solo la duración de su propia temporalidad.
+   // Nunca se extiende hasta el borde derecho ni se pega al borde izquierdo al desplazar el gráfico.
+   let lo=0,hi=c.length;
+   while(lo<hi){const mid=(lo+hi)>>1;if(c[mid].time<=ob.time)lo=mid+1;else hi=mid;}
+   const startIndex=Math.max(0,lo-1),endTime=ob.time+Math.max(1,Number(ob.timeframe)||1)*60;
+   lo=0;hi=c.length;
+   while(lo<hi){const mid=(lo+hi)>>1;if(c[mid].time<endTime)lo=mid+1;else hi=mid;}
+   const endIndex=Math.min(c.length,Math.max(startIndex+1,lo));
+   const logical=typeof scale.logicalToCoordinate==='function';
+   let x1=logical?scale.logicalToCoordinate(startIndex):scale.timeToCoordinate(c[startIndex]?.time);
+   let x2=logical?scale.logicalToCoordinate(endIndex):scale.timeToCoordinate(c[endIndex]?.time);
+   if(x1==null||x2==null){
+    const step=state.tf*60;
+    const next=c[Math.min(c.length-1,startIndex+1)];
+    const nextX=next?scale.timeToCoordinate(next.time):null;
+    const currentX=scale.timeToCoordinate(c[startIndex]?.time);
+    const barWidth=nextX!=null&&currentX!=null?Math.abs(nextX-currentX):7;
+    if(x1==null)x1=currentX;
+    if(x2==null&&x1!=null)x2=x1+barWidth*Math.max(1,(Number(ob.timeframe)||1)/state.tf);
+   }
    const y1=candleSeries.priceToCoordinate(ob.high),y2=candleSeries.priceToCoordinate(ob.low);
-   if(y1==null||y2==null){el.style.display='none';return;}
-   if(x1==null){if(firstTime!=null&&ob.time<firstTime)x1=0;else{el.style.display='none';return;}}
-   const left=Math.max(0,Math.min(width-8,x1)),mid=(y1+y2)/2,boxWidth=Math.min(window.innerWidth<=600?126:150,Math.max(0,width-left-8));
-   if(boxWidth<24){el.style.display='none';return;}
-   el.style.display='flex';el.style.left=left+'px';el.style.width=boxWidth+'px';el.style.top=Math.max(0,mid-15)+'px';el.style.height='30px';
+   if(x1==null||x2==null||y1==null||y2==null){el.style.display='none';return;}
+   const leftEdge=Math.min(x1,x2),rightEdge=Math.max(x1,x2);
+   if(rightEdge<=0||leftEdge>=width){el.style.display='none';return;}
+   const left=Math.max(0,leftEdge),boxWidth=Math.max(0,Math.min(width,rightEdge)-left);
+   if(boxWidth<3){el.style.display='none';return;}
+   const top=Math.max(0,Math.min(y1,y2)),height=Math.max(14,Math.abs(y2-y1));
+   el.style.display='flex';el.style.left=left+'px';el.style.width=boxWidth+'px';el.style.top=top+'px';el.style.height=height+'px';
   });
   lineEls.forEach(v=>{
    const y=candleSeries.priceToCoordinate(v.p);
