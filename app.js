@@ -147,20 +147,20 @@ function buildSetups(c,liquidityCandles=c,pivotCandles=liquidityCandles,obStruct
  }
  const lastTime=targetRawCandles.length?targetRawCandles[targetRawCandles.length-1].time:0;
  const validZones=obZones.filter(z=>!isOBInvalidated(z,z.side,{price:z.structurePrice,confirmedTime:z.structureConfirmedTime},targetRawCandles,lastTime));
- // En M1 y M2 se limita a dos OB por vela de origen, no por zona de precio.
- const lowTfZones=validZones.filter(z=>z.timeframe===1||z.timeframe===2);
+ // Una sola dirección de OB por vela: prioriza la tendencia; si es lateral, la última dirección EMA confirmada.
+ const preferredOBSide=trendSide||emaBias;
+ const directionalZones=preferredOBSide?validZones.filter(z=>z.side===preferredOBSide):validZones;
  const candleGroups=new Map();
- for(const z of lowTfZones){
+ for(const z of directionalZones){
   const key=String(z.time);
   if(!candleGroups.has(key))candleGroups.set(key,[]);
   candleGroups.get(key).push(z);
  }
- const keepLowTf=new Set();
+ const limitedZones=[];
  for(const group of candleGroups.values()){
-  group.sort((a,b)=>b.time-a.time);
-  for(const z of group.slice(0,2))keepLowTf.add(z);
+  group.sort((a,b)=>b.timeframe-a.timeframe||b.structureConfirmedTime-a.structureConfirmedTime);
+  limitedZones.push(...group.slice(0,2));
  }
- const limitedZones=validZones.filter(z=>(z.timeframe!==1&&z.timeframe!==2)||keepLowTf.has(z));
  return{setups,e9,e20,rv,pv:m30Pv,obZones:limitedZones};
 }
 function findValidOBAtTime(c,time,side,tf,pv,structureCandles,raw){
@@ -295,7 +295,8 @@ function drawOverlays(trades,c,host,obZones=[],setups=[]){
   const el=document.createElement('div');el.className='ob-zone '+(ob.side==='BUY'?'bull-zone':'bear-zone');
   el.innerHTML='';overlay.appendChild(el);return{el,ob};
  });
- // Máximo dos etiquetas COMPRA/VENTA por vela de entrada M1.
+ // Por vela de entrada solo se muestra una dirección. Si una operación ganó,
+ // esa dirección prevalece; si no hay resultado, prevalece la señal más reciente.
  const validEntries=(trades||[]).filter(t=>t&&Number.isFinite(t.entryTime)&&Number.isFinite(t.entry));
  const entryGroups=new Map();
  for(const t of validEntries){
@@ -305,8 +306,10 @@ function drawOverlays(trades,c,host,obZones=[],setups=[]){
  }
  const limitedEntries=[];
  for(const group of entryGroups.values()){
-  group.sort((a,b)=>b.entryTime-a.entryTime);
-  limitedEntries.push(...group.slice(0,2));
+  const winners=group.filter(t=>t.result==='GANADA');
+  const chosenSide=(winners.length?winners:group).slice().sort((a,b)=>Number(b.time||b.entryTime)-Number(a.time||a.entryTime))[0]?.side;
+  const sameDirection=group.filter(t=>t.side===chosenSide).sort((a,b)=>Number(b.time||b.entryTime)-Number(a.time||a.entryTime));
+  limitedEntries.push(...sameDirection.slice(0,2));
  }
  const entryEls=limitedEntries.map(t=>{
   const el=document.createElement('div');el.className='trade-entry-label '+(t.side==='BUY'?'trade-buy':'trade-sell');
