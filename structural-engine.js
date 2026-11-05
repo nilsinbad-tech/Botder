@@ -163,8 +163,8 @@ function runStructuralBacktest(symbol,market,candles,displayTf){
  else complete();
  return trades;
 }
-function saveStrategyJournal(){try{localStorage.setItem("botder-structure-journal",JSON.stringify(strategyJournal.slice(0,2000)));}catch(e){}}
-function loadStrategyJournal(){try{const saved=JSON.parse(localStorage.getItem("botder-structure-journal")||"[]");if(Array.isArray(saved))strategyJournal=saved.slice(0,2000);}catch(e){strategyJournal=[];}renderStrategyJournal();}
+function saveStrategyJournal(){try{localStorage.setItem("botder-smc-journal-v2",JSON.stringify(strategyJournal.slice(0,2000)));}catch(e){}}
+function loadStrategyJournal(){try{const saved=JSON.parse(localStorage.getItem("botder-smc-journal-v2")||"[]");if(Array.isArray(saved))strategyJournal=saved.slice(0,2000);}catch(e){strategyJournal=[];}renderStrategyJournal();}
 function recordStrategyTrade(signal){
  if(!signal||strategyJournal.some(t=>t.symbol===signal.symbol&&t.structureKey===signal.structureKey))return;
  strategyJournal.unshift({id:"STR-"+Date.now().toString(36).toUpperCase(),symbol:signal.symbol,market:signal.market,direction:signal.direction,entry:signal.entry,sl:signal.sl,tp1:signal.tp1,tp2:signal.tp2,timeframe:signal.timeframe,timeframeSeconds:signal.timeframeSeconds,confidence:signal.confidence,scoreLabel:signal.scoreLabel,structureKey:signal.structureKey,entryTime:signal.time*1000,entered:true,result:"ABIERTA"});
