@@ -395,7 +395,8 @@ function showLatest(calc,trades,c,raw=state.rawCandles){
  $('rsiLegend').textContent='Valor actual: '+fmt(rv);
 }
 function renderHistory(trades){
- const source=mergeTrades(state.marketBacktests,state.savedChartTrades.length?state.savedChartTrades:(trades||[]),2000);
+ // El resultado del backtesting histórico es la fuente principal; el análisis del gráfico solo completa operaciones que aún no estén registradas.
+ const source=mergeTrades(state.savedChartTrades,state.marketBacktests.length?state.marketBacktests:(trades||[]),2000);
  const rows=[...source].sort((a,b)=>Number(a.time)-Number(b.time)).slice(-550).reverse();
  const shown=Math.min(rows.length,550);
  $('historyCount').textContent='Mostrando '+shown+' de '+source.length+' · +'+fmt(source.filter(t=>t.result==='GANADA'&&Number.isFinite(t.points)).reduce((a,t)=>a+Math.max(0,t.points),0))+' / -'+fmt(source.filter(t=>t.result==='PERDIDA'&&Number.isFinite(t.points)).reduce((a,t)=>a+Math.abs(Math.min(0,t.points)),0))+' pts';
@@ -418,7 +419,7 @@ async function runUniverseBacktest(refresh=false){
  // Al terminar el backtest, vuelve a pintar el gráfico con las entradas históricas recién guardadas.
  const currentRaw=state.rawBySymbol.get(state.selected)||state.rawCandles;
  if(currentRaw.length&&state.main){
-  state.rawCandles=currentRaw;const chartRaw=currentRaw.filter(v=>v.time>=currentRaw.at(-1).time-86400);const chartCandles=aggregate(chartRaw,state.tf),signalCandles=aggregate(currentRaw,2),pivotCandles=aggregate(currentRaw,state.pivotTf),chartPivots=aggregate(chartRaw,state.pivotTf),hourly=getHourlyBias(currentRaw);
+  state.rawCandles=currentRaw;const chartRaw=currentRaw.filter(v=>v.time>=currentRaw.at(-1).time-172800);const chartCandles=aggregate(chartRaw,state.tf),signalCandles=aggregate(currentRaw,2),pivotCandles=aggregate(currentRaw,state.pivotTf),chartPivots=aggregate(chartRaw,state.pivotTf),hourly=getHourlyBias(currentRaw);
   const chartCalc=buildSetups(chartCandles,chartRaw,chartPivots,chartPivots,hourly.side,chartRaw);
   const signalCalc=buildSetups(signalCandles,currentRaw,pivotCandles,pivotCandles,hourly.side,currentRaw);
   const aligned=hourly.side?signalCalc.setups.filter(x=>x.side===hourly.side):[];
@@ -430,15 +431,15 @@ async function runUniverseBacktest(refresh=false){
  const closed=allTrades.filter(t=>t.result==='GANADA'||t.result==='PERDIDA');
  $('wins').textContent=closed.filter(t=>t.result==='GANADA').length;$('losses').textContent=closed.filter(t=>t.result==='PERDIDA').length;
  $('pending').textContent=allTrades.filter(t=>t.result==='PENDIENTE').length;$('expired').textContent=allTrades.filter(t=>t.result==='CANCELADA').length;
- const failed=state.downloadErrors.length;$('backtestInfo').textContent='Universo: '+state.symbols.length+' instrumentos · señales M2 · backtesting: últimas 48 horas · gráfico M'+state.tf+' (24 horas visibles) · '+allTrades.length+' señales simuladas · '+failed+' descargas fallidas · '+shortHistory.length+' con historial parcial'+(failed?'. Errores: '+state.downloadErrors.slice(0,2).join(' | '):'')+(shortHistory.length?'. Parciales: '+shortHistory.slice(0,3).join(', '):'.');
+ const failed=state.downloadErrors.length;$('backtestInfo').textContent='Universo: '+state.symbols.length+' instrumentos · señales M2 · backtesting: últimas 48 horas · gráfico M'+state.tf+' (48 horas visibles) · '+allTrades.length+' señales simuladas · '+failed+' descargas fallidas · '+shortHistory.length+' con historial parcial'+(failed?'. Errores: '+state.downloadErrors.slice(0,2).join(' | '):'')+(shortHistory.length?'. Parciales: '+shortHistory.slice(0,3).join(', '):'.');
 }
 async function analyze(){
  if(state.busy){state.analyzeQueued=true;return;}state.busy=true;$('dataStatus').textContent='Cargando gráfico…';
  try{const raw=state.rawBySymbol.get(state.selected)||await getCandles(state.selected,HISTORY_CANDLES);if(!raw.length)throw new Error('No llegaron velas para '+state.selected);state.rawBySymbol.set(state.selected,raw);
- state.rawCandles=raw;state.lastRecalcBucket=Math.floor(raw.at(-1).time/120);const chartRaw=raw.filter(v=>v.time>=raw.at(-1).time-86400);const c=aggregate(chartRaw,state.tf);state.candles=c;const signalCandles=aggregate(raw,2);const obCandles=raw;const pivotCandles=aggregate(raw,state.pivotTf);const chartPivots=aggregate(chartRaw,state.pivotTf);
- const hourly=getHourlyBias(raw),activeSide=hourly.side;const signalCalc=buildSetups(signalCandles,obCandles,pivotCandles,pivotCandles,activeSide,raw);const chartCalc=buildSetups(c,chartRaw,chartPivots,chartPivots,activeSide,chartRaw);
- // Una sola dirección gobierna las señales y los OB visibles: la tendencia H1.
- const alignedSetups=activeSide?signalCalc.setups.filter(setup=>setup.side===activeSide):[];
+ state.rawCandles=raw;state.lastRecalcBucket=Math.floor(raw.at(-1).time/120);const chartRaw=raw.filter(v=>v.time>=raw.at(-1).time-172800);const c=aggregate(chartRaw,state.tf);state.candles=c;const signalCandles=aggregate(raw,2);const obCandles=raw;const pivotCandles=aggregate(raw,state.pivotTf);const chartPivots=aggregate(chartRaw,state.pivotTf);
+ const hourly=getHourlyBias(raw),activeSide=hourly.side,historicalBias=buildHourlyBiasTimeline(raw);const signalCalc=buildSetups(signalCandles,obCandles,pivotCandles,pivotCandles,historicalBias,raw);const chartCalc=buildSetups(c,chartRaw,chartPivots,chartPivots,activeSide,chartRaw);
+ // El backtest y el historial usan el sesgo H1 que existía en cada vela, no el sesgo actual aplicado al pasado.
+ const alignedSetups=signalCalc.setups;
  const alignedZones=chartCalc.obZones;
  const freshTrades=simulate(signalCandles,alignedSetups).map(t=>({...t,symbol:state.selected}));
  state.savedChartTrades=mergeTrades(state.savedChartTrades,freshTrades,2000);
@@ -446,8 +447,8 @@ async function analyze(){
  savePersistentState();
  draw(c,chartCalc,state.trades,alignedZones,alignedSetups);showLatest(signalCalc,state.trades.filter(t=>t.symbol===state.selected),signalCandles);renderHistory(state.trades);
  $('chartTitle').textContent=(state.symbols.find(s=>s.symbol===state.selected)?.name||state.selected)+' · M'+state.tf;
- $('chartSubtitle').textContent='Velas '+c.length+' · 24 horas visibles · análisis 48 horas';
- $('chartRange').textContent='Gráfico: últimas 24 horas · '+new Date(c[0].time*1000).toLocaleTimeString('es-PA')+' — '+new Date(c.at(-1).time*1000).toLocaleTimeString('es-PA');
+ $('chartSubtitle').textContent='Velas '+c.length+' · 48 horas visibles · análisis 48 horas';
+ $('chartRange').textContent='Gráfico: últimas 48 horas · '+new Date(c[0].time*1000).toLocaleTimeString('es-PA')+' — '+new Date(c.at(-1).time*1000).toLocaleTimeString('es-PA');
  $('dataStatus').textContent='Datos actualizados · '+raw.length+' velas M1 · '+(raw.length>1?Math.round((raw.at(-1).time-raw[0].time)/3600)+' h de historial':'historial insuficiente');
  }catch(e){$('dataStatus').textContent='ERROR DE DATOS: '+e.message;$('signalDetails').textContent='No se pudo cargar este instrumento. '+e.message;}finally{state.busy=false;if(state.analyzeQueued){state.analyzeQueued=false;Promise.resolve().then(analyze);}}
 }
