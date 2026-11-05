@@ -215,9 +215,9 @@ function renderMarketChart(){
   // Niveles del backtest claramente identificados: entrada, TP1, TP2 y SL.
   const tradeLevelsToDraw=[["ENTRADA",entry,"#f8fafc"],["TP1",Number(t.tp1),"#39e6a0"],["TP2",Number(t.tp2),"#20c997"],["SL",sl,"#ff6579"]];
   tradeLevelsToDraw.forEach(([label,value,color])=>{
-   if(!Number.isFinite(value))return;const yy=yOf(value);if(yy<top||yy>h-bottom)return;
+   if(!Number.isFinite(value))return;const rawY=yOf(value),outside=rawY<top||rawY>h-bottom,yy=Math.max(top+2,Math.min(h-bottom-2,rawY));
    ctx.save();ctx.beginPath();ctx.rect(left,top,pw,ph);ctx.clip();ctx.strokeStyle=color;ctx.globalAlpha=label==="ENTRADA"?.95:.82;ctx.lineWidth=label==="ENTRADA"?1.35:1.05;ctx.setLineDash(label==="SL"?[5,3]:label==="ENTRADA"?[]:[3,3]);ctx.beginPath();ctx.moveTo(x1,yy);ctx.lineTo(x2,yy);ctx.stroke();ctx.setLineDash([]);
-   const txt=label+" "+value.toPrecision(7);ctx.font="bold 7px Arial";const tw=ctx.measureText(txt).width,bx=Math.max(left+2,Math.min(w-right-tw-10,x1+3)),by=Math.max(top+11,Math.min(h-bottom-3,yy-3));
+   const txt=(outside?(rawY<top?"↑ ":"↓ "):"")+label+" "+value.toPrecision(7);ctx.font="bold 7px Arial";const tw=ctx.measureText(txt).width,bx=Math.max(left+2,Math.min(w-right-tw-10,x1+3)),by=Math.max(top+11,Math.min(h-bottom-3,yy-3));
    ctx.globalAlpha=.98;ctx.fillStyle="rgba(5,12,22,.94)";ctx.fillRect(bx,by-10,tw+8,13);ctx.strokeStyle=color;ctx.lineWidth=.8;ctx.strokeRect(bx,by-10,tw+8,13);ctx.fillStyle=color;ctx.textAlign="left";ctx.fillText(txt,bx+4,by);ctx.restore();
   });
   const green=t.result==="PERDIDA"?"#39e6a0":"#39e6a0",red="#ff6579";
