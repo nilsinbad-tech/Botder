@@ -29,7 +29,7 @@ async function loadSymbols(){
  const all=r.active_symbols||[];const byCode=new Map(all.map(s=>[s.symbol,s]));
  const chosen=CANDIDATES.map(([code,label])=>{const s=byCode.get(code);return s?{symbol:s.symbol,name:s.display_name||label,market:s.market,submarket:s.submarket}:null;}).filter(Boolean);
  // Completa el universo con otros sintéticos activos si algún símbolo preferido no está disponible.
- const extras=all.filter(s=>/synthetic|derived/i.test((s.market||'')+' '+(s.submarket||'')) && /volatility|crash|boom|step|jump/i.test(s.display_name||''))
+ const extras=all.filter(s=>/volatility|crash|boom|step index|jump/i.test(s.display_name||''))
    .filter(s=>!chosen.some(x=>x.symbol===s.symbol))
    .sort((a,b)=>{
      const rank=n=>/step index/i.test(n)?0:/crash 300|boom 300/i.test(n)?1:/volatility/i.test(n)?2:/crash|boom/i.test(n)?3:4;
@@ -41,7 +41,10 @@ async function loadSymbols(){
    return rank(a.name)-rank(b.name);
  });
  state.symbols=[...ordered,...extras].slice(0,25);
- if(!state.symbols.length)throw new Error('Deriv no devolvió los símbolos priorizados. Revisa el catálogo disponible.');
+ if(!state.symbols.length){
+  const sample=all.slice(0,12).map(x=>(x.display_name||x.symbol||'sin nombre')+' ['+(x.symbol||'?')+']').join(', ');
+  throw new Error('Deriv respondió '+all.length+' símbolos, pero ninguno coincidió con los filtros. Muestra: '+(sample||'catálogo vacío'));
+ }
  $('instrumentCount').textContent=state.symbols.length+' / 25 instrumentos activos';
  state.selected=state.symbols[0].symbol;
  $('instrumentList').innerHTML=state.symbols.map(s=>'<button type="button" class="instrument-chip'+(s.symbol===state.selected?' selected':'')+'" data-symbol="'+esc(s.symbol)+'">'+esc(s.name)+'</button>').join('');
