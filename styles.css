@@ -48,3 +48,8 @@
 .ob-zone{min-height:12px!important;min-width:34px!important;padding:2px 4px!important;font-size:8px!important;font-weight:800!important;letter-spacing:.15px!important;opacity:.82!important;border-width:1px!important;border-radius:2px!important;overflow:hidden!important;white-space:nowrap!important}
 .bull-zone{background:rgba(8,124,101,.22)!important;border-color:#20d69a!important;color:#7debd0!important}
 .bear-zone{background:rgba(163,45,59,.22)!important;border-color:#ff5968!important;color:#ffabb2!important}
+
+/* BOTDER v44: resaltar los dos últimos bloques OB */
+.ob-zone{min-height:34px!important;min-width:90px!important;padding:6px 10px!important;font-size:11px!important;font-weight:900!important;letter-spacing:.4px!important;opacity:1!important;border-width:2px!important;border-radius:4px!important;white-space:nowrap!important;overflow:visible!important;text-shadow:0 1px 3px #000!important;z-index:5!important}
+.bull-zone{background:rgba(8,124,101,.48)!important;border-color:#20e6ae!important;color:#a5ffe6!important;box-shadow:0 0 10px rgba(32,230,174,.38),inset 0 0 0 1px rgba(32,230,174,.3)!important}
+.bear-zone{background:rgba(163,45,59,.5)!important;border-color:#ff5968!important;color:#ffd0d4!important;box-shadow:0 0 10px rgba(255,89,104,.38),inset 0 0 0 1px rgba(255,89,104,.3)!important}
