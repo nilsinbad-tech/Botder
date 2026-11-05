@@ -98,3 +98,15 @@
 .chart-overlay .level-line .level-tag{position:relative!important;left:0!important;right:auto!important;top:0!important;display:flex!important;align-items:center!important;gap:5px!important;min-width:0!important;width:max-content!important;max-width:calc(100vw - 30px)!important;padding:3px 5px!important;border:1px solid currentColor!important;border-radius:4px!important;background:#07111fee!important;box-shadow:0 1px 4px #0009!important;white-space:nowrap!important;font-size:8px!important;line-height:1.1!important}
 .chart-overlay .level-tag b{font-size:7px!important;letter-spacing:.1px!important}
 .chart-overlay .level-tag strong{font-size:8px!important}
+
+
+/* BOTDER v57: dos OB más recientes y etiquetas puras sin elementos de línea. */
+.chart-overlay .price-label{position:absolute!important;display:flex;align-items:center;gap:5px;width:max-content;max-width:calc(100vw - 24px);height:auto!important;min-height:0!important;margin:0!important;padding:3px 5px!important;border:1px solid currentColor!important;border-radius:4px!important;background:#07111fee!important;box-shadow:0 1px 4px #0009!important;white-space:nowrap!important;line-height:1.1!important;font-size:8px!important;pointer-events:none!important;z-index:12!important}
+.chart-overlay .price-label b{font-size:7px!important;font-weight:800!important;letter-spacing:.1px!important}
+.chart-overlay .price-label strong{font-size:8px!important;color:#fff!important;font-variant-numeric:tabular-nums}
+.chart-overlay .price-label.entry-line{color:#f1c45b!important}
+.chart-overlay .price-label.sl-line{color:#ff5968!important}
+.chart-overlay .price-label.tp-line{color:#20d69a!important}
+.chart-overlay .price-label.tp2-line{color:#46b6ff!important}
+/* Evita que estilos heredados de las antiguas líneas vuelvan a dibujar trazos. */
+.chart-overlay .price-label:before,.chart-overlay .price-label:after{content:none!important;display:none!important}
