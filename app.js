@@ -3,6 +3,7 @@
 'use strict';
 const APP_ID = '1089';
 const HISTORY_CANDLES = 10080;
+const REQUEST_TIMEOUT_MS = 45000;
 const API_URL = 'wss://ws.derivws.com/websockets/v3?app_id=' + APP_ID;
 const $ = id => document.getElementById(id);
 const state = { ws:null, req:0, pending:new Map(), symbols:[], selected:null, tf:1, candles:[], rawCandles:[], rawBySymbol:new Map(), marketBacktests:[], trades:[], liveSub:null, main:null, rsi:null, markerPlugin:null, overlayResizeObserver:null, overlayUpdate:null, overlayRangeHandler:null, chartKey:null, series:{}, busy:false, forceFitNext:true, lastRecalcBucket:null };
@@ -23,7 +24,7 @@ function connect(){
   ws.onmessage=e=>{let m;try{m=JSON.parse(e.data);}catch(err){console.error('Respuesta Deriv no válida',err);return;}if(m.req_id&&state.pending.has(m.req_id)){const p=state.pending.get(m.req_id);state.pending.delete(m.req_id);m.error?p.reject(new Error(m.error.message)):p.resolve(m);}if(m.msg_type==='tick'&&m.tick)onLiveTick(m.tick);};
  });
 }
-function request(payload){return new Promise((resolve,reject)=>{const id=++state.req;state.pending.set(id,{resolve,reject});state.ws.send(JSON.stringify({...payload,req_id:id}));setTimeout(()=>{if(state.pending.has(id)){state.pending.delete(id);reject(new Error('Deriv no respondió a tiempo'));}},20000);});}
+function request(payload){return new Promise((resolve,reject)=>{const id=++state.req;state.pending.set(id,{resolve,reject});state.ws.send(JSON.stringify({...payload,req_id:id}));setTimeout(()=>{if(state.pending.has(id)){state.pending.delete(id);reject(new Error('Deriv no respondió a tiempo'));}},REQUEST_TIMEOUT_MS);});}
 async function loadSymbols(){
  await connect();const r=await request({active_symbols:'brief',product_type:'basic'});
  const all=r.active_symbols||[];const byCode=new Map(all.map(s=>[s.symbol,s]));
