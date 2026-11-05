@@ -38,18 +38,18 @@ function buildStructuralPlan(baseCandles,displayTf,ctx=null){
  let thirdTouch=null,rejection=null,confirmation=null,projection=null,signal=null,tp1=null,tp2=null,sl=null,validLevels=false,confirmed=false;
  if(candidate?.third){thirdTouch=candidate.third;const d=candidate.d,idx=thirdTouch.i,rej=d[idx],follow=d.slice(idx+1,idx+4),slope=(candidate.line1.price2-candidate.line1.price1)/Math.max(1,candidate.line1.time2-candidate.line1.time1),lineAt=t=>candidate.line1.price1+slope*(t-candidate.line1.time1),oppSlope=(candidate.line2.price2-candidate.line2.price1)/Math.max(1,candidate.line2.time2-candidate.line2.time1),oppAt=t=>candidate.line2.price1+oppSlope*(t-candidate.line2.time1),touchPrice=lineAt(thirdTouch.time),range=Math.max(1e-12,rej.high-rej.low),body=Math.abs(rej.close-rej.open),lw=Math.min(rej.open,rej.close)-rej.low,uw=rej.high-Math.max(rej.open,rej.close),doji=isDoji(rej);
   const rejected=dir==="BUY"?(doji||rej.close<rej.open)&&lw>=Math.max(body*.2,range*.12)&&rej.close>=touchPrice-candidate.tolerance*.15:(doji||rej.close>rej.open)&&uw>=Math.max(body*.2,range*.12)&&rej.close<=touchPrice+candidate.tolerance*.15;if(rejected)rejection=rej;
-  const three=follow.length===3&&follow.every(c=>dir==="BUY"?c.close>c.open:c.close<c.open),exact=active.length-1===idx+3;if(rejected&&three&&exact)confirmation=follow[2];
+  const three=false,exact=true;if(rejected)confirmation=rej;
   const entryTime=confirmation?.time??d[Math.min(d.length-1,idx+3)]?.time??thirdTouch.time,entry=touchPrice,tp1Price=oppAt(entryTime);tp1={price:tp1Price,kind:"LÍNEA OPUESTA"};tp2=getTp2(dir,tp1Price);const margin=candidate.tolerance*.25;sl=dir==="BUY"?candidate.first.price-margin:candidate.first.price+margin;
   validLevels=!!tp2&&Number.isFinite(entry)&&Number.isFinite(sl)&&(dir==="BUY"?sl<entry&&tp1Price>entry&&tp2.price>tp1Price:sl>entry&&tp1Price<entry&&tp2.price<tp1Price);confirmed=!!rejection&&!!confirmation&&validLevels;
-  const low=touchPrice-candidate.tolerance,high=touchPrice+candidate.tolerance;projection={direction:dir==="BUY"?"COMPRAR":"VENDER",zoneLow:low,zoneHigh:high,low,high,entry,sl,tp1:tp1Price,tp2:tp2?.price,entryTolerance:candidate.tolerance,projectTime:thirdTouch.time,stage:!rejection?"T3 · ESPERANDO RECHAZO":!three?"ESPERANDO 3 VELAS A FAVOR":!exact?"CONFIRMACIÓN CERRADA":!validLevels?"NIVELES NO VÁLIDOS":confirmed?"SEÑAL CONFIRMADA":"ESPERANDO",timeframe:label,confirmed,reason:"Rechazo en tercer toque + 3 velas cerradas a favor"};
-  if(confirmed)signal={direction:dir==="BUY"?"COMPRAR":"VENDER",entry,sl,tp1:tp1Price,tp2:tp2.price,time:confirmation.time+candidate.seconds,touchTime:thirdTouch.time,touchIndex:idx,entryTolerance:candidate.tolerance,timeframe:label,mode:"CANAL 3 TOQUES + RECHAZO + 3 VELAS"};
+  const low=touchPrice-candidate.tolerance,high=touchPrice+candidate.tolerance;projection={direction:dir==="BUY"?"COMPRAR":"VENDER",zoneLow:low,zoneHigh:high,low,high,entry,sl,tp1:tp1Price,tp2:tp2?.price,entryTolerance:candidate.tolerance,projectTime:thirdTouch.time,stage:!rejection?"T3 · ESPERANDO RECHAZO":!validLevels?"NIVELES NO VÁLIDOS":confirmed?"SEÑAL CONFIRMADA":"ESPERANDO",timeframe:label,confirmed,reason:"Una vela de rechazo en el tercer toque"};
+  if(confirmed)signal={direction:dir==="BUY"?"COMPRAR":"VENDER",entry,sl,tp1:tp1Price,tp2:tp2.price,time:confirmation.time+candidate.seconds,touchTime:thirdTouch.time,touchIndex:idx,entryTolerance:candidate.tolerance,timeframe:label,mode:"CANAL 3 TOQUES + 1 VELA DE RECHAZO"};
   if(confirmed)items.push({type:"signal",price:thirdTouch.price,label:signal.direction,side:signal.direction,time:thirdTouch.time});
  }
  const h4Obs=[...detectOrderBlocks(h4,"BUY"),...detectOrderBlocks(h4,"SELL")].sort((a,b)=>a.time-b.time),m30Obs=[...detectOrderBlocks(m30,"BUY"),...detectOrderBlocks(m30,"SELL")].sort((a,b)=>a.time-b.time),bias4=h4Obs.at(-1)?.side||null,bias30=m30Obs.at(-1)?.side||null,biasD1=latestObBias(d1);
  const addOb=(o,label,tfSec)=>items.push({type:"ob",price:o.low,label,side:o.side,time:o.time,active:o.side===bias4,tf:tfSec},{type:"ob",price:o.high,label:"",side:o.side,time:o.time,active:o.side===bias4,tf:tfSec});
  h4Obs.slice(-2).forEach(o=>addOb(o,"ZONA H4",14400));m30Obs.slice(-2).forEach(o=>addOb(o,"OB M30",1800));
  const localObs=[...detectOrderBlocks(active,"BUY"),...detectOrderBlocks(active,"SELL")].sort((a,b)=>a.time-b.time);localObs.slice(-2).forEach(o=>addOb(o,"OB "+label,tf));
- const recommendation=!bias4?"H4 SIN SESGO":!dir?"INFORMATIVO":bias4===dir?"H4 A FAVOR":"H4 EN CONTRA · NO BLOQUEA",status=!candidate?"BUSCANDO CANAL "+label:!thirdTouch?"TOQUES "+candidate.touches.length+"/3":!rejection?"T3 · ESPERANDO RECHAZO":!confirmation?"RECHAZO · ESPERANDO 3 VELAS":!validLevels?"TP/SL NO VÁLIDOS":dir==="BUY"?"COMPRA CONFIRMADA":"VENTA CONFIRMADA";
+ const recommendation=!bias4?"H4 SIN SESGO":!dir?"INFORMATIVO":bias4===dir?"H4 A FAVOR":"H4 EN CONTRA · NO BLOQUEA",status=!candidate?"BUSCANDO CANAL "+label:!thirdTouch?"TOQUES "+candidate.touches.length+"/3":!rejection?"T3 · ESPERANDO RECHAZO":!confirmation?"ESPERANDO RECHAZO":!validLevels?"TP/SL NO VÁLIDOS":dir==="BUY"?"COMPRA CONFIRMADA":"VENTA CONFIRMADA";
  return{lines,items,projection,status,confirmed,bias4,bias30,biasD1,candidate,thirdTouch,near:localObs,last:baseCandles.at(-1),signal,targetTf:tp2?.kind||"M10 / ESTRUCTURA",recommendation,rejection,confirmation,activeTf:tf,activeSource:active};
 }
 function runStructuralBacktest(symbol,market,candles,displayTf){
@@ -104,12 +104,12 @@ function analyzeCandles(symbol,market,candles){
  if(!Array.isArray(candles)||candles.length<100)return;const d=candles.slice().sort((a,b)=>a.time-b.time),i=d.length-2;if(i<65)return;const closed=d[i],tf=Number(document.getElementById("timeframe")?.value)||60,plan=buildStructuralPlan(d.slice(0,i+1),tf);
  if(typeof evaluateOpenOperations==="function")evaluateOpenOperations(symbol,closed);if(typeof evaluateStrategyJournal==="function")evaluateStrategyJournal(symbol,closed);
  lastProjection=plan.projection;setText("side-analysis-status","● "+plan.status);setText("structure-diagnostic","ESTRUCTURA "+(plan.candidate?.tf||"M"+tf/60)+" · "+plan.status+" · "+plan.recommendation+" · "+(plan.activeSource?.length||0)+" VELAS · ZIGZAG 30/5/3");
- setText("trend-h4",plan.bias4==="BUY"?"ZONA COMPRA":plan.bias4==="SELL"?"ZONA VENTA":"SIN ZONA H4");setText("confirm-m30",plan.recommendation||"INFORMATIVO");setText("confirm-m1",plan.rejection?"RECHAZO DETECTADO":plan.thirdTouch?"ESPERANDO 3 VELAS A FAVOR":"ESPERANDO 3 TOQUES");setText("touch-status",plan.thirdTouch?"3º TOQUE":(plan.candidate?.touches?.length||0)+"/3 TOQUES");setText("ob-status",plan.bias4||"BUSCANDO");setText("channel-status",plan.candidate?.side==="BUY"?"ALCISTA":plan.candidate?.side==="SELL"?"BAJISTA":"BUSCANDO");
+ setText("trend-h4",plan.bias4==="BUY"?"ZONA COMPRA":plan.bias4==="SELL"?"ZONA VENTA":"SIN ZONA H4");setText("confirm-m30",plan.recommendation||"INFORMATIVO");setText("confirm-m1",plan.rejection?"RECHAZO DETECTADO":plan.thirdTouch?"ESPERANDO RECHAZO":"ESPERANDO 3 TOQUES");setText("touch-status",plan.thirdTouch?"3º TOQUE":(plan.candidate?.touches?.length||0)+"/3 TOQUES");setText("ob-status",plan.bias4||"BUSCANDO");setText("channel-status",plan.candidate?.side==="BUY"?"ALCISTA":plan.candidate?.side==="SELL"?"BAJISTA":"BUSCANDO");
  if(typeof renderProjection==="function")renderProjection(plan);
  const active=plan.activeSource?.at(-1),btKey=symbol+":"+tf;if(structuralBacktestValidatedKey!==btKey&&structuralBacktestRunningKey!==btKey&&plan.activeSource?.length>=120){structuralBacktestKey=btKey;runStructuralBacktest(symbol,market,plan.activeSource,tf);}
  if(typeof setStructureOverlay==="function")setStructureOverlay({items:plan.items,lines:plan.lines,projection:plan.projection,activeTf:tf});
  if(plan.projection&&typeof drawTradeLevels==="function")drawTradeLevels({entry:plan.projection.entry,sl:plan.projection.sl,tp1:plan.projection.tp1,tp2:plan.projection.tp2,time:plan.projection.projectTime,direction:plan.projection.direction},false);else if(typeof clearTradeLevels==="function")clearTradeLevels();
- if(plan.signal&&plan.candidate&&structuralBacktestValidatedKey===symbol+":"+tf){const c=plan.candidate,key=[tf,c.side,c.line1.time1,c.line1.time2,Number(c.line1.price1).toPrecision(12),Number(c.line1.price2).toPrecision(12)].join(":");if(!usedStructureKeys.has(symbol+":"+key)&&!strategyJournal.some(t=>t.structureKey===symbol+":"+key)){const full={...plan.signal,symbol,market,structureKey:symbol+":"+key};addSignal(full);recordStrategyTrade(full);notifyBot("BOTDER · "+plan.signal.direction,"Tercer toque y tres velas a favor confirmados.");}}
+ if(plan.signal&&plan.candidate&&structuralBacktestValidatedKey===symbol+":"+tf){const c=plan.candidate,key=[tf,c.side,c.line1.time1,c.line1.time2,Number(c.line1.price1).toPrecision(12),Number(c.line1.price2).toPrecision(12)].join(":");if(!usedStructureKeys.has(symbol+":"+key)&&!strategyJournal.some(t=>t.structureKey===symbol+":"+key)){const full={...plan.signal,symbol,market,structureKey:symbol+":"+key};addSignal(full);recordStrategyTrade(full);notifyBot("BOTDER · "+plan.signal.direction,"Tercer toque y una vela de rechazo confirmados.");}}
  if(typeof drawRsiPanel==="function")drawRsiPanel(makeIndicators(d).rsi,d);
 }
 function recordStrategyTrade(signal){
@@ -356,7 +356,7 @@ function analyzeCandles(symbol,market,candles){
  setText("structure-diagnostic","ESTRUCTURA "+(plan.candidate?.tf||"M"+tf/60)+" · "+plan.status+" · "+plan.recommendation+" · "+(plan.activeSource?.length||0)+" VELAS · ZIGZAG 30/5/3");
  setText("trend-h4",plan.bias4==="BUY"?"ZONA COMPRA":plan.bias4==="SELL"?"ZONA VENTA":"SIN ZONA H4");
  setText("confirm-m30",plan.recommendation||"INFORMATIVO");
- setText("confirm-m1",plan.rejection?"RECHAZO DETECTADO":plan.thirdTouch?"ESPERANDO 3 VELAS A FAVOR":"ESPERANDO 3 TOQUES");
+ setText("confirm-m1",plan.rejection?"RECHAZO DETECTADO":plan.thirdTouch?"ESPERANDO RECHAZO":"ESPERANDO 3 TOQUES");
  setText("touch-status",plan.thirdTouch?"3º TOQUE":(plan.candidate?.touches?.length||0)+"/3 TOQUES");
  setText("ob-status",plan.bias4||"BUSCANDO");
  setText("channel-status",plan.candidate?.side==="BUY"?"ALCISTA":plan.candidate?.side==="SELL"?"BAJISTA":"BUSCANDO");
@@ -374,7 +374,7 @@ function analyzeCandles(symbol,market,candles){
    const full={...plan.signal,symbol,market,structureKey:key,timeframeSeconds:tf};
    usedStructureKeys.add(key);
    addSignal(full);recordStrategyTrade(full);
-   notifyBot("BOTDER · "+plan.signal.direction,"Tercer toque y tres velas a favor confirmados.");
+   notifyBot("BOTDER · "+plan.signal.direction,"Tercer toque y una vela de rechazo confirmados.");
   }
  }
  if(typeof drawRsiPanel==="function")drawRsiPanel(makeIndicators(d).rsi,d);
