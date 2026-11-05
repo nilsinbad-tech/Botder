@@ -153,3 +153,48 @@
 
 /* Etiquetas de entrada dentro de la zona OB */
 .trade-entry-label{position:absolute;z-index:8;display:none;padding:4px 7px;border:1px solid;border-radius:5px;font-size:9px;font-weight:800;letter-spacing:.3px;white-space:nowrap;box-shadow:0 2px 8px #0008;pointer-events:none}.trade-buy{background:#073f35;color:#65e8c2;border-color:#20d69a}.trade-sell{background:#4a1720;color:#ff9aa4;border-color:#ff5968}
+
+
+/* BOTDER · optimización de lectura para Samsung Galaxy A06 (pantalla móvil) */
+@media(max-width:600px){
+ .app{padding:7px!important;gap:10px!important}
+ .topbar{height:60px!important;padding:0 10px!important}
+ .brand b{font-size:17px!important}.brand small{font-size:9px!important}
+ .toolbar{gap:9px!important}
+ .toolbar label{font-size:13px!important}
+ .toolbar select{min-height:44px!important;font-size:15px!important;padding:9px 10px!important}
+ .timeframes{gap:5px!important}
+ .timeframes button{min-height:42px!important;padding:9px 6px!important;font-size:13px!important;font-weight:800!important}
+ .summary-grid{gap:7px!important}
+ .summary-grid article{min-height:72px!important;padding:10px!important}
+ .summary-grid article small{font-size:10px!important}
+ .summary-grid article b{font-size:16px!important}
+ .summary-grid article em{font-size:10px!important}
+ .chart-card{padding:0!important}
+ .chart-head{padding:13px 11px!important}
+ .chart-head b{font-size:15px!important}
+ .chart-head small{font-size:11px!important}
+ .chart-mode{max-width:120px!important;text-align:right!important}
+ .chart-points-summary{font-size:12px!important;padding:10px!important}
+ .main-chart{height:520px!important;min-height:520px!important}
+ #rsiChart{height:175px!important;min-height:175px!important}
+ .rsi-head{min-height:42px!important;padding:10px 12px!important;font-size:13px!important}
+ .rsi-head span{font-size:12px!important}
+ .chart-foot{font-size:11px!important;padding:10px!important;gap:8px!important}
+ .chart-overlay .ob-zone{font-size:12px!important;min-height:34px!important;padding:7px 9px!important}
+ .chart-overlay .trade-entry-label{font-size:12px!important;padding:6px 9px!important;border-width:2px!important}
+ .chart-overlay .level-tag{font-size:11px!important}
+ .settings-drawer>summary{font-size:13px!important;padding:12px!important}
+ .settings-drawer .pivot-tf-controls button,#pivotTfControls button{min-width:42px!important;min-height:38px!important;padding:7px 9px!important;font-size:12px!important}
+ .panel-title{font-size:14px!important}
+ .signal-details{font-size:13px!important;line-height:1.5!important}
+ .tiny-legend{font-size:11px!important}
+ table{font-size:12px!important}
+ th,td{padding:11px 9px!important}
+}
+@media(max-width:390px){
+ .main-chart{height:540px!important;min-height:540px!important}
+ .chart-mode{display:none!important}
+ .chart-head{align-items:center!important}
+ .summary-grid article b{font-size:15px!important}
+}
