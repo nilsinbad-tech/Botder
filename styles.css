@@ -150,3 +150,6 @@
 .chart-overlay .price-label.tp-line{color:#58e2b4!important}
 .chart-overlay .price-label.tp2-line{color:#70caff!important}
 .chart-overlay .price-label{z-index:21!important}
+
+/* Etiquetas de entrada dentro de la zona OB */
+.trade-entry-label{position:absolute;z-index:8;display:none;padding:4px 7px;border:1px solid;border-radius:5px;font-size:9px;font-weight:800;letter-spacing:.3px;white-space:nowrap;box-shadow:0 2px 8px #0008;pointer-events:none}.trade-buy{background:#073f35;color:#65e8c2;border-color:#20d69a}.trade-sell{background:#4a1720;color:#ff9aa4;border-color:#ff5968}
