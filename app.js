@@ -73,7 +73,6 @@ function buildSetups(c,liquidityCandles=c,pivotCandles=liquidityCandles,obStruct
  const pv=pivots(pivotCandles,3,state.pivotTf*60);
  // La estructura que valida los OB queda fija en M10, independiente del selector visual de pivotes.
  const m10Candles=aggregate(targetRawCandles,10),m10Pv=fixedM10Pivots(m10Candles,3);
- const targetPivots=state.tpTfs.map(mins=>({mins,pv:pivots(aggregate(targetRawCandles,mins),3,mins*60)}));
  const stopPivots=state.slTfs.map(mins=>({mins,pv:pivots(aggregate(targetRawCandles,mins),3,mins*60)}));
  const setups=[],latestZones=new Map(),usedOBs=new Set();
  for(let i=55;i<c.length;i++){
@@ -86,9 +85,10 @@ function buildSetups(c,liquidityCandles=c,pivotCandles=liquidityCandles,obStruct
     latestZones.set(side,{...ob,side,timeframe:state.obTf,structurePrice:structure.price,structureTime:structure.time,structureType:side==='BUY'?'SOPORTE M10':'RESISTENCIA M10'});
    // Los setups/backtesting siguen respetando el sesgo H1; los dos OB se dibujan independientemente.
    if(!trendSide||side!==trendSide||usedOBs.has(key))continue;
-   const targets=targetPivots.flatMap(({mins,pv:targetPv})=>(side==='BUY'?targetPv.highs:targetPv.lows)
-    .filter(p=>p.confirmedTime<=x.time&&(side==='BUY'?p.price>ob.entry:p.price<ob.entry))
-    .map(p=>({...p,timeframe:mins})))
+   // TP1 y TP2: los dos niveles M10 anteriores al OB, en dirección del objetivo.
+   const targets=(side==='BUY'?m10Pv.highs:m10Pv.lows)
+    .filter(p=>p.confirmedTime<=ob.time&&(side==='BUY'?p.price>ob.entry:p.price<ob.entry))
+    .map(p=>({...p,timeframe:10}))
     .sort((a,b)=>side==='BUY'?a.price-b.price:b.price-a.price)
     .filter((p,index,all)=>all.findIndex(q=>Math.abs(q.price-p.price)<=Math.max(1e-10,Math.abs(p.price)*1e-8))===index);
    if(!targets.length)continue;
@@ -96,10 +96,10 @@ function buildSetups(c,liquidityCandles=c,pivotCandles=liquidityCandles,obStruct
     .filter(p=>p.confirmedTime<=x.time&&(side==='BUY'?p.price<ob.entry:p.price>ob.entry))
     .map(p=>({...p,timeframe:mins})))
     .sort((a,b)=>side==='BUY'?b.price-a.price:a.price-b.price);
-   const slPivot=stopCandidates[0]||null,tp1Pivot=targets[0],tp2Pivot=targets[1]||targets[0];
+   const slPivot=stopCandidates[0]||null,tp1Pivot=targets[0],tp2Pivot=targets[1]||null;
    const slBuffer=(ob.high-ob.low)*.12;
    const sl=slPivot?(side==='BUY'?slPivot.price-slBuffer:slPivot.price+slBuffer):(side==='BUY'?ob.low-slBuffer:ob.high+slBuffer);
-   setups.push({side,index:i,time:x.time,entry:ob.entry,sl,tp1:tp1Pivot.price,tp2:tp2Pivot.price,ob,slPivot,tp1Pivot,tp2Pivot,rsi:rv[i],state:'PREPARADA'});
+   setups.push({side,index:i,time:x.time,entry:ob.entry,sl,tp1:tp1Pivot.price,tp2:tp2Pivot?tp2Pivot.price:tp1Pivot.price,ob,slPivot,tp1Pivot,tp2Pivot,rsi:rv[i],state:'PREPARADA'});
    usedOBs.add(key);
   }
  }
