@@ -5,7 +5,7 @@ const APP_ID = '1089';
 const HISTORY_CANDLES = 10080;
 const API_URL = 'wss://ws.derivws.com/websockets/v3?app_id=' + APP_ID;
 const $ = id => document.getElementById(id);
-const state = { ws:null, req:0, pending:new Map(), symbols:[], selected:null, tf:1, candles:[], rawCandles:[], rawBySymbol:new Map(), marketBacktests:[], trades:[], liveSub:null, main:null, rsi:null, markerPlugin:null, overlayResizeObserver:null, series:{}, busy:false, lastRecalcBucket:null };
+const state = { ws:null, req:0, pending:new Map(), symbols:[], selected:null, tf:1, candles:[], rawCandles:[], rawBySymbol:new Map(), marketBacktests:[], trades:[], liveSub:null, main:null, rsi:null, markerPlugin:null, overlayResizeObserver:null, series:{}, busy:false, forceFitNext:true, lastRecalcBucket:null };
 const CANDIDATES = [
  ['1HZ10V','Volatility 10 (1s)'],['1HZ15V','Volatility 15 (1s)'],['1HZ25V','Volatility 25 (1s)'],['1HZ30V','Volatility 30 (1s)'],['1HZ50V','Volatility 50 (1s)'],['1HZ75V','Volatility 75 (1s)'],['1HZ90V','Volatility 90 (1s)'],['1HZ100V','Volatility 100 (1s)'],['1HZ150V','Volatility 150 (1s)'],['1HZ250V','Volatility 250 (1s)'],
  ['R_10','Volatility 10'],['R_25','Volatility 25'],['R_50','Volatility 50'],['R_75','Volatility 75'],['R_100','Volatility 100'],
@@ -86,6 +86,7 @@ function findOB(c,i,side){for(let j=i-1;j>=Math.max(0,i-9);j--){const q=c[j],opp
 function simulate(c,setups){
  const trades=[];for(const s of setups){let entered=false,result='PENDIENTE',entryIndex=-1,exitTime=null;for(let j=s.index+1;j<c.length;j++){const k=c[j];if(!entered){const entryHit=k.low<=s.entry&&k.high>=s.entry;if(!entryHit){if((s.side==='BUY'&&k.low<s.sl)||(s.side==='SELL'&&k.high>s.sl)){result='CANCELADA';exitTime=k.time;break;}if(j-s.index>=5){result='CANCELADA';exitTime=k.time;break;}continue;}entered=true;entryIndex=j;}const slHit=s.side==='BUY'?k.low<=s.sl:k.high>=s.sl;const tp1Hit=s.side==='BUY'?k.high>=s.tp1:k.low<=s.tp1;const tp2Hit=s.side==='BUY'?k.high>=s.tp2:k.low<=s.tp2;if(slHit){result='PERDIDA';exitTime=k.time;break;}if(tp1Hit||tp2Hit){result='GANADA';exitTime=k.time;break;}}trades.push({...s,result,entryIndex,exitTime});}return trades;}
 function draw(c,calc,trades){
+ const priorRange=state.main?state.main.timeScale().getVisibleLogicalRange():null;const preserveRange=!!priorRange&&!state.forceFitNext;
  if(!window.LightweightCharts){$('mainChart').innerHTML='<div class="chart-placeholder">No se pudo cargar el motor del gráfico.</div>';return;}
  if(state.overlayResizeObserver){state.overlayResizeObserver.disconnect();state.overlayResizeObserver=null;}
  if(state.main){state.main.remove();if(state.rsi)state.rsi.remove();}
@@ -102,12 +103,12 @@ function draw(c,calc,trades){
  });
  if(typeof L.createSeriesMarkers==='function'){state.markerPlugin=L.createSeriesMarkers(candle,markers.sort((a,b)=>a.time-b.time));}else{console.warn('La versión de Lightweight Charts no incluye createSeriesMarkers');}
  const latest=trades.filter(t=>t.result==='PENDIENTE').slice(-1)[0];
- state.main.timeScale().fitContent();drawOverlays(latest,c,main);
+ drawOverlays(latest,c,main);
  const rsiEl=$('rsiChart');rsiEl.innerHTML='';
  state.rsi=L.createChart(rsiEl,{autoSize:true,layout:{background:{type:'solid',color:'#0b121e'},textColor:'#8b9bb0',fontSize:10},grid:{vertLines:{color:'#172235'},horzLines:{color:'#172235'}},rightPriceScale:{borderColor:'#28364a'},timeScale:{visible:false},handleScroll:{mouseWheel:true,pressedMouseMove:true,horzTouchDrag:true},handleScale:{mouseWheel:true,pinch:true}});
  const rs=state.rsi.addSeries(L.LineSeries,{color:'#a36aff',lineWidth:2,priceLineVisible:false,lastValueVisible:true});rs.setData(calc.rv.map((v,i)=>v==null?null:{time:c[i].time,value:v}).filter(Boolean));
  [30,50,70].forEach(v=>rs.createPriceLine({price:v,color:'#45536b',lineStyle:L.LineStyle.Dashed,lineWidth:1,axisLabelVisible:false,title:''}));
- let syncingRange=false;state.main.timeScale().subscribeVisibleLogicalRangeChange(range=>{if(!range||syncingRange)return;syncingRange=true;state.rsi.timeScale().setVisibleLogicalRange(range);syncingRange=false;});state.rsi.timeScale().subscribeVisibleLogicalRangeChange(range=>{if(!range||syncingRange)return;syncingRange=true;state.main.timeScale().setVisibleLogicalRange(range);syncingRange=false;});state.rsi.timeScale().fitContent();
+ if(preserveRange){state.main.timeScale().setVisibleLogicalRange(priorRange);state.rsi.timeScale().setVisibleLogicalRange(priorRange);}else{state.main.timeScale().fitContent();state.rsi.timeScale().fitContent();}let syncingRange=false;state.main.timeScale().subscribeVisibleLogicalRangeChange(range=>{if(!range||syncingRange)return;syncingRange=true;state.rsi.timeScale().setVisibleLogicalRange(range);syncingRange=false;});state.rsi.timeScale().subscribeVisibleLogicalRangeChange(range=>{if(!range||syncingRange)return;syncingRange=true;state.main.timeScale().setVisibleLogicalRange(range);syncingRange=false;});state.forceFitNext=false;
 }
 function drawOverlays(t,c,host){
  const old=host.querySelector('.chart-overlay');if(old)old.remove();if(!t)return;
@@ -184,11 +185,11 @@ function onLiveTick(tick){
  if(state.lastRecalcBucket!==null&&recalcBucket>state.lastRecalcBucket){state.lastRecalcBucket=recalcBucket;state.rawBySymbol.set(state.selected,state.rawCandles);runUniverseBacktest(false).then(analyze);}
 }
 function subscribeLive(){if(state.liveSub){try{state.ws.send(JSON.stringify({forget:state.liveSub}));}catch{}}request({ticks:state.selected,subscribe:1}).then(r=>{state.liveSub=r.subscription?.id||null;}).catch(()=>{});}
-function selectSymbol(symbol){if(!state.symbols.some(s=>s.symbol===symbol))return;state.selected=symbol;$('symbolSelect').value=symbol;document.querySelectorAll('.instrument-chip').forEach(b=>b.classList.toggle('selected',b.dataset.symbol===symbol));analyze();subscribeLive();}
+function selectSymbol(symbol){if(!state.symbols.some(s=>s.symbol===symbol))return;state.selected=symbol;state.forceFitNext=true;$('symbolSelect').value=symbol;document.querySelectorAll('.instrument-chip').forEach(b=>b.classList.toggle('selected',b.dataset.symbol===symbol));analyze();subscribeLive();}
 function bind(){
  $('instrumentList').addEventListener('click',e=>{const b=e.target.closest('button[data-symbol]');if(b)selectSymbol(b.dataset.symbol);});
  $('symbolSelect').addEventListener('change',e=>selectSymbol(e.target.value));
- $('timeframes').addEventListener('click',async e=>{const b=e.target.closest('button[data-tf]');if(!b)return;state.tf=+b.dataset.tf;document.querySelectorAll('#timeframes button').forEach(x=>x.classList.toggle('active',x===b));await runUniverseBacktest(false);await analyze();});
+ $('timeframes').addEventListener('click',async e=>{const b=e.target.closest('button[data-tf]');if(!b)return;state.tf=+b.dataset.tf;state.forceFitNext=true;document.querySelectorAll('#timeframes button').forEach(x=>x.classList.toggle('active',x===b));await runUniverseBacktest(false);await analyze();});
  $('refreshBtn').addEventListener('click',async()=>{await runUniverseBacktest(true);await analyze();});$('runBacktest').addEventListener('click',async()=>{await runUniverseBacktest(true);await analyze();});
 }
 async function start(){bind();try{await loadSymbols();await runUniverseBacktest(false);await analyze();subscribeLive();}catch(e){setConnection(false,'No conectado');$('dataStatus').textContent=e.message;}}
