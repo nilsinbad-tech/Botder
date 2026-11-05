@@ -59,19 +59,20 @@ function backtest(d,symbol,strategy){
   if(i<nextAllowed)continue;const dir=signalAt(strategy.id,d,i,x);if(!dir)continue;
   const entry=d[i+1].open,levels=structureLevels(d,i,dir,entry,x.atr);if(!levels||levels.rr1<1.99)continue;
   const t={symbol,strategy:strategy.name,direction:dir,signalTime:d[i].time,entryTime:d[i+1].time,entry,sl:levels.sl,tp1:levels.tp1,tp2:levels.tp2,rr1:levels.rr1,rr2:levels.rr2,result:"ABIERTA",split:i<split?"ENTRENAMIENTO":"PRUEBA"};
+  let tp1Reached=false;
   for(let j=i+1;j<d.length;j++){
-   const c=d[j],stop=dir==="COMPRAR"?c.low<=t.sl:c.high>=t.sl,one=dir==="COMPRAR"?c.high>=t.tp1:c.low<=t.tp1,two=dir==="COMPRAR"?c.high>=t.tp2:c.low<=t.tp2;
-   // Si SL y TP coinciden en la misma vela, se contabiliza primero el SL (criterio conservador).
-   if(stop){t.result="SL";t.exitTime=c.time;t.exitPrice=t.sl;t.r=-1;break;}
-   if(two){t.result="TP2";t.exitTime=c.time;t.exitPrice=t.tp2;t.r=t.rr2;break;}
-   if(one){t.result="TP1";t.exitTime=c.time;t.exitPrice=t.tp1;t.r=t.rr1;break;}
+   const c=d[j],stop=dir==="COMPRAR"?c.low<=(tp1Reached?t.entry:t.sl):c.high>=(tp1Reached?t.entry:t.sl),one=dir==="COMPRAR"?c.high>=t.tp1:c.low<=t.tp1,two=dir==="COMPRAR"?c.high>=t.tp2:c.low<=t.tp2;
+   // Orden conservador: stop antes de objetivos si ambos aparecen en la misma vela.
+   if(stop){t.result=tp1Reached?"TP1":"SL";t.exitTime=c.time;t.exitPrice=tp1Reached?t.entry:t.sl;t.r=tp1Reached?(t.rr1*.5): -1;break;}
+   if(two){t.tp1Reached=true;t.tp2Reached=true;t.result="TP2";t.exitTime=c.time;t.exitPrice=t.tp2;t.r=tp1Reached?(t.rr1*.5+t.rr2*.5):t.rr2;break;}
+   if(one&&!tp1Reached){tp1Reached=true;t.tp1Reached=true;}
   }
   if(t.result==="ABIERTA"){t.result="SIN_CIERRE";t.exitTime=d.at(-1).time;t.exitPrice=d.at(-1).close;t.r=0;}
   trades.push(t);nextAllowed=Math.max(i+1,d.findIndex((c,j)=>j>i&&c.time>=t.exitTime));
  }
  return trades;
 }
-function summarize(trades){const closed=trades.filter(t=>t.result!=="SIN_CIERRE"),test=closed.filter(t=>t.split==="PRUEBA"),wins=a=>a.filter(t=>t.result==="TP1"||t.result==="TP2").length;const r=a=>a.reduce((s,t)=>s+t.r,0);const avg=a=>a.length?r(a)/a.length:0;return{total:trades.length,closed:closed.length,test:test.length,wins:wins(closed),losses:closed.filter(t=>t.result==="SL").length,tp1:closed.filter(t=>t.result==="TP1").length,tp2:closed.filter(t=>t.result==="TP2").length,rate:closed.length?wins(closed)/closed.length*100:0,testRate:test.length?wins(test)/test.length*100:0,expectancy:avg(closed),testExpectancy:avg(test),profitFactor:(()=>{const pos=closed.filter(t=>t.r>0).reduce((s,t)=>s+t.r,0),neg=Math.abs(closed.filter(t=>t.r<0).reduce((s,t)=>s+t.r,0));return neg?pos/neg:pos?99:0;})(),trades};}
+function summarize(trades){const closed=trades.filter(t=>t.result!=="SIN_CIERRE"),test=closed.filter(t=>t.split==="PRUEBA"),wins=a=>a.filter(t=>t.result==="TP1"||t.result==="TP2").length;const r=a=>a.reduce((s,t)=>s+t.r,0);const avg=a=>a.length?r(a)/a.length:0;const tp1Count=closed.filter(t=>t.tp1Reached||t.result==="TP1"||t.result==="TP2").length,tp2Count=closed.filter(t=>t.tp2Reached||t.result==="TP2").length,testTp1=test.filter(t=>t.tp1Reached||t.result==="TP1"||t.result==="TP2").length,testTp2=test.filter(t=>t.tp2Reached||t.result==="TP2").length;return{total:trades.length,closed:closed.length,test:test.length,wins:wins(closed),losses:closed.filter(t=>t.result==="SL").length,tp1:tp1Count,tp2:tp2Count,rate:closed.length?wins(closed)/closed.length*100:0,testRate:test.length?wins(test)/test.length*100:0,tp1Rate:closed.length?tp1Count/closed.length*100:0,tp2Rate:closed.length?tp2Count/closed.length*100:0,testTp1Rate:test.length?testTp1/test.length*100:0,testTp2Rate:test.length?testTp2/test.length*100:0,expectancy:avg(closed),testExpectancy:avg(test),profitFactor:(()=>{const pos=closed.filter(t=>t.r>0).reduce((s,t)=>s+t.r,0),neg=Math.abs(closed.filter(t=>t.r<0).reduce((s,t)=>s+t.r,0));return neg?pos/neg:pos?99:0;})(),trades};}
 function processInstrument(item,candles){const per=STRATEGIES.map(s=>({...s,...summarize(backtest(candles,item.name,s))}));per.forEach(s=>{s.symbol=item.symbol;s.market=item.name;s.candles=candles.length;});results.push(...per);}
 function bestByMarket(){const names=[...new Set(results.map(r=>r.symbol))];return names.map(symbol=>{const rows=results.filter(r=>r.symbol===symbol).sort((a,b)=>{const aa=a.test>=20?a.testRate:-1,bb=b.test>=20?b.testRate:-1;return bb-aa||b.testExpectancy-a.testExpectancy;});return rows[0];}).filter(Boolean);}
 function render(){
