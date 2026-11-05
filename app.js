@@ -72,17 +72,16 @@ function buildSetups(c,liquidityCandles=c,pivotCandles=liquidityCandles,obStruct
  const close=c.map(x=>x.close),e3=ema(close,3),e9=ema(close,9),e13=ema(close,13),e50=ema(close,50),rv=rsi(close);
  const pv=pivots(pivotCandles,3,state.pivotTf*60);
  // La estructura que valida los OB queda fija en M10, independiente del selector visual de pivotes.
- const m10Candles=aggregate(targetRawCandles,10),m10Pv=pivots(m10Candles,3,600);
+ const m10Candles=aggregate(targetRawCandles,10),m10Pv=fixedM10Pivots(m10Candles,3);
  const targetPivots=state.tpTfs.map(mins=>({mins,pv:pivots(aggregate(targetRawCandles,mins),3,mins*60)}));
  const stopPivots=state.slTfs.map(mins=>({mins,pv:pivots(aggregate(targetRawCandles,mins),3,mins*60)}));
  const setups=[],latestZones=new Map(),usedOBs=new Set();
  for(let i=55;i<c.length;i++){
   const x=c[i];
   for(const side of ['BUY','SELL']){
-   const ob=findOBAtTime(liquidityCandles,x.time,side,state.obTf);
-   if(!ob)continue;
-   const key=side+':'+ob.time,structure=findM10Structure(ob,side,m10Pv,m10Candles,x.time);
-   if(!structure||isOBInvalidated(ob,side,structure,targetRawCandles,x.time))continue;
+   const candidate=findValidOBAtTime(liquidityCandles,x.time,side,state.obTf,m10Pv,m10Candles,targetRawCandles);
+   if(!candidate)continue;
+   const {ob,structure}=candidate,key=side+':'+ob.time;
    if(!latestZones.has(side)||ob.time>latestZones.get(side).time)
     latestZones.set(side,{...ob,side,timeframe:state.obTf,structurePrice:structure.price,structureTime:structure.time,structureType:side==='BUY'?'SOPORTE M10':'RESISTENCIA M10'});
    // Los setups/backtesting siguen respetando el sesgo H1; los dos OB se dibujan independientemente.
@@ -106,6 +105,27 @@ function buildSetups(c,liquidityCandles=c,pivotCandles=liquidityCandles,obStruct
  }
  return{setups,e3,e9,e13,e50,rv,pv,obZones:[...latestZones.values()]};
 }
+function fixedM10Pivots(c,span=3){
+ const highs=[],lows=[];
+ for(let i=span;i<c.length-span;i++){
+  let hi=true,lo=true;
+  for(let j=1;j<=span;j++){if(c[i].high<=c[i-j].high||c[i].high<=c[i+j].high)hi=false;if(c[i].low>=c[i-j].low||c[i].low>=c[i+j].low)lo=false;}
+  if(hi)highs.push({index:i,time:c[i].time,confirmedTime:c[i+span].time+600,price:c[i].high});
+  if(lo)lows.push({index:i,time:c[i].time,confirmedTime:c[i+span].time+600,price:c[i].low});
+ }
+ return{highs,lows};
+}
+function findValidOBAtTime(c,time,side,tf,pv,m10Candles,raw){
+ const completed=c.filter(bar=>bar.time+tf*60<=time);
+ for(let j=completed.length-1;j>=Math.max(0,completed.length-9);j--){
+  const q=completed[j],opposite=side==='BUY'?q.close<q.open:q.close>q.open;
+  if(!opposite)continue;
+  const ob={time:q.time,high:q.high,low:q.low,entry:(q.high+q.low)/2};
+  const structure=findM10Structure(ob,side,pv,m10Candles,time);
+  if(structure&&!isOBInvalidated(ob,side,structure,raw,time))return{ob,structure};
+ }
+ return null;
+}
 function findM10Structure(ob,side,pv,candles,time){
  const levels=(side==='BUY'?pv.lows:pv.highs).filter(p=>p.confirmedTime<=time);
  const matches=levels.map(p=>{
@@ -117,7 +137,7 @@ function findM10Structure(ob,side,pv,candles,time){
  return matches.sort((a,b)=>Math.abs(a.price-(ob.high+ob.low)/2)-Math.abs(b.price-(ob.high+ob.low)/2))[0];
 }
 function isOBInvalidated(ob,side,structure,raw,time){
- return raw.some(bar=>bar.time>ob.time&&bar.time<=time&&(side==='SELL'?bar.close>structure.price:bar.close<structure.price));
+ return raw.some(bar=>bar.time>=structure.confirmedTime&&bar.time<=time&&(side==='SELL'?bar.close>structure.price:bar.close<structure.price));
 }
 function findOBAtTime(c,time,side,tf=state.obTf){const completed=c.filter(bar=>bar.time+tf*60<=time);return findOB(completed,completed.length,side);}
 function findOB(c,i,side){for(let j=i-1;j>=Math.max(0,i-9);j--){const q=c[j],opposite=side==='BUY'?q.close<q.open:q.close>q.open;if(opposite){const entry=(q.high+q.low)/2;return{time:q.time,high:q.high,low:q.low,entry};}}return null;}
