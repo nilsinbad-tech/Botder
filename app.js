@@ -80,10 +80,10 @@ function buildSetups(c,liquidityCandles=c,pivotCandles=liquidityCandles,obStruct
   for(const side of ['BUY','SELL']){
    const ob=findOBAtTime(liquidityCandles,x.time,side,state.obTf);
    if(!ob)continue;
+   // Los OB contra la tendencia H1 no se muestran.
+   if(!trendSide||side!==trendSide)continue;
    const higherOB=findOBAtTime(higherOBCandles,x.time,side,higherOBTf);
    if(higherOB){const higherKey=side+':'+higherOB.time;if(!higherOBs.has(higherKey))higherOBs.set(higherKey,{...higherOB,side,timeframe:higherOBTf});}
-   // Los OB contra la tendencia H1 solo se permiten si son estrechos.
-   if(!trendSide||side!==trendSide)continue;
    const key=side+':'+ob.time;
    if(state.obStructureOnly&&!isOBAtStructure(ob,side,obPv,obStructureCandles,x.time))continue;
    if(!usedZones.has(key)){usedZones.add(key);obZones.push({...ob,side,timeframe:state.obTf});}
