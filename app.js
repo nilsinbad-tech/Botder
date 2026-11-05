@@ -423,7 +423,27 @@ function bindOBControls(){
  const sync=(root,attr,value)=>{if(!root)return;root.querySelectorAll('button['+attr+']').forEach(b=>{const active=Number(b.getAttribute(attr))===value;b.classList.toggle('active',active);b.setAttribute('aria-pressed',String(active));});};
  const syncMulti=(root,attr,values)=>{if(!root)return;root.querySelectorAll('button['+attr+']').forEach(b=>{const active=values.includes(Number(b.getAttribute(attr)));b.classList.toggle('active',active);b.setAttribute('aria-pressed',String(active));});};
  if(obRoot){state.obTf=1;sync(obRoot,'data-ob-tf',1);}
- if(pivotRoot){sync(pivotRoot,'data-pivot-structure-tf',state.pivotTf);pivotRoot.addEventListener('click',e=>{const b=e.target.closest('button[data-pivot-structure-tf]');if(!b)return;state.pivotTf=Number(b.dataset.pivotStructureTf);save();sync(pivotRoot,'data-pivot-structure-tf',state.pivotTf);analyze();});}
+ if(pivotRoot){
+  // El selector de esta sección controla los pivotes visibles: deja activa únicamente la temporalidad elegida.
+  const applyPivotStructureTf=()=>{
+   for(const mins of [1,2,3,4,5,10])state.pivotTfEnabled[mins]=mins===state.pivotTf;
+   try{localStorage.setItem('botder-pivot-tfs',JSON.stringify(state.pivotTfEnabled));}catch{}
+   const visibleRoot=$('pivotTfControls');
+   if(visibleRoot)visibleRoot.querySelectorAll('button[data-pivot-tf]').forEach(button=>{
+    const active=!!state.pivotTfEnabled[Number(button.dataset.pivotTf)];
+    button.classList.toggle('active',active);button.setAttribute('aria-pressed',String(active));
+   });
+  };
+  applyPivotStructureTf();
+  sync(pivotRoot,'data-pivot-structure-tf',state.pivotTf);
+  pivotRoot.addEventListener('click',e=>{
+   const b=e.target.closest('button[data-pivot-structure-tf]');if(!b)return;
+   state.pivotTf=Number(b.dataset.pivotStructureTf);
+   applyPivotStructureTf();save();
+   sync(pivotRoot,'data-pivot-structure-tf',state.pivotTf);
+   analyze();
+  });
+ }
  const bindMulti=(root,attr,key)=>{if(!root)return;syncMulti(root,attr,state[key]);root.addEventListener('click',e=>{const b=e.target.closest('button['+attr+']');if(!b)return;const tf=Number(b.getAttribute(attr)),set=new Set(state[key]);if(set.has(tf)){if(set.size===1)return;set.delete(tf);}else set.add(tf);state[key]=[1,3,5,10,15,30].filter(v=>set.has(v));save();syncMulti(root,attr,state[key]);analyze();});};
  bindMulti(tpRoot,'data-tp-tf','tpTfs');bindMulti(slRoot,'data-sl-tf','slTfs');
 }
