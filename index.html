@@ -56,7 +56,14 @@
     <div class="panel-title"><b>Historial de operaciones</b><span id="historyCount">0 operaciones</span></div>
     <div class="history-scroll"><table><thead><tr><th>Hora</th><th>Dirección</th><th>Entrada</th><th>SL</th><th>TP1</th><th>TP2</th><th>Resultado</th></tr></thead><tbody id="historyBody"><tr><td colspan="7" class="empty-cell">Esperando backtesting…</td></tr></tbody></table></div>
   </section>
-  <section class="panel instruments-panel">
+
+  <section class="panel stake-panel">
+    <div class="panel-title"><b>Mínimo de contrato · Crash/Boom 300</b><span>Consulta Deriv</span></div>
+    <div id="minimumStakeResults" class="stake-results">Esperando catálogo de contratos…</div>
+    <p class="muted" id="minimumStakeNote">Se comparará el mínimo publicado para contratos direccionales CALL/PUT cuando Deriv lo informe.</p>
+    <p class="muted">Este dato corresponde a contratos de Deriv por API; no representa el lote mínimo de una cuenta Deriv MT5.</p>
+  </section>
+\n  <section class="panel instruments-panel">
     <div class="panel-title"><b>Universo Deriv</b><span id="instrumentCount">0 / 25 instrumentos</span></div>
     <div id="instrumentList" class="instrument-list">Cargando catálogo de Deriv…</div>
   </section>
