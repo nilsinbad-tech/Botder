@@ -65,58 +65,49 @@ function ema(values,period){const out=Array(values.length).fill(null),k=2/(perio
 function rsi(values,period=14){const out=Array(values.length).fill(null);let gain=0,loss=0;for(let i=1;i<values.length;i++){const d=values[i]-values[i-1];const g=Math.max(d,0),l=Math.max(-d,0);if(i<=period){gain+=g;loss+=l;if(i===period){gain/=period;loss/=period;out[i]=loss===0?100:100-100/(1+gain/loss);}}else{gain=(gain*(period-1)+g)/period;loss=(loss*(period-1)+l)/period;out[i]=loss===0?100:100-100/(1+gain/loss);}}return out;}
 function pivots(c,span=3,candleSeconds=600){const highs=[],lows=[];for(let i=span;i<c.length-span;i++){let hi=true,lo=true;for(let j=1;j<=span;j++){if(c[i].high<=c[i-j].high||c[i].high<=c[i+j].high)hi=false;if(c[i].low>=c[i-j].low||c[i].low>=c[i+j].low)lo=false;}if(hi)highs.push({index:i,time:c[i].time,confirmedTime:c[i+span].time+candleSeconds,price:c[i].high});if(lo)lows.push({index:i,time:c[i].time,confirmedTime:c[i+span].time+candleSeconds,price:c[i].low});}const sample=c.slice(-30),avgRange=sample.length?sample.reduce((sum,v)=>sum+(v.high-v.low),0)/sample.length:0,tolerance=avgRange*.45;const merge=items=>{const kept=[];for(const p of items){const near=kept.findIndex(q=>Math.abs(q.price-p.price)<=tolerance);if(near<0)kept.push(p);else if(p.confirmedTime>kept[near].confirmedTime)kept[near]=p;}return kept.sort((a,b)=>a.time-b.time);};return{highs:merge(highs),lows:merge(lows)};}
 function buildSetups(c,liquidityCandles=c,pivotCandles=liquidityCandles,obStructureCandles=pivotCandles,trendSide=null,targetRawCandles=pivotCandles){
- const close=c.map(x=>x.close),e3=ema(close,3),e9=ema(close,9),e13=ema(close,13),e50=ema(close,50),rv=rsi(close);
- const pv=pivots(pivotCandles,3,state.pivotTf*60);
- // La estructura que valida cada OB usa la temporalidad elegida en PIVOTES / RESISTENCIAS.
+ const close=c.map(x=>x.close),e9=ema(close,9),e20=ema(close,20),rv=rsi(close);
  const structureCandles=aggregate(targetRawCandles,state.pivotTf),structurePv=pivots(structureCandles,3,state.pivotTf*60);
- const m10Candles=aggregate(targetRawCandles,10),m10Pv=fixedM10Pivots(m10Candles,3);
+ const m20Candles=aggregate(targetRawCandles,20),m20Pv=pivots(m20Candles,3,1200);
  const stopPivots=state.slTfs.map(mins=>({mins,pv:pivots(aggregate(targetRawCandles,mins),3,mins*60)}));
  const setups=[],latestZones=[],zoneKeys=new Set(),usedOBs=new Set(),usedZones=new Set();
  const primaryTf=state.obPrimaryTf,previousTf=state.obPreviousTf;
  const primaryCandles=aggregate(targetRawCandles,primaryTf),previousCandles=aggregate(targetRawCandles,previousTf);
  for(let i=55;i<c.length;i++){
-  const x=c[i];
-  for(const side of (trendSide?[trendSide]:[])){
-   // Filtro RSI para ventas: entre 60 y 70 (incluidos) no se permiten entradas SELL.
-   if(side==='SELL'&&Number.isFinite(rv[i])&&rv[i]>=60&&rv[i]<=70)continue;
+  const x=c[i],prevRsi=rv[i-1],currRsi=rv[i];
+  if(!Number.isFinite(prevRsi)||!Number.isFinite(currRsi)||!Number.isFinite(e9[i-1])||!Number.isFinite(e20[i-1]))continue;
+  // El RSI toca/cruza 60 con vela alcista o 40 con vela bajista.
+  const buyTrigger=prevRsi<60&&currRsi>=60&&x.close>x.open&&e9[i-1]<=e20[i-1]&&e9[i]>e20[i]&&x.close>e20[i];
+  const sellTrigger=prevRsi>40&&currRsi<=40&&x.close<x.open&&e9[i-1]>=e20[i-1]&&e9[i]<e20[i]&&x.close<e20[i];
+  for(const side of (buyTrigger?['BUY']:sellTrigger?['SELL']:[])){
    const primary=findValidOBAtTime(primaryCandles,x.time,side,primaryTf,structurePv,structureCandles,targetRawCandles);
    if(!primary)continue;
    const previous=state.obPreviousEnabled?findValidOBAtTime(previousCandles,x.time,side,previousTf,structurePv,structureCandles,targetRawCandles):null;
    if(state.obPreviousEnabled&&!previous)continue;
-   for(const item of [{...primary,tf:primaryTf},...(previous?[{...previous,tf:previousTf}]:[])]){const zoneKey=side+':'+item.tf+':'+item.ob.time;if(!zoneKeys.has(zoneKey)){latestZones.push({...item.ob,side,timeframe:item.tf,structurePrice:item.structure.price,structureTime:item.structure.time,structureType:side==='BUY'?'SOPORTE':'RESISTENCIA'});zoneKeys.add(zoneKey);}}
+   for(const item of [{...primary,tf:primaryTf},...(previous?[{...previous,tf:previousTf}]:[])]){const zk=side+':'+item.tf+':'+item.ob.time;if(!zoneKeys.has(zk)){latestZones.push({...item.ob,side,timeframe:item.tf,structurePrice:item.structure.price,structureTime:item.structure.time,structureType:side==='BUY'?'SOPORTE':'RESISTENCIA'});zoneKeys.add(zk);}}
    const {ob,structure}=primary,key=side+':'+ob.time,zoneKey=side+':'+structure.time;
-   if(!trendSide||side!==trendSide||usedOBs.has(key)||usedZones.has(zoneKey))continue;
-   // TP1 y TP2: los dos niveles M10 anteriores al OB, en dirección del objetivo.
-   const targets=(side==='BUY'?m10Pv.highs:m10Pv.lows)
-    .filter(p=>p.confirmedTime<=ob.time&&(side==='BUY'?p.price>ob.entry:p.price<ob.entry))
-    .map(p=>({...p,timeframe:10}))
+   if(usedOBs.has(key)||usedZones.has(zoneKey))continue;
+   // Objetivos M20: TP1 es el pivote confirmado más cercano; TP2 la siguiente resistencia/soporte.
+   const levels=(side==='BUY'?m20Pv.highs:m20Pv.lows)
+    .filter(p=>p.confirmedTime<=x.time&&(side==='BUY'?p.price>x.close:p.price<x.close))
+    .map(p=>({...p,timeframe:20}))
     .sort((a,b)=>side==='BUY'?a.price-b.price:b.price-a.price)
     .filter((p,index,all)=>all.findIndex(q=>Math.abs(q.price-p.price)<=Math.max(1e-10,Math.abs(p.price)*1e-8))===index);
-   if(!targets.length)continue;
+   if(!levels.length)continue;
    const stopCandidates=stopPivots.flatMap(({mins,pv:stopPv})=>(side==='BUY'?stopPv.lows:stopPv.highs)
-    .filter(p=>p.confirmedTime<=x.time&&(side==='BUY'?p.price<ob.entry:p.price>ob.entry))
+    .filter(p=>p.confirmedTime<=x.time&&(side==='BUY'?p.price<x.close:p.price>x.close))
     .map(p=>({...p,timeframe:mins})))
     .sort((a,b)=>side==='BUY'?b.price-a.price:a.price-b.price);
-   const slPivot=stopCandidates[0]||null,tp1Pivot=targets[0],tp2Pivot=targets[1]||null;
+   const slPivot=stopCandidates[0]||null,tp1Pivot=levels[0],tp2Pivot=levels[1]||null;
    const slBuffer=(ob.high-ob.low)*.12;
    const sl=slPivot?(side==='BUY'?slPivot.price-slBuffer:slPivot.price+slBuffer):(side==='BUY'?ob.low-slBuffer:ob.high+slBuffer);
-   setups.push({side,index:i,time:x.time,entry:ob.entry,sl,tp1:tp1Pivot.price,tp2:tp2Pivot?tp2Pivot.price:tp1Pivot.price,ob,structureTime:structure.time,structurePrice:structure.price,slPivot,tp1Pivot,tp2Pivot,rsi:rv[i],state:'PREPARADA'});
+   const range=Math.max(0,x.high-x.low),body=Math.abs(x.close-x.open),strongCandle=range>0&&body/range>=.70;
+   setups.push({side,index:i,time:x.time,entry:x.close,sl,tp1:tp1Pivot.price,tp2:tp2Pivot?tp2Pivot.price:tp1Pivot.price,ob,structureTime:structure.time,structurePrice:structure.price,slPivot,tp1Pivot,tp2Pivot,rsi:rv[i],strongCandle,state:'PREPARADA'});
    usedOBs.add(key);usedZones.add(zoneKey);
   }
  }
  const latestPrimary=latestZones.filter(z=>z.timeframe===primaryTf).sort((a,b)=>b.time-a.time)[0]||null;
  const latestPrevious=state.obPreviousEnabled?latestZones.filter(z=>z.timeframe===previousTf).sort((a,b)=>b.time-a.time)[0]||null:null;
- return{setups,e3,e9,e13,e50,rv,pv,obZones:[latestPrevious,latestPrimary].filter(Boolean)};
-}
-function fixedM10Pivots(c,span=3){
- const highs=[],lows=[];
- for(let i=span;i<c.length-span;i++){
-  let hi=true,lo=true;
-  for(let j=1;j<=span;j++){if(c[i].high<=c[i-j].high||c[i].high<=c[i+j].high)hi=false;if(c[i].low>=c[i-j].low||c[i].low>=c[i+j].low)lo=false;}
-  if(hi)highs.push({index:i,time:c[i].time,confirmedTime:c[i+span].time+600,price:c[i].high});
-  if(lo)lows.push({index:i,time:c[i].time,confirmedTime:c[i+span].time+600,price:c[i].low});
- }
- return{highs,lows};
+ return{setups,e9,e20,rv,pv:m20Pv,obZones:[latestPrevious,latestPrimary].filter(Boolean)};
 }
 function findValidOBAtTime(c,time,side,tf,pv,structureCandles,raw){
  let lo=0,hi=c.length;
@@ -154,32 +145,19 @@ function findOB(c,i,side){for(let j=i-1;j>=Math.max(0,i-9);j--){const q=c[j],opp
 function simulate(c,setups){
  const trades=[],entryRsiValues=rsi(c.map(x=>x.close));
  for(const s of setups){
-  let entered=false,result='PENDIENTE',entryIndex=-1,entryTime=null,exitTime=null,exitPrice=null,oppositeCandles=0,cancelReason=null;
+  let entered=true,result='PENDIENTE',entryIndex=s.index,entryTime=s.time,exitTime=null,exitPrice=null,cancelReason=null;
+  // La señal se confirma en el cierre de la vela; si el cuerpo es >=70% del rango,
+  // se considera detonante fuerte y la entrada queda marcada como inmediata.
   for(let j=s.index+1;j<c.length;j++){
-   const k=c[j];
-   if(!entered){
-    // Antes de entrar, dos velas consecutivas contra la dirección invalidan la señal.
-    const opposite=s.side==='BUY'?k.close<k.open:k.close>k.open;
-    oppositeCandles=opposite?oppositeCandles+1:0;
-    if(oppositeCandles>=2){result='CANCELADA';exitTime=k.time;cancelReason='DOS_VELAS_CONTRARIAS';break;}
-    const entryHit=k.low<=s.entry&&k.high>=s.entry;
-    if(!entryHit){
-     if((s.side==='BUY'&&k.low<s.sl)||(s.side==='SELL'&&k.high>s.sl)){result='CANCELADA';exitTime=k.time;cancelReason='SL_ANTES_DE_ENTRADA';break;}
-     if(j-s.index>=5){result='CANCELADA';exitTime=k.time;cancelReason='EXPIRADA';break;}
-     continue;
-    }
-    entered=true;entryIndex=j;entryTime=k.time;
-   }
-   const slHit=s.side==='BUY'?k.low<=s.sl:k.high>=s.sl;
+   const k=c[j],slHit=s.side==='BUY'?k.low<=s.sl:k.high>=s.sl;
    const tp1Hit=s.side==='BUY'?k.high>=s.tp1:k.low<=s.tp1;
    const tp2Hit=s.side==='BUY'?k.high>=s.tp2:k.low<=s.tp2;
-   // Si SL y TP aparecen dentro de la misma vela, se cuenta SL primero (criterio conservador).
    if(slHit){result='PERDIDA';exitPrice=s.sl;exitTime=k.time;break;}
    if(tp2Hit){result='GANADA';exitPrice=s.tp2;exitTime=k.time;break;}
    if(tp1Hit){result='GANADA';exitPrice=s.tp1;exitTime=k.time;break;}
   }
   const points=exitPrice==null?null:(s.side==='BUY'?exitPrice-s.entry:s.entry-exitPrice);
-  trades.push({...s,result,entryIndex,entryTime,entryRsi:entryIndex>=0?entryRsiValues[entryIndex]:null,exitTime,exitPrice,points,cancelReason});
+  trades.push({...s,result,entryIndex,entryTime,entryRsi:entryRsiValues[entryIndex],exitTime,exitPrice,points,cancelReason});
  }
  return trades;
 }
