@@ -2,6 +2,7 @@
 (() => {
 'use strict';
 const APP_ID = '1089';
+const HISTORY_CANDLES = 10080;
 const API_URL = 'wss://ws.derivws.com/websockets/v3?app_id=' + APP_ID;
 const $ = id => document.getElementById(id);
 const state = { ws:null, req:0, pending:new Map(), symbols:[], selected:null, tf:1, candles:[], rawCandles:[], rawBySymbol:new Map(), marketBacktests:[], trades:[], liveSub:null, main:null, rsi:null, markerPlugin:null, overlayResizeObserver:null, series:{}, busy:false, lastRecalcBucket:null };
@@ -49,7 +50,7 @@ async function loadSymbols(){
 
 function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
 async function getCandles(symbol){
- const r=await request({ticks_history:symbol,adjust_start_time:1,count:1440,end:'latest',granularity:60,style:'candles'});
+ const r=await request({ticks_history:symbol,adjust_start_time:1,count:HISTORY_CANDLES,end:'latest',granularity:60,style:'candles'});
  return (r.candles||[]).map(c=>({time:Number(c.epoch),open:+c.open,high:+c.high,low:+c.low,close:+c.close})).filter(c=>Number.isFinite(c.close));
 }
 function aggregate(candles,mins){if(mins===1)return candles;const groups=new Map();for(const candle of candles){const bucket=Math.floor(candle.time/(mins*60))*(mins*60);let g=groups.get(bucket);if(!g){g={time:bucket,open:candle.open,high:candle.high,low:candle.low,close:candle.close,count:0};groups.set(bucket,g);}g.high=Math.max(g.high,candle.high);g.low=Math.min(g.low,candle.low);g.close=candle.close;g.count++;}const lastBucket=candles.length?Math.floor(candles.at(-1).time/(mins*60))*(mins*60):null;return [...groups.values()].filter(g=>g.count===mins||g.time===lastBucket).map(({count,...bar})=>bar).sort((a,b)=>a.time-b.time);}
@@ -157,7 +158,7 @@ async function runUniverseBacktest(refresh=false){
  const closed=allTrades.filter(t=>t.result==='GANADA'||t.result==='PERDIDA');
  $('wins').textContent=closed.filter(t=>t.result==='GANADA').length;$('losses').textContent=closed.filter(t=>t.result==='PERDIDA').length;
  $('pending').textContent=allTrades.filter(t=>t.result==='PENDIENTE').length;$('expired').textContent=allTrades.filter(t=>t.result==='CANCELADA').length;
- $('backtestInfo').textContent='Universo: '+state.symbols.length+' instrumentos · M'+state.tf+' · últimas 24 horas · '+allTrades.length+' señales simuladas.';
+ $('backtestInfo').textContent='Universo: '+state.symbols.length+' instrumentos · M'+state.tf+' · últimos 7 días · '+allTrades.length+' señales simuladas.';
 }
 async function analyze(){
  if(state.busy)return;state.busy=true;$('dataStatus').textContent='Cargando gráfico…';
@@ -165,7 +166,7 @@ async function analyze(){
  state.rawCandles=raw;state.lastRecalcBucket=Math.floor(raw.at(-1).time/(state.tf*60));const c=aggregate(raw,state.tf);state.candles=c;const calc=buildSetups(c);state.trades=simulate(c,calc.setups);
  draw(c,calc,state.trades);showLatest(calc,state.trades,c);renderHistory(state.trades);
  $('chartTitle').textContent=(state.symbols.find(s=>s.symbol===state.selected)?.name||state.selected)+' · M'+state.tf;
- $('chartSubtitle').textContent='Velas '+c.length+' · análisis de 24 horas · señales proyectadas';
+ $('chartSubtitle').textContent='Velas '+c.length+' · análisis de 7 días · señales proyectadas';
  $('chartRange').textContent=new Date(c[0].time*1000).toLocaleDateString('es-PA')+' — '+new Date(c.at(-1).time*1000).toLocaleTimeString('es-PA');
  $('dataStatus').textContent='Datos actualizados';
  }catch(e){$('dataStatus').textContent='Error: '+e.message;$('signalDetails').textContent=e.message;}finally{state.busy=false;}
@@ -174,7 +175,7 @@ function onLiveTick(tick){
  if(!state.selected||tick.symbol!==state.selected||!state.rawCandles.length)return;
  const price=Number(tick.quote),epoch=Number(tick.epoch);if(!Number.isFinite(price)||!Number.isFinite(epoch))return;
  const minute=Math.floor(epoch/60)*60;let last=state.rawCandles[state.rawCandles.length-1];
- if(minute>last.time){state.rawCandles.push({time:minute,open:price,high:price,low:price,close:price});if(state.rawCandles.length>1440)state.rawCandles.shift();}
+ if(minute>last.time){state.rawCandles.push({time:minute,open:price,high:price,low:price,close:price});if(state.rawCandles.length>HISTORY_CANDLES)state.rawCandles.shift();}
  else if(minute===last.time){last.high=Math.max(last.high,price);last.low=Math.min(last.low,price);last.close=price;}
  const tfSeconds=state.tf*60,bucket=Math.floor(epoch/tfSeconds)*tfSeconds;
  const group=state.rawCandles.filter(x=>Math.floor(x.time/tfSeconds)*tfSeconds===bucket);
