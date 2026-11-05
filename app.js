@@ -505,12 +505,24 @@ function showLatest(calc,trades,c,raw=state.rawCandles){
  $('rsiLegend').textContent='Valor actual: '+fmt(rv);
 }
 function renderHistory(trades){
- const source=mergeTrades(state.marketBacktests,state.savedChartTrades.length?state.savedChartTrades:(trades||[]),2000);
- const rows=[...source].sort((a,b)=>Number(a.time)-Number(b.time)).slice(-550).reverse();
- const shown=Math.min(rows.length,550);
- const realized=source.filter(t=>(t.result==='GANADA'||t.result==='PERDIDA')&&Number.isFinite(t.exitPrice)).map(t=>tradeMoney(t,t.exitPrice)).filter(Number.isFinite);const moneyTotal=realized.reduce((a,v)=>a+v,0);$('historyCount').textContent='Mostrando '+shown+' de '+source.length+' · resultado estimado '+moneyText(moneyTotal)+' USD';$('historyBody').innerHTML=rows.length?rows.map(t=>{const spec=cfdSpec(t.symbol),slMoney=tradeMoney(t,t.sl),tp1Money=tradeMoney(t,t.tp1),tp2Money=tradeMoney(t,t.tp2),resultMoney=t.exitPrice==null?null:tradeMoney(t,t.exitPrice);return '<tr><td>'+new Date(t.time*1000).toLocaleTimeString('es-PA',{hour:'2-digit',minute:'2-digit'})+'</td><td>'+esc(state.symbols.find(x=>x.symbol===t.symbol)?.name||t.symbol||state.selected)+'</td><td style="color:'+(t.side==='BUY'?'#20d69a':'#ff6876')+'">'+(t.side==='BUY'?'COMPRA':'VENTA')+'</td><td>'+fmt(t.entry)+'</td><td>'+fmt(Number.isFinite(t.entryRsi)?t.entryRsi:t.rsi)+'</td><td>'+fmt(t.sl)+'</td><td>'+fmt(t.tp1)+'</td><td>'+fmt(t.tp2)+'</td><td>'+t.result+'</td><td style="color:'+(t.points==null?'#8b9bb0':t.points>=0?'#20d69a':'#ff6876')+'">'+(t.points==null?'—':(t.points>0?'+':'')+fmt(t.points)+' pts')+'</td><td>'+(spec?spec.minLot+' lotes':'—')+'</td><td>'+moneyText(slMoney)+'</td><td>'+moneyText(tp1Money)+'</td><td>'+moneyText(tp2Money)+'</td><td>'+moneyText(resultMoney)+'</td></tr>';}).join(''):'<tr><td colspan="15" class="empty-cell">No hay operaciones detectadas en este período.</td></tr>';
+ // El historial visible y sus contadores siempre corresponden a las últimas 24 horas.
+ const cutoff=Math.floor(Date.now()/1000)-86400;
+ const combined=mergeTrades(state.marketBacktests,state.savedChartTrades,2000);
+ const source=combined.filter(t=>Number.isFinite(Number(t.time))&&Number(t.time)>=cutoff);
+ const rows=[...source].sort((a,b)=>Number(b.time)-Number(a.time));
+ const shown=rows.length;
+ const realized=source.filter(t=>(t.result==='GANADA'||t.result==='PERDIDA')&&Number.isFinite(t.exitPrice)).map(t=>tradeMoney(t,t.exitPrice)).filter(Number.isFinite);
+ const moneyTotal=realized.reduce((a,v)=>a+v,0);
+ $('historyCount').textContent='Mostrando '+shown+' operaciones de las últimas 24 horas · resultado estimado '+moneyText(moneyTotal)+' USD';
+ $('historyBody').innerHTML=rows.length?rows.map(t=>{
+  const spec=cfdSpec(t.symbol),slMoney=tradeMoney(t,t.sl),tp1Money=tradeMoney(t,t.tp1),tp2Money=tradeMoney(t,t.tp2),resultMoney=t.exitPrice==null?null:tradeMoney(t,t.exitPrice);
+  return '<tr><td>'+new Date(t.time*1000).toLocaleTimeString('es-PA',{hour:'2-digit',minute:'2-digit'})+'</td><td>'+esc(state.symbols.find(x=>x.symbol===t.symbol)?.name||t.symbol||state.selected)+'</td><td style="color:'+(t.side==='BUY'?'#20d69a':'#ff6876')+'">'+(t.side==='BUY'?'COMPRA':'VENTA')+'</td><td>'+fmt(t.entry)+'</td><td>'+fmt(Number.isFinite(t.entryRsi)?t.entryRsi:t.rsi)+'</td><td>'+fmt(t.sl)+'</td><td>'+fmt(t.tp1)+'</td><td>'+fmt(t.tp2)+'</td><td>'+t.result+'</td><td style="color:'+(t.points==null?'#8b9bb0':t.points>=0?'#20d69a':'#ff6876')+'">'+(t.points==null?'—':(t.points>0?'+':'')+fmt(t.points)+' pts')+'</td><td>'+(spec?spec.minLot+' lotes':'—')+'</td><td>'+moneyText(slMoney)+'</td><td>'+moneyText(tp1Money)+'</td><td>'+moneyText(tp2Money)+'</td><td>'+moneyText(resultMoney)+'</td></tr>';
+ }).join(''):'<tr><td colspan="15" class="empty-cell">No hay operaciones detectadas en las últimas 24 horas. Ejecuta el backtesting para analizar los datos.</td></tr>';
  const closed=source.filter(t=>t.result==='GANADA'||t.result==='PERDIDA');
- $('wins').textContent=closed.filter(t=>t.result==='GANADA').length;$('losses').textContent=closed.filter(t=>t.result==='PERDIDA').length;$('pending').textContent=source.filter(t=>t.result==='PENDIENTE').length;$('expired').textContent=source.filter(t=>t.result==='CANCELADA').length;
+ $('wins').textContent=closed.filter(t=>t.result==='GANADA').length;
+ $('losses').textContent=closed.filter(t=>t.result==='PERDIDA').length;
+ $('pending').textContent=source.filter(t=>t.result==='PENDIENTE').length;
+ $('expired').textContent=source.filter(t=>t.result==='CANCELADA').length;
 }
 async function runUniverseBacktest(refresh=false){
  if(!state.rawCandles.length)$('dataStatus').textContent='Preparando análisis de 24 horas…';
@@ -536,9 +548,8 @@ async function runUniverseBacktest(refresh=false){
  if(state.markerPlugin)state.markerPlugin.setMarkers([]);
  savePersistentState();
  renderHistory(state.marketBacktests);
- const closed=allTrades.filter(t=>t.result==='GANADA'||t.result==='PERDIDA');
- $('wins').textContent=closed.filter(t=>t.result==='GANADA').length;$('losses').textContent=closed.filter(t=>t.result==='PERDIDA').length;
- $('pending').textContent=allTrades.filter(t=>t.result==='PENDIENTE').length;$('expired').textContent=allTrades.filter(t=>t.result==='CANCELADA').length;
+ // Los contadores se pintan desde el mismo historial filtrado de 24 horas.
+ renderHistory(state.marketBacktests);
  const failed=state.downloadErrors.length;$('backtestInfo').textContent='Universo: '+state.symbols.length+' instrumentos · señales M2 · gráfico M'+state.tf+' · período: últimas 24 horas · '+allTrades.length+' señales simuladas · '+failed+' descargas fallidas · '+shortHistory.length+' con historial parcial'+(failed?'. Errores: '+state.downloadErrors.slice(0,2).join(' | '):'')+(shortHistory.length?'. Parciales: '+shortHistory.slice(0,3).join(', '):'.');
 }
 async function analyze(){
