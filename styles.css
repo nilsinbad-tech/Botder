@@ -198,3 +198,4 @@
  .chart-head{align-items:center!important}
  .summary-grid article b{font-size:15px!important}
 }
+.rsi-level-settings{align-items:flex-start!important;gap:9px!important}.rsi-config-grid{display:flex;gap:12px;flex-wrap:wrap;width:100%}.rsi-config-grid label,.rsi-level-group label{display:flex;align-items:center;gap:6px;color:#aebdd0;font-size:11px}.rsi-config-grid select,.rsi-config-grid input,.rsi-level-group input{min-height:32px;max-width:82px;padding:5px;border:1px solid #40516a;border-radius:6px;background:#081321;color:#fff;font-size:12px;font-weight:700}.rsi-level-group{display:flex;gap:10px;flex-wrap:wrap;width:100%}.rsi-level-group input{width:54px}.rsi-settings-status{font-size:10px;color:#aab8ca}
