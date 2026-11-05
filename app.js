@@ -99,13 +99,35 @@ function draw(c,calc,trades){
  });
  candle.setMarkers(markers.sort((a,b)=>a.time-b.time));
  const latest=trades.filter(t=>t.state==='PREPARADA').slice(-1)[0];
- if(latest){candle.createPriceLine({price:latest.ob.high,color:latest.side==='BUY'?'#168f76':'#b43c4b',lineWidth:1,lineStyle:L.LineStyle.Dotted,axisLabelVisible:false,title:latest.side==='BUY'?'OB alcista':'OB bajista'});candle.createPriceLine({price:latest.ob.low,color:latest.side==='BUY'?'#168f76':'#b43c4b',lineWidth:1,lineStyle:L.LineStyle.Dotted,axisLabelVisible:false,title:'OB'});candle.createPriceLine({price:latest.entry,color:latest.side==='BUY'?'#20d69a':'#ff5968',lineWidth:2,lineStyle:L.LineStyle.Dashed,axisLabelVisible:true,title:latest.side==='BUY'?'COMPRA':'VENTA'});candle.createPriceLine({price:latest.sl,color:'#ff5968',lineStyle:L.LineStyle.Dotted,axisLabelVisible:true,title:'SL'});candle.createPriceLine({price:latest.tp1,color:'#20d69a',lineStyle:L.LineStyle.Dotted,axisLabelVisible:true,title:'TP1'});candle.createPriceLine({price:latest.tp2,color:'#20d69a',lineStyle:L.LineStyle.Dashed,axisLabelVisible:true,title:'TP2'});}
- state.main.timeScale().fitContent();
+ state.main.timeScale().fitContent();drawOverlays(latest,c,main);
  const rsiEl=$('rsiChart');rsiEl.innerHTML='';
  state.rsi=L.createChart(rsiEl,{autoSize:true,layout:{background:{type:'solid',color:'#0b121e'},textColor:'#8b9bb0',fontSize:10},grid:{vertLines:{color:'#172235'},horzLines:{color:'#172235'}},rightPriceScale:{borderColor:'#28364a'},timeScale:{visible:false},handleScroll:{mouseWheel:true,pressedMouseMove:true,horzTouchDrag:true},handleScale:{mouseWheel:true,pinch:true}});
  const rs=state.rsi.addSeries(L.LineSeries,{color:'#a36aff',lineWidth:2,priceLineVisible:false,lastValueVisible:true});rs.setData(calc.rv.map((v,i)=>v==null?null:{time:c[i].time,value:v}).filter(Boolean));
  [30,50,70].forEach(v=>rs.createPriceLine({price:v,color:'#45536b',lineStyle:L.LineStyle.Dashed,lineWidth:1,axisLabelVisible:false,title:''}));
  state.rsi.timeScale().fitContent();
+}
+function drawOverlays(t,c,host){
+ const old=host.querySelector('.chart-overlay');if(old)old.remove();if(!t)return;
+ const overlay=document.createElement('div');overlay.className='chart-overlay';host.appendChild(overlay);
+ const zone=document.createElement('div');zone.className='ob-zone '+(t.side==='BUY'?'bull-zone':'bear-zone');zone.innerHTML='<b>'+(t.side==='BUY'?'OB ALCISTA':'OB BAJISTA')+'</b>';overlay.appendChild(zone);
+ const levels=[
+  {p:t.entry,label:(t.side==='BUY'?'COMPRA':'VENTA')+' '+fmt(t.entry),cls:'entry-line'},
+  {p:t.sl,label:'SL '+fmt(t.sl),cls:'sl-line'},
+  {p:t.tp1,label:'TP1 · PIVOTE '+fmt(t.tp1),cls:'tp-line'},
+  {p:t.tp2,label:'TP2 · SOPORTE/RESISTENCIA '+fmt(t.tp2),cls:'tp-line'}
+ ];
+ const lineEls=levels.map(v=>{const el=document.createElement('div');el.className='level-line '+v.cls;el.innerHTML='<span>'+v.label+'</span>';overlay.appendChild(el);return{el,...v};});
+ const update=()=>{
+  const width=host.clientWidth,xOb=state.main.timeScale().timeToCoordinate(t.ob.time),xSignal=state.main.timeScale().timeToCoordinate(t.time);
+  const xStart=Math.max(0,Math.min(width-8,xSignal==null?width*.55:xSignal));
+  const xZone=Math.max(0,Math.min(width-8,xOb==null?width*.4:xOb));
+  const yHigh=state.main.priceScale('right').priceToCoordinate(t.ob.high),yLow=state.main.priceScale('right').priceToCoordinate(t.ob.low);
+  if(yHigh!=null&&yLow!=null){zone.style.display='block';zone.style.left=xZone+'px';zone.style.width=Math.max(24,width-xZone-3)+'px';zone.style.top=Math.min(yHigh,yLow)+'px';zone.style.height=Math.max(8,Math.abs(yLow-yHigh))+'px';}else zone.style.display='none';
+  lineEls.forEach(v=>{const y=state.main.priceScale('right').priceToCoordinate(v.p);if(y==null){v.el.style.display='none';return;}v.el.style.display='block';v.el.style.left=xStart+'px';v.el.style.width=Math.max(25,width-xStart-2)+'px';v.el.style.top=y+'px';});
+ };
+ state.main.timeScale().subscribeVisibleLogicalRangeChange(update);
+ if(window.ResizeObserver){const ro=new ResizeObserver(update);ro.observe(host);}
+ requestAnimationFrame(update);
 }
 function fmt(n){return Number.isFinite(n)?Number(n).toFixed(2):'—';}
 function showLatest(calc,trades,c){
@@ -114,7 +136,7 @@ function showLatest(calc,trades,c){
  $('trendValue').textContent=trend;$('trendValue').style.color=trend==='BAJISTA'?'#ff6876':trend==='ALCISTA'?'#20d69a':'#d5b35b';
  $('signalValue').textContent=t?(t.side==='BUY'?'COMPRA':'VENTA'):'ESPERANDO';$('signalValue').style.color=t?(t.side==='BUY'?'#20d69a':'#ff6876'):'#aab8ca';
  $('entryValue').textContent=t?fmt(t.entry):'—';$('slValue').textContent=t?fmt(t.sl):'—';$('tp1Value').textContent=t?fmt(t.tp1):'—';$('tp2Value').textContent=t?fmt(t.tp2):'—';$('rsiValue').textContent=fmt(rv);
- const confirms=t&&((t.side==='BUY'&&rv>=50&&rv<=65)||(t.side==='SELL'&&rv<=55&&rv>=35));
+ const confirms=t&&((t.side==='BUY'&&t.rsi>=50&&t.rsi<=65)||(t.side==='SELL'&&t.rsi<=55&&t.rsi>=35));
  $('rsiConfirm').textContent=t?(confirms?'CONFIRMA '+(t.side==='BUY'?'COMPRA':'VENTA'):'NO CONFIRMA'):'Sin señal';$('rsiConfirm').style.color=confirms?'#20d69a':'#ff6876';
  $('signalState').textContent=t?'PREPARADA':'ESPERANDO';$('signalDetails').textContent=t?(t.side==='BUY'?'OB alcista':'OB bajista')+' detectado. Entrada proyectada '+fmt(t.entry)+', SL '+fmt(t.sl)+', TP1 en pivote '+fmt(t.tp1)+' y TP2 '+fmt(t.tp2)+'.':'No hay una señal completa en la última vela. El motor sigue analizando.';
  $('rsiLegend').textContent='Valor actual: '+fmt(rv);
