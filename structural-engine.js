@@ -33,19 +33,21 @@ function botderMedianRange(d,end){
  return a.length?a[Math.floor(a.length/2)]:Math.max(1e-8,Math.abs(d[end]?.close||1)*.0001);
 }
 function botderLiquidity(d,end,pivots){
- const tol=Math.max(botderMedianRange(d,end)*.16,Math.abs(d[end]?.close||1)*1e-7,1e-9);
+ const tol=Math.max(botderMedianRange(d,end)*.16,Math.abs(d[end]?.close||1)*1e-7,1e-9),lookback=240;
  const cluster=(items,side)=>{
-  const result=[],seen=new Set();
-  for(let a=0;a<items.length;a++)for(let b=a+1;b<items.length;b++){
-   const p=items[a],q=items[b];if(Math.abs(p.price-q.price)>tol)continue;
-   const key=p.i+":"+q.i;if(seen.has(key))continue;seen.add(key);
-   const lo=Math.min(p.price,q.price),hi=Math.max(p.price,q.price),last=Math.max(p.i,q.i);
-   let swept=false;for(let k=last+1;k<=end;k++){if(side==="SSL"?d[k].low<lo-tol*.1:d[k].high>hi+tol*.1){swept=true;break;}}
+  const recent=items.filter(p=>p.i>=Math.max(0,end-lookback)&&p.i<=end).slice(-140),used=new Set(),result=[];
+  for(const p of recent){
+   if(used.has(p.i))continue;
+   const group=recent.filter(q=>Math.abs(q.price-p.price)<=tol);
+   if(group.length<2)continue;
+   group.forEach(q=>used.add(q.i));
+   const last=Math.max(...group.map(q=>q.i)),low=Math.min(...group.map(q=>q.price)),high=Math.max(...group.map(q=>q.price));
+   let swept=false;
+   for(let k=last+1;k<=end;k++){if(side==="SSL"?d[k].low<low-tol*.1:d[k].high>high+tol*.1){swept=true;break;}}
    if(swept)continue;
-   const group=items.filter(x=>Math.abs(x.price-p.price)<=tol);
-   const low=Math.min(...group.map(x=>x.price)),high=Math.max(...group.map(x=>x.price));
-   if(result.some(x=>Math.abs(x.level-(side==="SSL"?low:high))<=tol*.35))continue;
-   result.push({side,low,high,level:side==="SSL"?low:high,count:group.length,time:d[last].time,index:last,tolerance:tol});
+   const level=side==="SSL"?low:high;
+   if(result.some(x=>Math.abs(x.level-level)<=tol*.35))continue;
+   result.push({side,low,high,level,count:group.length,time:d[last].time,index:last,tolerance:tol});
   }
   return result.sort((x,y)=>side==="SSL"?y.level-x.level:x.level-y.level);
  };
@@ -72,9 +74,9 @@ function botderZones(d,end){
 function botderOverlap(a,b,pad=0){
  return !!a&&!!b&&Math.max(a.low,b.low)<=Math.min(a.high,b.high)+pad;
 }
-function botderTradeAt(d,i,tf){
+function botderTradeAt(d,i,tf,cache=null){
  if(i<60||i>=d.length)return null;
- const close=d.slice(0,i+1).map(c=>c.close),e9=botderEma(close,9),e20=botderEma(close,20),e50=botderEma(close,50);
+ const close=cache?null:d.slice(0,i+1).map(c=>c.close),e9=cache?.e9||botderEma(close,9),e20=cache?.e20||botderEma(close,20),e50=cache?.e50||botderEma(close,50);
  const c=d[i],emaBull=e9[i]!=null&&e20[i]!=null&&e50[i]!=null&&e9[i]>e20[i]&&e20[i]>e50[i],emaBear=e9[i]!=null&&e20[i]!=null&&e50[i]!=null&&e9[i]<e20[i]&&e20[i]<e50[i];
  const piv=botderPivots(d,i-1,2),liq=botderLiquidity(d,i-1,piv),zones=botderZones(d,i-1),range=botderMedianRange(d,i-1),pad=Math.max(range*.75,liq.tolerance*2);
  const candidate=(side)=>{
@@ -108,20 +110,24 @@ function botderScoreSignal(s){
  return s?Math.max(0,Math.min(100,Math.round(s.confidence))):0;
 }
 function botderBacktest(d,tf,symbol,market){
- const trades=[],seen=new Set();let nextAvailable=60;
+ const trades=[],seen=new Set(),closes=d.map(c=>c.close),cache={e9:botderEma(closes,9),e20:botderEma(closes,20),e50:botderEma(closes,50)};
+ let nextAvailable=60;
  for(let i=60;i<d.length-1;i++){
   if(i<nextAvailable)continue;
-  const s=botderTradeAt(d,i,tf);if(!s)continue;
-  const key=[tf,s.direction,s.pool.time,s.pool.level.toPrecision(12)].join(":");if(seen.has(key))continue;seen.add(key);
-  let result="ABIERTA",exitPrice=null,exitTime=0,exitReason="SIN CIERRE";
+  const signal=botderTradeAt(d,i,tf,cache);if(!signal)continue;
+  const key=[tf,signal.direction,signal.pool.time,signal.pool.level.toPrecision(12)].join(":");
+  if(seen.has(key))continue;seen.add(key);
+  let result="ABIERTA",exitPrice=null,exitTime=0,exitReason="SIN CIERRE",exitIndex=-1;
   for(let j=i+1;j<d.length;j++){
-   const b=d[j],stop=s.direction==="COMPRAR"?b.low<=s.sl:b.high>=s.sl,one=s.direction==="COMPRAR"?b.high>=s.tp1:b.low<=s.tp1,two=s.direction==="COMPRAR"?b.high>=s.tp2:b.low<=s.tp2;
-   if(stop){result="PERDIDA";exitPrice=s.sl;exitTime=b.time*1000;exitReason="SL ESTRUCTURAL";break;}
-   if(two){result="GANADA";exitPrice=s.tp2;exitTime=b.time*1000;exitReason="TP2 LIQUIDEZ";break;}
-   if(one){result="GANADA";exitPrice=s.tp1;exitTime=b.time*1000;exitReason="TP1 LIQUIDEZ";break;}
+   const bar=d[j],stop=signal.direction==="COMPRAR"?bar.low<=signal.sl:bar.high>=signal.sl;
+   const tp1=signal.direction==="COMPRAR"?bar.high>=signal.tp1:bar.low<=signal.tp1;
+   const tp2=signal.direction==="COMPRAR"?bar.high>=signal.tp2:bar.low<=signal.tp2;
+   if(stop){result="PERDIDA";exitPrice=signal.sl;exitTime=bar.time*1000;exitReason="SL ESTRUCTURAL";exitIndex=j;break;}
+   if(tp2){result="GANADA";exitPrice=signal.tp2;exitTime=bar.time*1000;exitReason="TP2 LIQUIDEZ";exitIndex=j;break;}
+   if(tp1){result="GANADA";exitPrice=signal.tp1;exitTime=bar.time*1000;exitReason="TP1 LIQUIDEZ";exitIndex=j;break;}
   }
-  trades.push({...s,id:"BT-"+symbol+"-"+tf+"-"+s.time,symbol,market,result,exitPrice,price:exitPrice,entryTime:s.time*1000,zoneTime:s.time*1000,exitTime,exitReason,entered:true});
-  nextAvailable=exitTime?Math.max(i+1,d.findIndex((x,k)=>k>i&&x.time*1000>=exitTime)):d.length;
+  trades.push({...signal,id:"BT-"+symbol+"-"+tf+"-"+signal.time,symbol,market,result,exitPrice,price:exitPrice,entryIndex:i,exitIndex,entryTime:signal.time*1000,zoneTime:signal.time*1000,exitTime,exitReason,entered:true});
+  nextAvailable=exitIndex>=0?exitIndex+1:d.length;
  }
  return trades;
 }
@@ -135,7 +141,7 @@ function buildStructuralPlan(baseCandles,displayTf){
  const tf=Number(displayTf)||60,source=tf===30?botderAggregate(baseCandles,150):baseCandles.slice(),label=tf===30?"S30 · MOTOR 150s":botderLabel(tf),i=source.length-2;
  if(i<60)return{items:[],lines:[],projection:null,signal:null,status:"CARGANDO HISTORIAL",activeSource:source,bias4:null,recommendation:"ESPERANDO"};
  const items=botderAnnotations(source,i,tf),signal=botderTradeAt(source,i,tf);
- const closes=source.slice(0,i+1).map(c=>c.close),emaSets=[{name:"EMA 9",color:"#ffd166",values:botderEma(closes,9)},{name:"EMA 20",color:"#61b7ff",values:botderEma(closes,20)},{name:"EMA 50",color:"#bd8cff",values:botderEma(closes,50)}],ema=emaSets.map(set=>({name:set.name,color:set.color,points:set.values.map((price,k)=>price==null?null:{time:source[k].time,price}).filter(Boolean).slice(-180)}));
+ const closes=source.slice(0,i+1).map(c=>c.close),emaSets=[{name:"EMA 9",color:"#ffd166",values:botderEma(closes,9)},{name:"EMA 20",color:"#61b7ff",values:botderEma(closes,20)},{name:"EMA 50",color:"#bd8cff",values:botderEma(closes,50)}],ema=emaSets.map(set=>({name:set.name,color:set.color,points:set.values.map((price,k)=>price==null?null:{time:source[k].time,price}).filter(Boolean)}));
  let projection=null;
  if(signal){
   projection={direction:signal.direction,entry:signal.entry,sl:signal.sl,tp1:signal.tp1,tp2:signal.tp2,zoneLow:signal.pool.low,zoneHigh:signal.pool.high,low:signal.pool.low,high:signal.pool.high,stage:"OPORTUNIDAD "+signal.confidence+"%",timeframe:label,confidence:signal.confidence,reason:signal.mode};
@@ -149,18 +155,19 @@ function runStructuralBacktest(symbol,market,candles,displayTf){
  const runId=++structuralBacktestRunId;structuralBacktestRunningKey=key;
  const raw=candles.slice().sort((a,b)=>a.time-b.time),d=tf===30?botderAggregate(raw,150):raw;
  const trades=botderBacktest(d,tf===30?150:tf,symbol,market).map(t=>({...t,timeframe:botderLabel(tf),timeframeSeconds:tf,sourceSeconds:tf===30?150:tf}));
- const complete=()=>{if(runId!==structuralBacktestRunId)return;if(typeof selectedSymbol!=="undefined"&&selectedSymbol&&selectedSymbol!==symbol){structuralBacktestRunningKey="";return;}if(Number(document.getElementById("timeframe")?.value||tf)!==tf){structuralBacktestRunningKey="";return;}
+ const complete=()=>{
+  if(runId!==structuralBacktestRunId)return;
+  if(typeof selectedSymbol!=="undefined"&&selectedSymbol&&selectedSymbol!==symbol){structuralBacktestRunningKey="";return;}
+  if(Number(document.getElementById("timeframe")?.value||tf)!==tf){structuralBacktestRunningKey="";return;}
   if(typeof backtestTrades!=="undefined")backtestTrades.splice(0,backtestTrades.length,...trades);
   setBacktestTrades(trades);
-  const cv=d.map(c=>c.close),ema=[{name:"EMA 9",color:"#ffd166",values:botderEma(cv,9)},{name:"EMA 20",color:"#61b7ff",values:botderEma(cv,20)},{name:"EMA 50",color:"#bd8cff",values:botderEma(cv,50)}].map(x=>({name:x.name,color:x.color,points:x.values.map((price,k)=>price==null?null:{time:d[k].time,price}).filter(Boolean).slice(-180)}));
   const livePlan=buildStructuralPlan(raw,tf);
-  if(typeof setStructureOverlay==="function")setStructureOverlay({items:livePlan.items,lines:[],ema:livePlan.ema||ema,projection:livePlan.projection,activeTf:tf});
+  if(typeof setStructureOverlay==="function")setStructureOverlay({items:livePlan.items,lines:[],ema:livePlan.ema,projection:livePlan.projection,activeTf:tf});
   structuralBacktestValidatedKey=key;structuralBacktestRunningKey="";backtestSymbol=symbol;backtestReady=true;
-  setText("chart-message","BACKTEST "+botderLabel(tf)+" · "+d.length+" velas · "+trades.length+" operaciones evaluadas.");
+  setText("chart-message","BACKTEST "+botderLabel(tf)+" · "+raw.length+" velas visibles · "+d.length+" velas de análisis · "+trades.length+" operaciones evaluadas.");
   if(typeof renderStrategyJournal==="function")renderStrategyJournal();
  };
- if(d.length>1800){let offset=0,all=[];const chunk=()=>{if(runId!==structuralBacktestRunId)return;const end=Math.min(d.length,offset+1800);const part=botderBacktest(d.slice(0,end),tf===30?150:tf,symbol,market);all=part;offset=end;if(offset<d.length){setTimeout(chunk,0);return;}trades.splice(0,trades.length,...all.map(t=>({...t,timeframe:botderLabel(tf),timeframeSeconds:tf,sourceSeconds:tf===30?150:tf})));complete();};chunk();}
- else complete();
+ if(typeof requestAnimationFrame==="function")requestAnimationFrame(()=>setTimeout(complete,0));else setTimeout(complete,0);
  return trades;
 }
 function saveStrategyJournal(){try{localStorage.setItem("botder-smc-journal-v2",JSON.stringify(strategyJournal.slice(0,2000)));}catch(e){}}
