@@ -108,7 +108,9 @@ function buildSetups(c,liquidityCandles=c,pivotCandles=liquidityCandles,obStruct
    usedOBs.add(key);
   }
  }
- return{setups,e3,e9,e13,e50,rv,pv,obZones:latestZones.sort((a,b)=>a.time-b.time).slice(-2)};
+ const latest10=latestZones.filter(z=>z.timeframe===10).sort((a,b)=>b.time-a.time)[0]||null;
+ const latest30=latestZones.filter(z=>z.timeframe===30).sort((a,b)=>b.time-a.time)[0]||null;
+ return{setups,e3,e9,e13,e50,rv,pv,obZones:[latest30,latest10].filter(Boolean)};
 }
 function fixedM10Pivots(c,span=3){
  const highs=[],lows=[];
