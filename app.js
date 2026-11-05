@@ -198,10 +198,40 @@ function draw(c,calc,trades,obZones=[],setups=[]){
  if(preserveRange){state.main.timeScale().setVisibleLogicalRange(priorRange);state.rsi.timeScale().setVisibleLogicalRange(priorRange);}else{const visibleFrom=Math.max(0,c.length-120);const visibleRange={from:visibleFrom,to:c.length+3};state.main.timeScale().setVisibleLogicalRange(visibleRange);state.rsi.timeScale().setVisibleLogicalRange(visibleRange);}let syncingRange=false;state.main.timeScale().subscribeVisibleLogicalRangeChange(range=>{if(!range||syncingRange)return;syncingRange=true;state.rsi.timeScale().setVisibleLogicalRange(range);syncingRange=false;});state.rsi.timeScale().subscribeVisibleLogicalRangeChange(range=>{if(!range||syncingRange)return;syncingRange=true;state.main.timeScale().setVisibleLogicalRange(range);syncingRange=false;});state.forceFitNext=false;
 }
 function drawPivotLines(){
- // El gráfico queda limpio: sin líneas de pivotes, soportes ni resistencias.
- if(!state.series.candle)return;
+ if(!state.series.candle||!state.rawCandles.length)return;
  for(const line of state.pivotLines){try{state.series.candle.removePriceLine(line);}catch{}}
  state.pivotLines=[];
+ const raw=state.rawCandles,current=Number(raw[raw.length-1].close);
+ if(!Number.isFinite(current))return;
+ const colors={1:'#8b9cff',2:'#d18cff',3:'#55c9d8',4:'#e2b65c',5:'#35c99a',10:'#ff8b65',30:'#c084fc',60:'#f472b6'};
+ const L=window.LightweightCharts;
+ for(const mins of [1,2,3,4,5,10,30,60]){
+  if(!state.pivotTfEnabled[mins])continue;
+  const candles=aggregate(raw,mins);
+  if(!candles.length)continue;
+  const detected=pivots(candles,3,mins*60);
+  const highs=detected.highs.filter(p=>Number.isFinite(p.price)&&p.price>current);
+  const lows=detected.lows.filter(p=>Number.isFinite(p.price)&&p.price<current);
+  let resistance=highs.sort((a,b)=>a.price-b.price)[0];
+  let support=lows.sort((a,b)=>b.price-a.price)[0];
+  if(!resistance){
+   const candidates=candles.map(bar=>({time:bar.time,price:bar.high}));
+   resistance=candidates.reduce((best,p)=>!best||p.price>best.price?p:best,null);
+   if(resistance&&resistance.price<=current)resistance=null;
+  }
+  if(!support){
+   const candidates=candles.map(bar=>({time:bar.time,price:bar.low}));
+   support=candidates.reduce((best,p)=>!best||p.price<best.price?p:best,null);
+   if(support&&support.price>=current)support=null;
+  }
+  const color=colors[mins];
+  for(const pair of [[resistance,true],[support,false]]){
+   const p=pair[0],isResistance=pair[1];
+   if(!p||!Number.isFinite(p.price))continue;
+   const line=state.series.candle.createPriceLine({price:p.price,color,lineWidth:1,lineStyle:isResistance?L.LineStyle.Dashed:L.LineStyle.Dotted,axisLabelVisible:true,title:(isResistance?'Resistencia ':'Pivote ')+(mins===60?'1h':mins+'m')});
+   state.pivotLines.push(line);
+  }
+ }
 }
 function drawOverlays(trades,c,host,obZones=[],setups=[]){
  // Se conservan únicamente las cajas de Order Blocks. No dibujar entradas, TP, SL,
