@@ -5,7 +5,7 @@ const HISTORY_CANDLES = 5000;
 const REQUEST_TIMEOUT_MS = 45000;
 const API_URL = 'wss://api.derivws.com/trading/v1/options/ws/public';
 const $ = id => document.getElementById(id);
-const state = { ws:null, req:0, pending:new Map(), symbols:[], selected:null, tf:1, candles:[], rawCandles:[], rawBySymbol:new Map(), marketBacktests:[], savedChartTrades:[], trades:[], liveSub:null, main:null, rsi:null, markerPlugin:null, overlayResizeObserver:null, overlayUpdate:null, overlayRangeHandler:null, pivotLines:[], tradePriceLines:[], overlayPriceLevels:[],levelOverrides:{}, pivotTfEnabled:{1:false,2:false,3:false,4:false,5:true,10:false,30:false,60:false}, tpTfs:[1,3,5,10], slTfs:[1,3,5,10], obStructureOnly:true, rsiConfig:{timeframe:5,period:14,low:40,mid:50,high:60}, obTf:1, obPrimaryTf:10, obPreviousTf:30, obPreviousEnabled:false, pivotTf:5, chartKey:null, series:{}, busy:false, analyzeQueued:false, forceFitNext:true, lastRecalcBucket:null, pendingLiveTick:null, liveFrame:0, overlayFrame:0 };
+const state = { ws:null, req:0, pending:new Map(), reconnectTimer:null, reconnecting:false, symbols:[], selected:null, tf:1, candles:[], rawCandles:[], rawBySymbol:new Map(), marketBacktests:[], savedChartTrades:[], trades:[], liveSub:null, main:null, rsi:null, markerPlugin:null, overlayResizeObserver:null, overlayUpdate:null, overlayRangeHandler:null, pivotLines:[], tradePriceLines:[], overlayPriceLevels:[],levelOverrides:{}, pivotTfEnabled:{1:false,2:false,3:false,4:false,5:true,10:false,30:false,60:false}, tpTfs:[1,3,5,10], slTfs:[1,3,5,10], obStructureOnly:true, rsiConfig:{timeframe:5,period:14,low:40,mid:50,high:60}, obTf:1, obPrimaryTf:10, obPreviousTf:30, obPreviousEnabled:false, pivotTf:5, chartKey:null, series:{}, busy:false, analyzeQueued:false, forceFitNext:true, lastRecalcBucket:null, pendingLiveTick:null, liveFrame:0, overlayFrame:0 };
 const PERSIST_KEY='botder-history-v3';
 function tradeKey(t){return Number.isFinite(Number(t.structureTime))?String(t.symbol||'')+'|'+String(t.side||'')+'|ZONA|'+String(t.structureTime):String(t.symbol||'')+'|'+String(t.time)+'|'+String(t.side||'');}
 function mergeTrades(oldItems,newItems,limit=2000){const map=new Map();for(const t of [...(oldItems||[]),...(newItems||[])]){if(!t||!Number.isFinite(Number(t.time))||!t.side)continue;map.set(tradeKey(t),t);}return [...map.values()].sort((a,b)=>a.time-b.time).slice(-limit);}
@@ -20,16 +20,59 @@ const CANDIDATES = [
 /* Deriv CFD public specs: contract size and minimum volume */
 const DERIV_CFD_SPECS={'1HZ10V':{contractSize:1,minLot:.5},'1HZ15V':{contractSize:1,minLot:.2},'1HZ25V':{contractSize:1,minLot:.005},'1HZ30V':{contractSize:1,minLot:.2},'1HZ50V':{contractSize:1,minLot:.005},'1HZ75V':{contractSize:1,minLot:.05},'1HZ90V':{contractSize:1,minLot:.1},'1HZ100V':{contractSize:1,minLot:1},'R_10':{contractSize:1,minLot:.5},'R_25':{contractSize:1,minLot:.5},'R_50':{contractSize:1,minLot:4},'R_75':{contractSize:1,minLot:.01},'R_100':{contractSize:1,minLot:1}};
 function setConnection(ok,msg){$('connectionDot').parentElement.classList.toggle('connected',ok);$('connectionText').textContent=msg;}
+function scheduleReconnect(delay=4000){
+ if(state.reconnectTimer||state.reconnecting)return;
+ state.reconnectTimer=setTimeout(()=>{
+  state.reconnectTimer=null;
+  reconnectConnection(false).catch(()=>scheduleReconnect(6000));
+ },delay);
+}
 function connect(){
  return new Promise((resolve,reject)=>{
-  if(state.ws && state.ws.readyState===1){resolve();return;}
-  const ws=new WebSocket(API_URL); state.ws=ws;
-  const timer=setTimeout(()=>reject(new Error('Tiempo de conexión agotado')),12000);
-  ws.onopen=()=>{clearTimeout(timer);setConnection(false,'Validando Deriv…');resolve();};
-  ws.onerror=()=>{clearTimeout(timer);setConnection(false,'Error de conexión');reject(new Error('No se pudo conectar a Deriv'));};
-  ws.onclose=()=>{setConnection(false,'Deriv desconectada');for(const [,p] of state.pending)p.reject(new Error('Conexión cerrada'));state.pending.clear();};
+  if(state.ws&&state.ws.readyState===1){resolve();return;}
+  if(state.ws&&state.ws.readyState!==3){try{state.ws.close();}catch{}}
+  let settled=false;
+  const finish=(error)=>{if(settled)return;settled=true;clearTimeout(timer);error?reject(error):resolve();};
+  const ws=new WebSocket(API_URL);state.ws=ws;
+  const timer=setTimeout(()=>{setConnection(false,'Tiempo agotado · reconectando…');try{ws.close();}catch{}finish(new Error('Tiempo de conexión agotado'));},12000);
+  ws.onopen=()=>{setConnection(false,'Validando Deriv…');finish();};
+  ws.onerror=()=>{setConnection(false,'Error de conexión');finish(new Error('No se pudo conectar a Deriv'));};
+  ws.onclose=()=>{
+   if(state.ws===ws){state.ws=null;state.liveSub=null;}
+   setConnection(false,'Deriv desconectada · reconectando…');
+   for(const [,p] of state.pending)p.reject(new Error('Conexión cerrada'));
+   state.pending.clear();
+   finish(new Error('Conexión cerrada'));
+   if(!state.reconnecting)scheduleReconnect();
+  };
   ws.onmessage=e=>{let m;try{m=JSON.parse(e.data);}catch(err){console.error('Respuesta Deriv no válida',err);return;}if(m.req_id&&state.pending.has(m.req_id)){const p=state.pending.get(m.req_id);state.pending.delete(m.req_id);m.error?p.reject(new Error(m.error.message)):p.resolve(m);}if(m.msg_type==='tick'&&m.tick)onLiveTick(m.tick);};
  });
+}
+async function reconnectConnection(runBacktest=true){
+ if(state.reconnecting)return;
+ state.reconnecting=true;
+ if(state.reconnectTimer){clearTimeout(state.reconnectTimer);state.reconnectTimer=null;}
+ const wanted=state.selected||state.savedSelected;
+ try{
+  setConnection(false,'Reconectando con Deriv…');
+  const old=state.ws;state.ws=null;state.liveSub=null;
+  if(old){try{old.close();}catch{}}
+  await connect();
+  await loadSymbols();
+  if(wanted&&state.symbols.some(item=>item.symbol===wanted)){state.selected=wanted;$('symbolSelect').value=wanted;}
+  state.rawBySymbol.delete(state.selected);
+  await analyze();
+  if(!state.rawCandles.length)throw new Error('Deriv conectó, pero no entregó velas');
+  setConnection(true,'Deriv conectada · datos recibidos');
+  subscribeLive();
+  if(runBacktest)runUniverseBacktest(true).catch(e=>{$('backtestInfo').textContent='Error al actualizar: '+e.message;});
+ }catch(e){
+  setConnection(false,'Sin conexión · reintentando…');
+  $('dataStatus').textContent='No se pudo reconectar: '+e.message;
+  throw e;
+ }finally{
+  state.reconnecting=false;
+ }
 }
 function request(payload){return new Promise((resolve,reject)=>{if(!state.ws||state.ws.readyState!==1){reject(new Error('WebSocket no está conectado'));return;}const id=++state.req;const timer=setTimeout(()=>{if(state.pending.has(id)){state.pending.delete(id);reject(new Error('Deriv no respondió a tiempo: '+(payload.ticks_history||payload.active_symbols||'solicitud')));}},REQUEST_TIMEOUT_MS);state.pending.set(id,{resolve:m=>{clearTimeout(timer);resolve(m);},reject:e=>{clearTimeout(timer);reject(e);}});try{state.ws.send(JSON.stringify({...payload,req_id:id}));}catch(e){clearTimeout(timer);state.pending.delete(id);reject(e);}});}
 async function loadSymbols(){
@@ -563,7 +606,7 @@ function bind(){
  $('instrumentList').addEventListener('click',e=>{const b=e.target.closest('button[data-symbol]');if(b)selectSymbol(b.dataset.symbol);});
  $('symbolSelect').addEventListener('change',e=>selectSymbol(e.target.value));
  $('timeframes').addEventListener('click',async e=>{const b=e.target.closest('button[data-tf]');if(!b)return;state.tf=+b.dataset.tf;state.forceFitNext=true;document.querySelectorAll('#timeframes button').forEach(x=>x.classList.toggle('active',x===b));await analyze();});
- $('refreshBtn').addEventListener('click',async()=>{state.rawBySymbol.delete(state.selected);await analyze();runUniverseBacktest(true).catch(e=>{$('backtestInfo').textContent='Error al actualizar: '+e.message;});});$('runBacktest').addEventListener('click',async()=>{runUniverseBacktest(true).catch(e=>{$('backtestInfo').textContent='Error al actualizar: '+e.message;});});
+ $('refreshBtn').addEventListener('click',async()=>{const button=$('refreshBtn');button.disabled=true;button.textContent='…';try{await reconnectConnection(true);}catch(e){$('signalDetails').textContent='Deriv no pudo reconectar: '+e.message;}finally{button.disabled=false;button.textContent='↻';}});$('runBacktest').addEventListener('click',async()=>{runUniverseBacktest(true).catch(e=>{$('backtestInfo').textContent='Error al actualizar: '+e.message;});});
 }
 async function start(){restorePersistentState();bind();try{await loadSymbols();if(state.savedSelected&&state.symbols.some(s=>s.symbol===state.savedSelected)){state.selected=state.savedSelected;$('symbolSelect').value=state.selected;document.querySelectorAll('.instrument-chip').forEach(b=>b.classList.toggle('selected',b.dataset.symbol===state.selected));}setConnection(false,'Catálogo recibido · cargando velas…');$('dataStatus').textContent='Instrumentos listos · cargando gráfico principal…';await analyze();if(!state.rawCandles.length||!state.main)throw new Error($('dataStatus').textContent||'Deriv no entregó velas para dibujar');setConnection(true,'Deriv conectada · datos recibidos');subscribeLive();$('backtestInfo').textContent='Gráfico listo. Calculando las últimas 24 horas en segundo plano…';runUniverseBacktest(false).catch(e=>{$('backtestInfo').textContent='Error en análisis de 24 horas: '+e.message;});}catch(e){setConnection(false,'Sin datos de Deriv');$('dataStatus').textContent='No se pudo iniciar: '+e.message;$('signalDetails').textContent=e.message;}}
 start();
