@@ -66,7 +66,7 @@ async function getCandles(symbol,preferredCount=HISTORY_CANDLES){
    let added=0;for(const bar of part){if(!seen.has(bar.time)){seen.add(bar.time);chunks.push(bar);added++;}}
    total=chunks.length;
    const oldest=part[0].time;
-   if(added===0||part.length<count||oldest<=0)break;
+   if(added===0||oldest<=0)break;
    end=oldest-1;
   }catch(e){lastError=e;break;}
  }
@@ -429,7 +429,7 @@ async function analyze(){
  $('chartTitle').textContent=(state.symbols.find(s=>s.symbol===state.selected)?.name||state.selected)+' · M'+state.tf;
  $('chartSubtitle').textContent='Velas '+c.length+' · 24 horas visibles · análisis 48 horas';
  $('chartRange').textContent='Gráfico: últimas 24 horas · '+new Date(c[0].time*1000).toLocaleTimeString('es-PA')+' — '+new Date(c.at(-1).time*1000).toLocaleTimeString('es-PA');
- $('dataStatus').textContent='Datos actualizados · '+raw.length+' velas M1 (48 horas de análisis)';
+ $('dataStatus').textContent='Datos actualizados · '+raw.length+' velas M1 · '+(raw.length>1?Math.round((raw.at(-1).time-raw[0].time)/3600)+' h de historial':'historial insuficiente');
  }catch(e){$('dataStatus').textContent='ERROR DE DATOS: '+e.message;$('signalDetails').textContent='No se pudo cargar este instrumento. '+e.message;}finally{state.busy=false;if(state.analyzeQueued){state.analyzeQueued=false;Promise.resolve().then(analyze);}}
 }
 function onLiveTick(tick){
