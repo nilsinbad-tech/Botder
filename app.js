@@ -283,11 +283,14 @@ function drawOverlays(trades,c,host,obZones=[],setups=[]){
    el.style.display='flex';el.style.left=left+'px';el.style.width=boxWidth+'px';el.style.top=Math.max(0,mid-15)+'px';el.style.height='30px';
   });
   lineEls.forEach(v=>{
-   const y=candleSeries.priceToCoordinate(v.p),x=scale.timeToCoordinate(v.time);
-   if(y==null||x==null){v.el.style.display='none';return;}
-   v.el.style.display='flex';v.el.style.left=Math.max(2,Math.min(width-145,x-68))+'px';
-   v.el.style.right='auto';v.el.style.width='max-content';
-   v.el.style.top=Math.max(2,y-38)+'px';
+   const y=candleSeries.priceToCoordinate(v.p);
+   const current=c.length?scale.timeToCoordinate(c[c.length-1].time):null;
+   if(y==null||current==null){v.el.style.display='none';return;}
+   v.el.style.display='flex';v.el.style.right='auto';v.el.style.width='max-content';
+   const labelWidth=v.el.offsetWidth||145;
+   const targetX=current+8;
+   v.el.style.left=Math.max(2,Math.min(Math.max(2,width-labelWidth-2),targetX))+'px';
+   v.el.style.top=Math.max(2,Math.min(host.clientHeight-v.el.offsetHeight-2,y-(v.el.offsetHeight/2)))+'px';
   });
  };
  state.overlayUpdate=update;
@@ -343,7 +346,7 @@ async function runUniverseBacktest(refresh=false){
  state.marketBacktests=mergeTrades(state.marketBacktests,allTrades,2000);
  state.savedChartTrades=mergeTrades(state.savedChartTrades,allTrades,2000);
  state.trades=state.savedChartTrades.filter(t=>t.symbol===state.selected);
- if(state.markerPlugin&&state.candles.length)state.markerPlugin.setMarkers(buildTradeMarkers(state.trades,state.candles));
+ if(state.markerPlugin)state.markerPlugin.setMarkers([]);
  savePersistentState();
  renderHistory(state.marketBacktests);
  const closed=allTrades.filter(t=>t.result==='GANADA'||t.result==='PERDIDA');
