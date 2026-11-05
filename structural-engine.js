@@ -200,7 +200,7 @@ function renderProjection(plan){
 function safeText(v){return String(v??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));}
 function analyzeCandles(symbol,market,candles){
  if(!Array.isArray(candles)||candles.length<100)return;
- const tf=Number(document.getElementById("timeframe")?.value)||60,raw=candles.slice().sort((a,b)=>a.time-b.time),source=tf===30?botderAggregate(raw,150):raw,bar=source.at(-2);if(!bar)return;
+ const tf=Number(document.getElementById("timeframe")?.value)||60,selected=typeof getDisplayCandles==="function"?getDisplayCandles(tf):candles,raw=(selected?.length?selected:candles).slice().sort((a,b)=>a.time-b.time),source=tf===30?botderAggregate(raw,150):raw,bar=source.at(-2);if(!bar)return;
  const key=symbol+":"+tf;if(botderAnalyzedBars.get(key)===bar.time)return;botderAnalyzedBars.set(key,bar.time);
  const plan=buildStructuralPlan(raw,tf);if(typeof evaluateStrategyJournal==="function")evaluateStrategyJournal(symbol,bar);
  lastProjection=plan.projection;setText("side-analysis-status","● "+plan.status);setText("structure-diagnostic",plan.status+" · "+plan.recommendation+" · "+source.length+" velas · EMA 9/20/50");
@@ -220,7 +220,7 @@ function analyzeCandles(symbol,market,candles){
  if(typeof drawRsiPanel==="function"){const el=document.querySelector(".rsi-strip");if(el)el.style.display="none";}
  renderSignals();renderStrategyJournal();
 }
-function analyzeLiveStructure(symbol,candles){if(symbol!==selectedMarket?.symbol||!Array.isArray(candles))return;const tf=Number(document.getElementById("timeframe")?.value)||60,plan=buildStructuralPlan(candles,tf);if(typeof setStructureOverlay==="function")setStructureOverlay({items:plan.items,lines:[],ema:plan.ema,projection:plan.projection,activeTf:tf});}
+function analyzeLiveStructure(symbol,candles){if(symbol!==selectedMarket?.symbol||!Array.isArray(candles))return;const tf=Number(document.getElementById("timeframe")?.value)||60,selected=typeof getDisplayCandles==="function"?getDisplayCandles(tf):candles,plan=buildStructuralPlan(selected?.length?selected:candles,tf);if(typeof setStructureOverlay==="function")setStructureOverlay({items:plan.items,lines:[],ema:plan.ema,projection:plan.projection,activeTf:tf});}
 function setAnalysisGranularity(seconds){analysisGranularity=Number(seconds)||60;}
 loadStrategyJournal();
 renderStrategyJournal();
