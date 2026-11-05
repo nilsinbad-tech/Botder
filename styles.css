@@ -30,3 +30,6 @@
 .level-line .level-tag{font-size:7px!important;padding:2px 4px!important;min-width:88px!important;gap:4px!important;box-shadow:none!important;border-radius:3px!important}
 .level-tag b{font-size:6px!important;letter-spacing:.2px!important}
 .level-tag strong{font-size:7px!important}
+
+/* Selector de temporalidades para pivotes y resistencias */
+.pivot-settings{display:flex;align-items:center;gap:9px;flex-wrap:wrap;padding:9px 11px;margin:8px 0;background:#101a29;border:1px solid #223149;border-radius:9px}.pivot-settings>span{font-size:11px;font-weight:800;color:#c6d3e4}.pivot-settings>small{font-size:10px;color:#8092aa}.pivot-tf-controls{display:flex;gap:5px;flex-wrap:wrap}.pivot-tf-controls button{min-width:38px;padding:6px 9px;border:1px solid #34445c;border-radius:6px;background:#0b121e;color:#aab8ca;font-size:11px;font-weight:800}.pivot-tf-controls button.active{background:#1c594b;border-color:#35c99a;color:#8ff0ce;box-shadow:0 0 0 1px #35c99a33}@media(max-width:600px){.pivot-settings{gap:7px}.pivot-settings>span{width:100%}.pivot-settings>small{width:100%}}
