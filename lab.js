@@ -72,7 +72,27 @@ case 49:{let width=h20-l20,old=hi(d,i-8,8)-lo(d,i-8,8);if(width<old*.7&&c.close>
 case 50:{let slope=x.e20[i]-x.e20[i-8];if(slope>0&&c.low<=x.e20[i]-a*.7&&c.close>x.e20[i]&&c.close>p.high)return 1;if(slope<0&&c.high>=x.e20[i]+a*.7&&c.close<x.e20[i]&&c.close<p.low)return -1;break}
 }
 return 0}
-function backtest(d,s){let x=calc(d),start=Math.max(100,d.length-720),trades=[],next=start;for(let i=start;i<d.length-1;i++){if(i<next)continue;let dir=signal(s.id,i,d,x);if(!dir)continue;let entry=d[i+1].open,look=d.slice(Math.max(0,i-10),i+1),pad=(x.a[i]||0)*.12,sl=dir>0?Math.min(...look.map(z=>z.low))-pad:Math.max(...look.map(z=>z.high))+pad,risk=Math.abs(entry-sl);if(!Number.isFinite(risk)||risk<=0)continue;let tp=entry+dir*risk*1.5,result="ABIERTA",exitIndex=-1,exitPrice=null;for(let j=i+1;j<d.length;j++){let z=d[j],stop=dir>0?z.low<=sl:z.high>=sl,target=dir>0?z.high>=tp:z.low<=tp;if(stop){result="PERDIDA";exitIndex=j;exitPrice=sl;break}if(target){result="GANADA";exitIndex=j;exitPrice=tp;break}}if(exitIndex>=0){trades.push({result,signalIndex:i,entryIndex:i+1,exitIndex,signalTime:d[i].time,entryTime:d[i+1].time,exitTime:d[exitIndex].time,direction:dir>0?"BUY":"SELL",entry,sl,tp,exitPrice,risk});next=exitIndex+1}else{next=d.length}}let wins=trades.filter(t=>t.result==="GANADA").length,losses=trades.filter(t=>t.result==="PERDIDA").length,total=trades.length;return{wins,losses,total,rate:total?wins/total*100:null,lossRate:total?losses/total*100:null,open:0,candles:d.length,trades}}
+function backtest(d,s){
+ let x=calc(d),start=Math.max(100,d.length-720),trades=[],entries=[],next=start;
+ for(let i=start;i<d.length-1;i++){
+  if(i<next)continue;
+  let dir=signal(s.id,i,d,x);if(!dir)continue;
+  let entry=d[i+1].open,look=d.slice(Math.max(0,i-10),i+1),pad=(x.a[i]||0)*.12;
+  let sl=dir>0?Math.min(...look.map(z=>z.low))-pad:Math.max(...look.map(z=>z.high))+pad,risk=Math.abs(entry-sl);
+  if(!Number.isFinite(risk)||risk<=0)continue;
+  let tp=entry+dir*risk*1.5,result="ABIERTA",exitIndex=-1,exitPrice=null;
+  for(let j=i+1;j<d.length;j++){
+   let z=d[j],stop=dir>0?z.low<=sl:z.high>=sl,target=dir>0?z.high>=tp:z.low<=tp;
+   if(stop){result="PERDIDA";exitIndex=j;exitPrice=sl;break}
+   if(target){result="GANADA";exitIndex=j;exitPrice=tp;break}
+  }
+  let trade={result,signalIndex:i,entryIndex:i+1,exitIndex,signalTime:d[i].time,entryTime:d[i+1].time,exitTime:exitIndex>=0?d[exitIndex].time:null,direction:dir>0?"BUY":"SELL",entry,sl,tp,exitPrice,risk};
+  entries.push(trade);
+  if(exitIndex>=0){trades.push(trade);next=exitIndex+1}else{next=d.length}
+ }
+ let wins=trades.filter(t=>t.result==="GANADA").length,losses=trades.filter(t=>t.result==="PERDIDA").length,total=trades.length;
+ return{wins,losses,total,rate:total?wins/total*100:null,lossRate:total?losses/total*100:null,open:entries.filter(t=>t.result==="ABIERTA").length,candles:d.length,trades,entries}
+}
 function process(m,d){marketHistory[m.symbol]=d;let done=0;for(const s of raw){results.push({strategy:s,market:m.name,symbol:m.symbol,...backtest(d,s)});done++;$("live-detail").textContent="Instrumento: "+m.name+" · estrategia "+done+" de 50";$("live-count").textContent=results.length+" / "+(symbols.length*50)+" pruebas";if(done%5===0){render();prog()}}}
 function ranked(sym){let a=results.filter(x=>x.symbol===sym&&x.total>=MIN&&x.candles>=MIN_CANDLES);let best=[...a].sort((x,y)=>y.wins-x.wins||x.losses-y.losses||(y.rate||0)-(x.rate||0)||y.total-x.total)[0]||null;let worst=[...a].sort((x,y)=>y.losses-x.losses||x.wins-y.wins||(x.rate||0)-(y.rate||0)||y.total-x.total)[0]||null;return{best,worst,count:a.length}}
 function drawChart(){
@@ -83,11 +103,11 @@ function drawChart(){
  const X=i=>24+i*(952/Math.max(1,view.length-1)),Y=p=>18+(hi-p)/span*300;
  let shapes='';
  view.forEach((c,j)=>{const x=X(j),yo=Y(c.open),yc=Y(c.close),yh=Y(c.high),yl=Y(c.low),up=c.close>=c.open,top=Math.min(yo,yc),height=Math.max(2,Math.abs(yc-yo));shapes+='<line x1="'+x+'" y1="'+yh+'" x2="'+x+'" y2="'+yl+'" stroke="'+(up?'#48e0a2':'#ff7184')+'" stroke-width="2"/><rect x="'+(x-2.7)+'" y="'+top+'" width="5.4" height="'+height+'" rx="1" fill="'+(up?'#48e0a2':'#ff7184')+'"/>'});
- const visible=r.trades.filter(t=>t.entryIndex>=from&&t.entryIndex<d.length);
+ const visible=(r.entries||r.trades).filter(t=>t.entryIndex>=from&&t.entryIndex<d.length);
  visible.forEach(t=>{let j=t.entryIndex-from,x=X(j),y=Y(t.entry);shapes+='<path d="'+(t.direction==='BUY'?'M '+x+' '+(y+15)+' l -7 11 h 14 z':'M '+x+' '+(y-15)+' l -7 -11 h 14 z')+'" fill="'+(t.direction==='BUY'?'#48e0a2':'#ff7184')+'"/>';});
- const last=r.trades[r.trades.length-1];let levels='';
+ const last=(r.entries||r.trades).slice(-1)[0];let levels='';
  if(last){levels='<line x1="24" y1="'+Y(last.entry)+'" x2="976" y2="'+Y(last.entry)+'" stroke="#70baff" stroke-dasharray="5 5"/><line x1="24" y1="'+Y(last.tp)+'" x2="976" y2="'+Y(last.tp)+'" stroke="#48e0a2" stroke-dasharray="4 5"/><line x1="24" y1="'+Y(last.sl)+'" x2="976" y2="'+Y(last.sl)+'" stroke="#ff7184" stroke-dasharray="4 5"/>'}
- host.innerHTML='<div class="chart-summary"><b>'+esc(r.strategy.name)+'</b><span>'+esc(symbols.find(x=>x.symbol===sym)?.name||sym)+'</span><span>'+r.wins+' ganadas · '+r.losses+' perdidas · '+r.total+' operaciones cerradas</span></div><svg class="market-chart" viewBox="0 0 1000 350" role="img" aria-label="Gráfico de velas M2 con entradas de '+esc(r.strategy.name)+'">'+levels+shapes+'</svg><div class="chart-legend"><span><i class="buy-dot"></i> BUY</span><span><i class="sell-dot"></i> SELL</span><span>Últimas '+view.length+' velas visibles · M2</span></div><p class="chart-note">Las flechas marcan entradas históricas. Las líneas muestran entrada, TP y SL de la operación cerrada más reciente. Gráfico basado en precios recibidos de Deriv.</p>';
+ host.innerHTML='<div class="chart-summary"><b>'+esc(r.strategy.name)+'</b><span>'+esc(symbols.find(x=>x.symbol===sym)?.name||sym)+'</span><span>'+r.wins+' ganadas · '+r.losses+' perdidas · '+r.total+' operaciones cerradas</span></div><svg class="market-chart" viewBox="0 0 1000 350" role="img" aria-label="Gráfico de velas M2 con entradas de '+esc(r.strategy.name)+'">'+levels+shapes+'</svg><div class="chart-legend"><span><i class="buy-dot"></i> BUY</span><span><i class="sell-dot"></i> SELL</span><span>Últimas '+view.length+' velas visibles · M2</span></div><p class="chart-note">Las flechas marcan todas las entradas detectadas. Las líneas muestran entrada, TP y SL de la señal más reciente, aunque siga abierta. Gráfico basado en precios recibidos de Deriv.</p>';
 }
 function render(){let winners=symbols.map(m=>{let q=ranked(m.symbol),line=(label,r,kind)=>'<div class="rank-line '+kind+'"><div class="rank-label">'+label+'</div><div class="rank-strategy">'+(r?esc(r.strategy.name):'Sin muestra suficiente')+'</div><div class="rank-stats">'+(r?r.wins+' ganadas · '+r.losses+' perdidas · '+f(r.rate)+'% acierto · '+r.total+' ops':'Se necesitan al menos '+MIN+' operaciones cerradas')+'</div></div>';return '<article class="winner-card"><div class="winner-market"><strong>'+esc(m.name)+'</strong><small>'+esc(m.symbol)+'</small></div><div class="rank-pair">'+line('MEJOR RESULTADO',q.best,'best')+line('PEOR RESULTADO',q.worst,'worst')+'</div></article>'}).join('');$('winner-list').className='winner-list';$('winner-list').innerHTML=winners||'No hay resultados';
 let filter=$('strategy-filter').value,chosen=filter==='all'?symbols.map(m=>m.symbol):[filter];$('strategy-list').className='strategy-list';$('strategy-list').innerHTML=raw.map(s=>{let rs=chosen.map(sym=>results.find(r=>r.symbol===sym&&r.strategy.id===s.id)).filter(Boolean);if(!rs.length)return'';return '<article class="strategy-card"><div class="strategy-top"><strong>'+s.id+'. '+esc(s.name)+'</strong><small>'+esc(s.group)+' · '+esc(s.rules)+'</small></div><div class="strategy-results">'+rs.map(r=>'<div class="instrument-result"><b class="'+(r.rate>=50?'rate':'')+'">'+(r.rate==null?'—':f(r.rate)+'% G')+'</b><span>'+esc(r.market)+' · '+r.wins+'G ('+f(r.rate||0)+'%) / '+r.losses+'P ('+f(r.lossRate||0)+'%) · '+r.total+' ops</span>'+(r.trades&&r.trades.length?'<details class="trade-details"><summary>Ver '+r.trades.length+' entradas</summary><div class="trade-list">'+r.trades.map(t=>'<div class="trade-row"><b class="'+(t.result==='GANADA'?'rate':'loss')+'">'+t.result+' · '+t.direction+'</b><span>Entrada '+new Date(t.entryTime*1000).toLocaleString('es-PA')+' · '+f(t.entry,4)+'</span><span>SL '+f(t.sl,4)+' · TP '+f(t.tp,4)+'</span><span>Salida '+f(t.exitPrice,4)+'</span></div>').join('')+'</div></details>':'')+'</div>').join('')+'</div></article>'}).join('')||'Sin resultados';
