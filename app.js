@@ -138,12 +138,12 @@ function drawPivotLines(){
  const raw=state.rawCandles;
  const current=Number(raw[raw.length-1].close);
  if(!Number.isFinite(current))return;
- // Los niveles se calculan exclusivamente con velas de 10 minutos.
- const m10=aggregate(raw,10);
+ // Los niveles se calculan exclusivamente con velas de 5 minutos.
+ const m10=aggregate(raw,5);
  if(!m10.length)return;
- const detected=pivots(m10,3,600);
- // Elegir la resistencia M10 más cercana por encima del precio.
- // Si el precio superó todos los pivotes confirmados, usar el máximo M10 reciente.
+ const detected=pivots(m10,3,300);
+ // Elegir la resistencia M5 más cercana por encima del precio.
+ // Si el precio superó todos los pivotes confirmados, usar el máximo M5 reciente.
  const highs=detected.highs.filter(p=>Number.isFinite(p.price));
  const lows=detected.lows.filter(p=>Number.isFinite(p.price));
  let resistance=highs.filter(p=>p.price>current).sort((a,b)=>a.price-b.price)[0];
