@@ -5,7 +5,7 @@ const HISTORY_CANDLES = 4320;
 const REQUEST_TIMEOUT_MS = 45000;
 const API_URL = 'wss://api.derivws.com/trading/v1/options/ws/public';
 const $ = id => document.getElementById(id);
-const state = { ws:null, req:0, pending:new Map(), symbols:[], selected:null, tf:1, candles:[], rawCandles:[], rawBySymbol:new Map(), marketBacktests:[], savedChartTrades:[], trades:[], liveSub:null, main:null, rsi:null, markerPlugin:null, overlayResizeObserver:null, overlayUpdate:null, overlayRangeHandler:null, pivotLines:[], tradePriceLines:[], overlayPriceLevels:[],levelOverrides:{}, pivotTfEnabled:{1:false,2:false,3:false,4:false,5:true,10:false,30:false,60:false}, tpTfs:[1,3,5,10], slTfs:[1,3,5,10], obStructureOnly:true, obTf:1, obPrimaryTf:10, obPreviousTf:30, obPreviousEnabled:false, pivotTf:5, chartKey:null, series:{}, busy:false, analyzeQueued:false, forceFitNext:true, lastRecalcBucket:null, pendingLiveTick:null, liveFrame:0, overlayFrame:0 };
+const state = { ws:null, req:0, connectPromise:null, heartbeatTimer:null, reconnectTimer:null, pending:new Map(), symbols:[], selected:null, tf:1, candles:[], rawCandles:[], rawBySymbol:new Map(), marketBacktests:[], savedChartTrades:[], trades:[], liveSub:null, main:null, rsi:null, markerPlugin:null, overlayResizeObserver:null, overlayUpdate:null, overlayRangeHandler:null, pivotLines:[], tradePriceLines:[], overlayPriceLevels:[],levelOverrides:{}, pivotTfEnabled:{1:false,2:false,3:false,4:false,5:true,10:false,30:false,60:false}, tpTfs:[1,3,5,10], slTfs:[1,3,5,10], obStructureOnly:true, obTf:1, obPrimaryTf:10, obPreviousTf:30, obPreviousEnabled:false, pivotTf:5, chartKey:null, series:{}, busy:false, analyzeQueued:false, forceFitNext:true, lastRecalcBucket:null, pendingLiveTick:null, liveFrame:0, overlayFrame:0 };
 const PERSIST_KEY='botder-history-v3';
 const USER_CONFIG_KEY='botder-user-config-v1';
 function saveUserConfig(){
@@ -37,17 +37,52 @@ const CANDIDATES = [
 ];
 function setConnection(ok,msg){$('connectionDot').parentElement.classList.toggle('connected',ok);$('connectionText').textContent=msg;}
 function connect(){
- return new Promise((resolve,reject)=>{
-  if(state.ws && state.ws.readyState===1){resolve();return;}
-  const ws=new WebSocket(API_URL); state.ws=ws;
-  const timer=setTimeout(()=>reject(new Error('Tiempo de conexión agotado')),12000);
-  ws.onopen=()=>{clearTimeout(timer);setConnection(false,'Validando Deriv…');resolve();};
-  ws.onerror=()=>{clearTimeout(timer);setConnection(false,'Error de conexión');reject(new Error('No se pudo conectar a Deriv'));};
-  ws.onclose=()=>{setConnection(false,'Deriv desconectada');for(const [,p] of state.pending)p.reject(new Error('Conexión cerrada'));state.pending.clear();};
+ if(state.ws&&state.ws.readyState===1)return Promise.resolve();
+ if(state.connectPromise)return state.connectPromise;
+ state.connectPromise=new Promise((resolve,reject)=>{
+  const ws=new WebSocket(API_URL);state.ws=ws;let settled=false;
+  const fail=error=>{if(settled)return;settled=true;clearTimeout(timer);reject(error);};
+  const timer=setTimeout(()=>{fail(new Error('Tiempo de conexión agotado'));try{ws.close();}catch{}},12000);
+  ws.onopen=()=>{if(settled)return;settled=true;clearTimeout(timer);setConnection(false,'Deriv conectada · verificando…');startHeartbeat();resolve();};
+  ws.onerror=()=>{setConnection(false,'Error de conexión · reconectando…');fail(new Error('No se pudo conectar a Deriv'));try{ws.close();}catch{}};
+  ws.onclose=()=>{
+   fail(new Error('Conexión cerrada'));
+   if(state.ws===ws)state.ws=null;
+   state.liveSub=null;setConnection(false,'Deriv desconectada · reconectando…');
+   for(const [,p] of state.pending)p.reject(new Error('Conexión cerrada'));state.pending.clear();
+   scheduleReconnect();
+  };
   ws.onmessage=e=>{let m;try{m=JSON.parse(e.data);}catch(err){console.error('Respuesta Deriv no válida',err);return;}if(m.req_id&&state.pending.has(m.req_id)){const p=state.pending.get(m.req_id);state.pending.delete(m.req_id);m.error?p.reject(new Error(m.error.message)):p.resolve(m);}if(m.msg_type==='tick'&&m.tick)onLiveTick(m.tick);};
- });
+ }).finally(()=>{state.connectPromise=null;});
+ return state.connectPromise;
 }
-function request(payload){return new Promise((resolve,reject)=>{if(!state.ws||state.ws.readyState!==1){reject(new Error('WebSocket no está conectado'));return;}const id=++state.req;const timer=setTimeout(()=>{if(state.pending.has(id)){state.pending.delete(id);reject(new Error('Deriv no respondió a tiempo: '+(payload.ticks_history||payload.active_symbols||'solicitud')));}},REQUEST_TIMEOUT_MS);state.pending.set(id,{resolve:m=>{clearTimeout(timer);resolve(m);},reject:e=>{clearTimeout(timer);reject(e);}});try{state.ws.send(JSON.stringify({...payload,req_id:id}));}catch(e){clearTimeout(timer);state.pending.delete(id);reject(e);}});}
+function startHeartbeat(){
+ if(state.heartbeatTimer)clearInterval(state.heartbeatTimer);
+ state.heartbeatTimer=setInterval(async()=>{
+  const ws=state.ws;
+  if(!ws||ws.readyState!==1){scheduleReconnect();return;}
+  try{await request({ping:1},8000);setConnection(true,'Deriv conectada · activa');}
+  catch(error){
+   setConnection(false,'Deriv sin respuesta · reconectando…');
+   if(state.ws===ws){try{ws.close();}catch{}scheduleReconnect();}
+  }
+ },20000);
+}
+function scheduleReconnect(){
+ if(state.reconnectTimer)return;
+ state.reconnectTimer=setTimeout(async()=>{
+  state.reconnectTimer=null;
+  try{
+   await connect();
+   if(state.selected)subscribeLive();
+   setConnection(true,'Deriv reconectada · conexión activa');
+  }catch(error){
+   setConnection(false,'No conecta · reintentando…');
+   scheduleReconnect();
+  }
+ },3000);
+}
+function request(payload,timeoutMs=REQUEST_TIMEOUT_MS){return new Promise((resolve,reject)=>{if(!state.ws||state.ws.readyState!==1){reject(new Error('WebSocket no está conectado'));return;}const id=++state.req;const timer=setTimeout(()=>{if(state.pending.has(id)){state.pending.delete(id);reject(new Error('Deriv no respondió a tiempo: '+(payload.ticks_history||payload.active_symbols||payload.ping?'ping':'solicitud')));}},timeoutMs);state.pending.set(id,{resolve:m=>{clearTimeout(timer);resolve(m);},reject:e=>{clearTimeout(timer);reject(e);}});try{state.ws.send(JSON.stringify({...payload,req_id:id}));}catch(e){clearTimeout(timer);state.pending.delete(id);reject(e);}});}
 async function loadSymbols(){
  await connect();const r=await request({active_symbols:'brief'});
  const all=r.active_symbols||[];
