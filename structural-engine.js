@@ -121,7 +121,7 @@ function botderBacktest(d,tf,symbol,market){
    if(one){result="GANADA";exitPrice=s.tp1;exitTime=b.time*1000;exitReason="TP1 LIQUIDEZ";break;}
   }
   trades.push({...s,id:"BT-"+symbol+"-"+tf+"-"+s.time,symbol,market,result,exitPrice,price:exitPrice,entryTime:s.time*1000,zoneTime:s.time*1000,exitTime,exitReason,entered:true});
-  nextAvailable=trades.length?Math.max(i+1,d.findIndex((x,k)=>k>i&&x.time*1000>=exitTime)):i+1;
+  nextAvailable=exitTime?Math.max(i+1,d.findIndex((x,k)=>k>i&&x.time*1000>=exitTime)):d.length;
  }
  return trades;
 }
@@ -140,7 +140,7 @@ function buildStructuralPlan(baseCandles,displayTf){
   projection={direction:signal.direction,entry:signal.entry,sl:signal.sl,tp1:signal.tp1,tp2:signal.tp2,zoneLow:signal.pool.low,zoneHigh:signal.pool.high,low:signal.pool.low,high:signal.pool.high,stage:"OPORTUNIDAD "+signal.confidence+"%",timeframe:label,confidence:signal.confidence,reason:signal.mode};
   items.push({type:"signal",price:signal.entry,label:signal.direction,side:signal.direction,time:signal.time,tf});
  }
- return{items,lines:[],projection,signal:signal?{...signal,timeframe:label}:null,status:signal?"OPORTUNIDAD DETECTADA":"ESPERANDO CONFLUENCIA",activeSource:source,bias4:null,recommendation:"EMA 9/20/50 + OB + FVG + LIQUIDEZ",activeTf:tf};
+ return{items,lines:[],ema,projection,signal:signal?{...signal,timeframe:label}:null,status:signal?"OPORTUNIDAD DETECTADA":"ESPERANDO CONFLUENCIA",activeSource:source,bias4:null,recommendation:"EMA 9/20/50 + OB + FVG + LIQUIDEZ",activeTf:tf};
 }
 function runStructuralBacktest(symbol,market,candles,displayTf){
  const tf=Number(displayTf)||60,key=symbol+":"+tf;
@@ -208,7 +208,7 @@ function analyzeCandles(symbol,market,candles){
  renderProjection(plan);
  const btKey=symbol+":"+tf;
  if(structuralBacktestValidatedKey!==btKey&&structuralBacktestRunningKey!==btKey&&source.length>=120)runStructuralBacktest(symbol,market,raw,tf);
- if(typeof setStructureOverlay==="function")setStructureOverlay({items:plan.items,lines:[],projection:plan.projection,activeTf:tf});
+ if(typeof setStructureOverlay==="function")setStructureOverlay({items:plan.items,lines:[],ema:plan.ema,projection:plan.projection,activeTf:tf});
  if(plan.signal&&structuralBacktestValidatedKey===btKey){
   const s=plan.signal,structureKey=[symbol,tf,s.direction,s.pool.time,s.pool.level.toPrecision(12)].join(":");
   if(!botderSignalKeys.has(structureKey)&&!strategyJournal.some(t=>t.structureKey===structureKey)){
@@ -220,7 +220,7 @@ function analyzeCandles(symbol,market,candles){
  if(typeof drawRsiPanel==="function"){const el=document.querySelector(".rsi-strip");if(el)el.style.display="none";}
  renderSignals();renderStrategyJournal();
 }
-function analyzeLiveStructure(symbol,candles){if(symbol!==selectedMarket?.symbol||!Array.isArray(candles))return;const tf=Number(document.getElementById("timeframe")?.value)||60,plan=buildStructuralPlan(candles,tf);if(typeof setStructureOverlay==="function")setStructureOverlay({items:plan.items,lines:[],projection:plan.projection,activeTf:tf});}
+function analyzeLiveStructure(symbol,candles){if(symbol!==selectedMarket?.symbol||!Array.isArray(candles))return;const tf=Number(document.getElementById("timeframe")?.value)||60,plan=buildStructuralPlan(candles,tf);if(typeof setStructureOverlay==="function")setStructureOverlay({items:plan.items,lines:[],ema:plan.ema,projection:plan.projection,activeTf:tf});}
 function setAnalysisGranularity(seconds){analysisGranularity=Number(seconds)||60;}
 loadStrategyJournal();
 renderStrategyJournal();
