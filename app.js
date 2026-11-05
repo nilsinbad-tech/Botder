@@ -200,10 +200,15 @@ function drawOverlays(trades,c,host,obZones=[]){
  // Elimina TODAS las capas anteriores para que no queden OB viejos superpuestos.
  host.querySelectorAll('.chart-overlay').forEach(node=>node.remove());state.overlayUpdate=null;
  const overlay=document.createElement('div');overlay.className='chart-overlay';host.appendChild(overlay);
- // Un solo OB visible: el de la dirección de la tendencia H1.
- // Así nunca aparecen OB alcista y bajista simultáneamente.
- const hourly=getHourlyBias(state.rawCandles);
- const zones=hourly.side&&hourly.ob?[{...hourly.ob,side:hourly.side,fvg:false}]:[];
+ // Resalta los dos OB más recientes: uno de compra y uno de venta.
+ // Se priorizan los OB que alimentaron señales/backtesting; si falta un lado, se busca el OB reciente en M2.
+ const bySide={BUY:[],SELL:[]};
+ (obZones||[]).forEach(ob=>{if(ob&&bySide[ob.side]&&Number.isFinite(ob.time))bySide[ob.side].push({...ob,fvg:false});});
+ (trades||[]).forEach(t=>{if(t.ob&&bySide[t.side])bySide[t.side].push({...t.ob,side:t.side,fvg:false});});
+ const signalBars=aggregate(state.rawCandles,2);
+ for(const side of ['BUY','SELL']){if(!bySide[side].length){const recent=findOB(signalBars,signalBars.length,side);if(recent)bySide[side].push({...recent,side,fvg:false});}}
+ const latestBySide=side=>{const unique=new Map();bySide[side].forEach(ob=>unique.set(String(ob.time),ob));return [...unique.values()].sort((x,y)=>x.time-y.time).slice(-1)[0];};
+ const zones=['BUY','SELL'].map(latestBySide).filter(Boolean);
  const zoneEls=zones.map(ob=>{
   const el=document.createElement('div');el.className='ob-zone '+(ob.fvg?'fvg-zone ':'')+(ob.side==='BUY'?'bull-zone':'bear-zone');
   el.innerHTML='<b>'+(ob.fvg?(ob.side==='BUY'?'FVG ALCISTA':'FVG BAJISTA'):(ob.side==='BUY'?'OB ALCISTA':'OB BAJISTA'))+'</b>';
@@ -222,6 +227,7 @@ function drawOverlays(trades,c,host,obZones=[]){
   const firstTime=c[first]?.time;
   zoneEls.forEach(({el,ob})=>{
    let x1=scale.timeToCoordinate(ob.time);
+   if(x1==null){let match=null;for(let i=c.length-1;i>=0;i--){if(c[i].time<=ob.time){match=c[i];break;}}if(match)x1=scale.timeToCoordinate(match.time);}
    const y1=priceScale.priceToCoordinate(ob.high),y2=priceScale.priceToCoordinate(ob.low);
    if(y1==null||y2==null){el.style.display='none';return;}
    if(x1==null){if(firstTime!=null&&ob.time<firstTime)x1=0;else{el.style.display='none';return;}}
