@@ -281,3 +281,29 @@ footer{padding:18px 3px 6px}
 
 /* Interfaz SMC: sin panel RSI ni cuadrícula. */
 .rsi-strip{display:none!important}
+
+/* LABORATORIO DE ESTRATEGIAS */
+.strategy-lab{margin:12px 14px 18px;border:1px solid var(--line);border-radius:13px;background:var(--surface);overflow:hidden}
+.strategy-lab>summary{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:14px 15px;cursor:pointer;list-style:none;font-size:10px;font-weight:950;letter-spacing:.65px;color:#e8f0f8}
+.strategy-lab>summary::-webkit-details-marker{display:none}
+.lab-summary-hint{font-size:8px;color:var(--muted);font-weight:650;letter-spacing:0;text-align:right}
+.lab-content{padding:14px;border-top:1px solid var(--line)}
+.lab-intro h2{margin:5px 0;font-size:17px;color:#f0f5fb}
+.lab-intro p,.lab-note{font-size:9px;line-height:1.6;color:var(--muted);max-width:760px}
+.lab-actions{display:flex;gap:8px;flex-wrap:wrap;margin:13px 0}
+.lab-actions button{border:1px solid rgba(57,230,160,.4);border-radius:8px;padding:10px 12px;background:rgba(57,230,160,.12);color:#bdf9dd;font-size:9px;font-weight:900;letter-spacing:.3px}
+.lab-actions button:disabled{opacity:.45}
+.lab-actions .lab-export{border-color:var(--line);background:rgba(143,163,185,.1);color:#d3deea}
+.lab-status-row{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;padding:10px;border-radius:8px;background:rgba(4,12,22,.5);font-size:9px}
+.lab-status-row strong{color:#8fe8c1}.lab-status-row span,.lab-summary{color:var(--muted)}
+.lab-summary{font-size:8px;margin:9px 0 15px}
+.lab-content h3{font-size:10px;letter-spacing:.6px;color:#dce7f2;margin:16px 0 8px}
+.lab-table-wrap{width:100%;overflow-x:auto}
+.lab-table{width:100%;border-collapse:collapse;min-width:560px;font-size:8px}
+.lab-table th,.lab-table td{padding:9px 7px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}
+.lab-table th{font-size:7px;color:var(--muted);letter-spacing:.4px}
+.lab-table td{color:#dbe5ef}.lab-table td:nth-child(3){color:#8fe8c1;font-weight:850}
+.lab-ranking{display:grid;gap:6px}
+.lab-rank-row{display:grid;grid-template-columns:minmax(110px,1fr) minmax(120px,1.5fr) auto;gap:8px;align-items:center;padding:8px;border:1px solid var(--line);border-radius:7px;background:rgba(5,14,25,.45);font-size:8px}
+.lab-rank-row b{color:#e7eef7}.lab-rank-row span{color:var(--muted)}.lab-rank-row strong{color:#8fe8c1}
+@media(max-width:520px){.strategy-lab{margin:9px 8px 14px}.lab-content{padding:10px}.lab-intro h2{font-size:14px}.lab-actions button{width:100%}.lab-rank-row{grid-template-columns:1fr auto}.lab-rank-row span{grid-column:1}.lab-rank-row strong{grid-column:2;grid-row:1/3}}
