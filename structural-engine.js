@@ -35,15 +35,13 @@ function botderMedianRange(d,end){
 function botderLiquidity(d,end,pivots){
  const tol=Math.max(botderMedianRange(d,end)*.16,Math.abs(d[end]?.close||1)*1e-7,1e-9),lookback=240;
  const cluster=(items,side)=>{
-  const recent=items.filter(p=>p.i>=Math.max(0,end-lookback)&&p.i<=end).slice(-140),used=new Set(),result=[];
-  for(const p of recent){
-   if(used.has(p.i))continue;
-   const group=recent.filter(q=>Math.abs(q.price-p.price)<=tol);
-   if(group.length<2)continue;
-   group.forEach(q=>used.add(q.i));
+  const recent=items.filter(p=>p.i>=Math.max(0,end-lookback)&&p.i<=end).slice(-140).slice().sort((x,y)=>x.price-y.price),result=[];
+  for(let k=0;k<recent.length;){
+   let j=k+1;while(j<recent.length&&recent[j].price-recent[k].price<=tol)j++;
+   const group=recent.slice(k,j);k=j;if(group.length<2)continue;
    const last=Math.max(...group.map(q=>q.i)),low=Math.min(...group.map(q=>q.price)),high=Math.max(...group.map(q=>q.price));
    let swept=false;
-   for(let k=last+1;k<=end;k++){if(side==="SSL"?d[k].low<low-tol*.1:d[k].high>high+tol*.1){swept=true;break;}}
+   for(let n=last+1;n<=end;n++){if(side==="SSL"?d[n].low<low-tol*.1:d[n].high>high+tol*.1){swept=true;break;}}
    if(swept)continue;
    const level=side==="SSL"?low:high;
    if(result.some(x=>Math.abs(x.level-level)<=tol*.35))continue;
@@ -52,6 +50,13 @@ function botderLiquidity(d,end,pivots){
   return result.sort((x,y)=>side==="SSL"?y.level-x.level:x.level-y.level);
  };
  return{ssl:cluster(pivots.lows,"SSL"),bsl:cluster(pivots.highs,"BSL"),tolerance:tol};
+}
+function botderPivotWindow(items,minIndex,maxIndex){
+ let lo=0,hi=items.length;
+ while(lo<hi){const mid=(lo+hi)>>1;if(items[mid].i<minIndex)lo=mid+1;else hi=mid;}
+ const start=lo;lo=start;hi=items.length;
+ while(lo<hi){const mid=(lo+hi)>>1;if(items[mid].i<=maxIndex)lo=mid+1;else hi=mid;}
+ return items.slice(start,lo);
 }
 function botderZones(d,end){
  const ob=[],fvg=[],from=Math.max(2,end-70);
@@ -78,7 +83,7 @@ function botderTradeAt(d,i,tf,cache=null){
  if(i<60||i>=d.length)return null;
  const close=cache?null:d.slice(0,i+1).map(c=>c.close),e9=cache?.e9||botderEma(close,9),e20=cache?.e20||botderEma(close,20),e50=cache?.e50||botderEma(close,50);
  const c=d[i],confirm=i-1,emaBull=e9[confirm]!=null&&e20[confirm]!=null&&e50[confirm]!=null&&e9[confirm]>e20[confirm]&&e20[confirm]>e50[confirm],emaBear=e9[confirm]!=null&&e20[confirm]!=null&&e50[confirm]!=null&&e9[confirm]<e20[confirm]&&e20[confirm]<e50[confirm];
- const piv=botderPivots(d,i-1,2),liq=botderLiquidity(d,i-1,piv),zones=botderZones(d,i-1),range=botderMedianRange(d,i-1),pad=Math.max(range*.75,liq.tolerance*2);
+ const piv=cache?.pivots?{highs:botderPivotWindow(cache.pivots.highs,Math.max(0,i-3-240),i-3),lows:botderPivotWindow(cache.pivots.lows,Math.max(0,i-3-240),i-3)}:botderPivots(d,i-1,2),liq=botderLiquidity(d,i-1,piv),zones=botderZones(d,i-1),range=botderMedianRange(d,i-1),pad=Math.max(range*.75,liq.tolerance*2);
  const candidate=(side)=>{
   const isBuy=side==="BUY",pool=(isBuy?liq.ssl:liq.bsl).find(p=>c.low<=p.high+pad&&c.high>=p.low-pad);
   if(!pool)return null;
@@ -110,7 +115,7 @@ function botderScoreSignal(s){
  return s?Math.max(0,Math.min(100,Math.round(s.confidence))):0;
 }
 function botderBacktest(d,tf,symbol,market){
- const trades=[],seen=new Set(),closes=d.map(c=>c.close),cache={e9:botderEma(closes,9),e20:botderEma(closes,20),e50:botderEma(closes,50)};
+ const trades=[],seen=new Set(),closes=d.map(c=>c.close),cache={e9:botderEma(closes,9),e20:botderEma(closes,20),e50:botderEma(closes,50),pivots:botderPivots(d,d.length-1,2)};
  let nextAvailable=60;
  for(let i=60;i<d.length-1;i++){
   if(i<nextAvailable)continue;
