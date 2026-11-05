@@ -197,7 +197,8 @@ function drawPivotLines(){
 }
 function drawOverlays(trades,c,host,obZones=[]){
  if(state.overlayResizeObserver){state.overlayResizeObserver.disconnect();state.overlayResizeObserver=null;}
- const old=host.querySelector('.chart-overlay');if(old)old.remove();state.overlayUpdate=null;
+ // Elimina TODAS las capas anteriores para que no queden OB viejos superpuestos.
+ host.querySelectorAll('.chart-overlay').forEach(node=>node.remove());state.overlayUpdate=null;
  const overlay=document.createElement('div');overlay.className='chart-overlay';host.appendChild(overlay);
  // Un solo OB visible: el de la dirección de la tendencia H1.
  // Así nunca aparecen OB alcista y bajista simultáneamente.
