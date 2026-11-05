@@ -8,7 +8,21 @@ const $ = id => document.getElementById(id);
 const state = { ws:null, req:0, pending:new Map(), reconnectTimer:null, reconnecting:false, symbols:[], selected:null, tf:1, candles:[], rawCandles:[], rawBySymbol:new Map(), marketBacktests:[], savedChartTrades:[], trades:[], liveSub:null, main:null, rsi:null, markerPlugin:null, overlayResizeObserver:null, overlayUpdate:null, overlayRangeHandler:null, pivotLines:[], tradePriceLines:[], overlayPriceLevels:[],levelOverrides:{}, pivotTfEnabled:{1:false,2:false,3:false,4:false,5:true,10:false,30:false,60:false}, tpTfs:[1,3,5,10], slTfs:[1,3,5,10], obStructureOnly:true, rsiConfig:{timeframe:5,period:14,low:40,mid:50,high:60}, obTf:1, obPrimaryTf:10, obPreviousTf:30, obPreviousEnabled:false, pivotTf:5, chartKey:null, series:{}, busy:false, analyzeQueued:false, forceFitNext:true, lastRecalcBucket:null, pendingLiveTick:null, liveFrame:0, overlayFrame:0 };
 const PERSIST_KEY='botder-history-v3';
 function tradeKey(t){return Number.isFinite(Number(t.structureTime))?String(t.symbol||'')+'|'+String(t.side||'')+'|ZONA|'+String(t.structureTime):String(t.symbol||'')+'|'+String(t.time)+'|'+String(t.side||'');}
-function mergeTrades(oldItems,newItems,limit=2000){const map=new Map();for(const t of [...(oldItems||[]),...(newItems||[])]){if(!t||!Number.isFinite(Number(t.time))||!t.side)continue;map.set(tradeKey(t),t);}return [...map.values()].sort((a,b)=>a.time-b.time).slice(-limit);}
+function mergeTrades(oldItems,newItems,limit=2000){
+ const map=new Map(),terminal=t=>t&&['GANADA','PERDIDA','CANCELADA'].includes(t.result);
+ for(const t of [...(oldItems||[]),...(newItems||[])]){
+  if(!t||!Number.isFinite(Number(t.time))||!t.side)continue;
+  const key=tradeKey(t),previous=map.get(key);
+  if(!previous){map.set(key,{...t});continue;}
+  const incoming={...previous,...t};
+  if(terminal(previous)&&!terminal(t)){
+   incoming.result=previous.result;incoming.exitTime=previous.exitTime;incoming.exitPrice=previous.exitPrice;
+   incoming.points=previous.points;incoming.cancelReason=previous.cancelReason;
+  }
+  map.set(key,incoming);
+ }
+ return [...map.values()].sort((a,b)=>a.time-b.time).slice(-limit);
+}
 function savePersistentState(){try{localStorage.setItem(PERSIST_KEY,JSON.stringify({version:3,selected:state.selected,marketBacktests:state.marketBacktests.slice(-2000),savedChartTrades:state.savedChartTrades.slice(-2000)}));}catch(e){console.warn('No se pudo guardar el historial local',e);}}
 function restorePersistentState(){try{const saved=JSON.parse(localStorage.getItem(PERSIST_KEY)||'null');if(!saved||saved.version!==3)return;state.savedSelected=saved.selected||null;state.marketBacktests=Array.isArray(saved.marketBacktests)?saved.marketBacktests:[];state.savedChartTrades=Array.isArray(saved.savedChartTrades)?saved.savedChartTrades:[];renderHistory(state.marketBacktests);}catch(e){console.warn('No se pudo restaurar el historial local',e);}}
 const CANDIDATES = [
@@ -356,11 +370,29 @@ function drawOverlays(trades,c,host,obZones=[],setups=[]){
  const lineEls=[];
  const overrideKey=t?String(state.selected||'')+':'+String(t.time)+':'+t.side:null;
  if(t&&overrideKey&&state.levelOverrides[overrideKey])Object.assign(t,state.levelOverrides[overrideKey]);
- // En el gráfico solo se dibuja la señal vigente. Las operaciones cerradas
- // (TP1, TP2 o SL) quedan exclusivamente en el historial y no dejan marcas activas.
- const activeEntries=(trades||[]).filter(x=>x.result==='PENDIENTE'&&Number.isFinite(x.entry)&&x.entryIndex>=0&&Number.isFinite(x.entryTime));
- const currentPending=t&&t.result==='PENDIENTE'&&t.entryIndex<0&&!Number.isFinite(t.entryTime)?[t]:[];
- const visibleEntries=[...activeEntries,...currentPending].slice(-1);
+ // Solo la última operación pendiente conserva niveles activos.
+ // Las anteriores quedan dibujadas en su vela con su resultado definitivo.
+ const visibleEntries=t?[t]:[];
+ const historicalEls=[];
+ (trades||[]).filter(x=>x.result!=='PENDIENTE').forEach((trade,index)=>{
+  const confirmed=trade.entryIndex>=0&&Number.isFinite(trade.entryTime);
+  const entryTime=confirmed?trade.entryTime:(trade.exitTime||trade.time);
+  const entryPrice=Number.isFinite(trade.entry)?trade.entry:Number.isFinite(trade.exitPrice)?trade.exitPrice:null;
+  const side=trade.side==='BUY'?'COMPRA':'VENTA';
+  if(entryPrice!=null){
+   const entry=document.createElement('div');
+   entry.className='price-label historical-trade-label historical-entry-label '+(trade.side==='BUY'?'history-buy':'history-sell');
+   entry.innerHTML='<b>'+side+'</b><strong>'+(confirmed?'ENTRADA':'CANCELADA')+'</strong>';
+   overlay.appendChild(entry);historicalEls.push({el:entry,time:entryTime,price:entryPrice,offset:(index%4)*12-18});
+  }
+  if(confirmed&&Number.isFinite(trade.exitTime)&&Number.isFinite(trade.exitPrice)){
+   const result=document.createElement('div');
+   const resultText=trade.result==='GANADA'?'GANADA':trade.result==='PERDIDA'?'PÉRDIDA':'CANCELADA';
+   result.className='price-label historical-trade-label historical-result-label '+(trade.result==='GANADA'?'history-win':trade.result==='PERDIDA'?'history-loss':'history-cancel');
+   result.innerHTML='<b>'+resultText+'</b><strong>'+fmt(trade.exitPrice)+'</strong>';
+   overlay.appendChild(result);historicalEls.push({el:result,time:trade.exitTime,price:trade.exitPrice,offset:18+(index%4)*12});
+  }
+ });
  state.overlayPriceLevels=t?[t.entry,t.sl,t.tp1,t.tp2].filter(Number.isFinite):[];
  const levelLineEls=[];
  visibleEntries.forEach((trade,index)=>{
@@ -386,6 +418,14 @@ function drawOverlays(trades,c,host,obZones=[],setups=[]){
   const width=host.clientWidth,scale=state.main.timeScale(),candleSeries=state.series.candle;
   const range=scale.getVisibleLogicalRange(),first=range?Math.max(0,Math.floor(range.from)):0,last=range?Math.min(c.length-1,Math.ceil(range.to)):c.length-1;
   const firstTime=c[first]?.time;
+  historicalEls.forEach(v=>{
+   const x=scale.timeToCoordinate(v.time),y=candleSeries.priceToCoordinate(v.price);
+   if(x==null||y==null||x<0||x>width){v.el.style.display='none';return;}
+   v.el.style.display='flex';
+   const w=v.el.offsetWidth||90;
+   v.el.style.left=Math.max(0,Math.min(width-w,x-w/2))+'px';
+   v.el.style.top=Math.max(2,y+v.offset)+'px';
+  });
   zoneEls.forEach(({el,ob})=>{
    let x1=scale.timeToCoordinate(ob.time);
    if(x1==null){let match=null;for(let i=c.length-1;i>=0;i--){if(c[i].time<=ob.time){match=c[i];break;}}if(match)x1=scale.timeToCoordinate(match.time);}
