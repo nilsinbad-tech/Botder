@@ -419,7 +419,14 @@ function drawOverlays(trades,c,host,obZones=[],setups=[]){
   const range=scale.getVisibleLogicalRange(),first=range?Math.max(0,Math.floor(range.from)):0,last=range?Math.min(c.length-1,Math.ceil(range.to)):c.length-1;
   const firstTime=c[first]?.time;
   historicalEls.forEach(v=>{
-   const x=scale.timeToCoordinate(v.time),y=candleSeries.priceToCoordinate(v.price);
+   let x=scale.timeToCoordinate(v.time);
+   if(x==null){
+    let lo=0,hi=c.length;
+    while(lo<hi){const mid=(lo+hi)>>1;if(c[mid].time<v.time)lo=mid+1;else hi=mid;}
+    const nearest=c[Math.max(0,lo-1)];
+    if(nearest)x=scale.timeToCoordinate(nearest.time);
+   }
+   const y=candleSeries.priceToCoordinate(v.price);
    if(x==null||y==null||x<0||x>width){v.el.style.display='none';return;}
    v.el.style.display='flex';
    const w=v.el.offsetWidth||90;
