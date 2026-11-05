@@ -1,6 +1,6 @@
 (()=>{
 "use strict";
-const WS="wss://api.derivws.com/trading/v1/options/ws/public",DAY=86400,TEST_DAYS=2,COUNT=5000,INSTRUMENT_LIMIT=8;
+const WS="wss://api.derivws.com/trading/v1/options/ws/public",DAY=86400,TEST_DAYS=2,COUNT=5000,INSTRUMENT_LIMIT=8,MAX_HISTORY_PAGES=500;
 const strategies=[
 {id:1,name:"OB + EMA",group:"Tendencia",rules:"OB M1 + EMA 9/21 alineadas; confirmación de ruptura en 30s",ob:true},
 {id:2,name:"Liquidity Sweep",group:"Liquidez",rules:"Barrida de swing M1 + recuperación; confirmación en 30s"},
@@ -144,7 +144,7 @@ function candlesFromTicks(ticks,gran){
 }
 function loadTwoDayTicks(symbol,done){
  const end=Math.floor(Date.now()/60000)*60,start=end-TEST_DAYS*DAY;
- reqState={symbol,done,data:[],end:"latest",pages:0,start,targetEnd:end};requestPage();
+ reqState={symbol,done,data:[],end:"latest",pages:0,start,targetEnd:end,lastOldest:null};requestPage();
 }
 function handleHistory(m){
  if(!reqState||m.req_id!==reqState.req)return;
@@ -155,9 +155,11 @@ function handleHistory(m){
  st.data=[...new Map(st.data.map(x=>[x.time,x])).values()];
  st.pages++;
  const oldest=st.data[0].time;
- if(oldest>st.start&&part.length>=COUNT&&st.pages<100){
-  st.end=String(Math.floor(oldest)-1);requestPage();return;
+ if(oldest>st.start&&st.pages<MAX_HISTORY_PAGES&&st.lastOldest!==oldest){
+  st.lastOldest=oldest;st.end=Math.floor(oldest)-1;requestPage();return;
  }
+ if(oldest>st.start&&st.pages>=MAX_HISTORY_PAGES){reqState=null;st.done([],"Se alcanzó el límite de "+MAX_HISTORY_PAGES+" páginas antes de completar los 2 días.");return}
+ if(oldest>st.start&&st.lastOldest===oldest){reqState=null;st.done([],"La paginación de Deriv no avanzó hacia datos más antiguos.");return}
  const ticks=st.data.filter(x=>x.time>=st.start&&x.time<st.targetEnd);
  const m1=candlesFromTicks(ticks,60).filter(c=>c.time>=st.start&&c.time+60<=st.targetEnd);
  const m30=candlesFromTicks(ticks,30).filter(c=>c.time>=st.start&&c.time+30<=st.targetEnd);
