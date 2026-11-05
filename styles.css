@@ -83,3 +83,8 @@
 .chart-overlay .bull-zone{background:rgba(0,190,145,.52)!important;border-color:#ffd34e!important;color:#fff!important;box-shadow:0 0 0 1px #ffd34e77,0 0 14px #20e6aeaa,0 0 13px #ffd34e88,inset 0 0 8px #20e6ae55!important}
 .chart-overlay .bear-zone{background:rgba(225,55,75,.58)!important;border-color:#ffd34e!important;color:#fff!important;box-shadow:0 0 0 1px #ffd34e88,0 0 16px #ff5968bb,0 0 13px #ffd34e99,inset 0 0 8px #ff596855!important}
 @media(max-width:600px){.chart-overlay .ob-zone{min-width:104px!important;min-height:28px!important;height:28px!important;padding:4px 7px!important}.chart-overlay .ob-zone b{font-size:9px!important}}
+
+/* v53: niveles compactos y arrastrables; el precio y su descripción quedan en la escala derecha */
+.chart-overlay .level-line{height:16px!important;margin-top:-8px!important;border-top:2px dashed!important;pointer-events:auto!important;touch-action:none!important;cursor:ns-resize!important;background:transparent!important;z-index:12!important}
+.chart-overlay .entry-line{border-top-style:solid!important;border-top-width:2px!important}
+.chart-overlay .level-tag{display:none!important}
