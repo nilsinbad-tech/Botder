@@ -25,8 +25,12 @@ function connect(){
   const timer=setTimeout(()=>reject(new Error('Tiempo de conexión agotado')),12000);
   ws.onopen=()=>{clearTimeout(timer);setConnection(false,'Validando Deriv…');resolve();};
   ws.onerror=()=>{clearTimeout(timer);setConnection(false,'Error de conexión');reject(new Error('No se pudo conectar a Deriv'));};
-  ws.onclose=()=>{setConnection(false,'Deriv desconectada');for(const [,p] of state.pending)p.reject(new Error('Conexión cerrada'));state.pending.clear();};
-  ws.onmessage=e=>{let m;try{m=JSON.parse(e.data);}catch(err){console.error('Respuesta Deriv no válida',err);return;}if(m.req_id&&state.pending.has(m.req_id)){const p=state.pending.get(m.req_id);state.pending.delete(m.req_id);m.error?p.reject(new Error(m.error.message)):p.resolve(m);}if(m.msg_type==='tick'&&m.tick)onLiveTick(m.tick);};
+  ws.onclose=()=>{if(state.ws===ws){state.ws=null;state.liveSub=null;}setConnection(false,'Deriv desconectada');for(const [,p] of state.pending)p.reject(new Error('Conexión cerrada por Deriv'));state.pending.clear();};
+  ws.onmessage=e=>{let m;try{m=JSON.parse(e.data);}catch(err){console.error('Respuesta Deriv no válida',err);$('dataStatus').textContent='Respuesta de Deriv no válida';return;}
+   if(m.req_id&&state.pending.has(m.req_id)){const p=state.pending.get(m.req_id);state.pending.delete(m.req_id);m.error?p.reject(new Error(m.error.message)):p.resolve(m);}
+   else if(m.error&&state.pending.size){const first=state.pending.entries().next().value;if(first){const [id,p]=first;state.pending.delete(id);p.reject(new Error(m.error.message||'Error de Deriv'));}}
+   if(m.msg_type==='tick'&&m.tick)onLiveTick(m.tick);
+  };
  });
 }
 function request(payload){return new Promise((resolve,reject)=>{if(!state.ws||state.ws.readyState!==1){reject(new Error('WebSocket no está conectado'));return;}const id=++state.req;const timer=setTimeout(()=>{if(state.pending.has(id)){state.pending.delete(id);reject(new Error('Deriv no respondió a tiempo: '+(payload.ticks_history||payload.active_symbols||'solicitud')));}},REQUEST_TIMEOUT_MS);state.pending.set(id,{resolve:m=>{clearTimeout(timer);resolve(m);},reject:e=>{clearTimeout(timer);reject(e);}});try{state.ws.send(JSON.stringify({...payload,req_id:id}));}catch(e){clearTimeout(timer);state.pending.delete(id);reject(e);}});}
@@ -308,7 +312,9 @@ function drawOverlays(trades,c,host,obZones=[],setups=[]){
   });
   const update=()=>{
     const width=host.clientWidth,scale=state.main.timeScale(),candleSeries=state.series.candle;
-    zoneEls.forEach(({el,ob})=>{
+    // Prioriza los OB más recientes y evita apilar más de dos etiquetas en la misma zona visual.
+    const placedOBLabels=[];
+    [...zoneEls].sort((a,b)=>b.ob.time-a.ob.time).forEach(({el,ob})=>{
       const exactX=scale.timeToCoordinate(ob.time);
       let x=exactX;
       if(x==null){
@@ -318,12 +324,15 @@ function drawOverlays(trades,c,host,obZones=[],setups=[]){
         if(nearest&&ob.time>=c[0].time&&ob.time<=c[c.length-1].time)x=scale.timeToCoordinate(nearest.time);
       }
       const y1=candleSeries.priceToCoordinate(ob.high),y2=candleSeries.priceToCoordinate(ob.low);
-      // Si la vela no está visible, se oculta: nunca se pega el OB al borde del gráfico.
       if(x==null||x<0||x>width||y1==null||y2==null){el.style.display='none';return;}
       const boxWidth=Math.min(window.innerWidth<=600?126:150,Math.max(0,width-x-8));
       if(boxWidth<24){el.style.display='none';return;}
+      const centerY=(y1+y2)/2;
+      const overlaps=placedOBLabels.filter(p=>Math.abs(p.y-centerY)<30&&x<p.right&&x+boxWidth>p.left);
+      if(overlaps.length>=2){el.style.display='none';return;}
       el.style.display='flex';el.style.left=x+'px';el.style.width=boxWidth+'px';
-      el.style.top=((y1+y2)/2-15)+'px';el.style.height='30px';
+      el.style.top=(centerY-15)+'px';el.style.height='30px';
+      placedOBLabels.push({left:x,right:x+boxWidth,y:centerY});
     });
     entryEls.forEach(v=>{
       const y=candleSeries.priceToCoordinate(v.p),x=scale.timeToCoordinate(v.time);
