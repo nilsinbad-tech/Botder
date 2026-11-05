@@ -68,9 +68,11 @@ function aggregate(candles,mins){if(mins===1)return candles;const groups=new Map
 function ema(values,period){const out=Array(values.length).fill(null),k=2/(period+1);let prev=null;values.forEach((v,i)=>{prev=prev===null?v:v*k+prev*(1-k);out[i]=prev;});return out;}
 function rsi(values,period=14){const out=Array(values.length).fill(null);let gain=0,loss=0;for(let i=1;i<values.length;i++){const d=values[i]-values[i-1];const g=Math.max(d,0),l=Math.max(-d,0);if(i<=period){gain+=g;loss+=l;if(i===period){gain/=period;loss/=period;out[i]=loss===0?100:100-100/(1+gain/loss);}}else{gain=(gain*(period-1)+g)/period;loss=(loss*(period-1)+l)/period;out[i]=loss===0?100:100-100/(1+gain/loss);}}return out;}
 function pivots(c,span=3,candleSeconds=600){const highs=[],lows=[];for(let i=span;i<c.length-span;i++){let hi=true,lo=true;for(let j=1;j<=span;j++){if(c[i].high<=c[i-j].high||c[i].high<=c[i+j].high)hi=false;if(c[i].low>=c[i-j].low||c[i].low>=c[i+j].low)lo=false;}if(hi)highs.push({index:i,time:c[i].time,confirmedTime:c[i+span].time+candleSeconds,price:c[i].high});if(lo)lows.push({index:i,time:c[i].time,confirmedTime:c[i+span].time+candleSeconds,price:c[i].low});}const sample=c.slice(-30),avgRange=sample.length?sample.reduce((sum,v)=>sum+(v.high-v.low),0)/sample.length:0,tolerance=avgRange*.45;const merge=items=>{const kept=[];for(const p of items){const near=kept.findIndex(q=>Math.abs(q.price-p.price)<=tolerance);if(near<0)kept.push(p);else if(p.confirmedTime>kept[near].confirmedTime)kept[near]=p;}return kept.sort((a,b)=>a.time-b.time);};return{highs:merge(highs),lows:merge(lows)};}
-function buildSetups(c,liquidityCandles=c,pivotCandles=liquidityCandles,obStructureCandles=pivotCandles,trendSide=null){
+function buildSetups(c,liquidityCandles=c,pivotCandles=liquidityCandles,obStructureCandles=pivotCandles,trendSide=null,targetRawCandles=pivotCandles){
  const close=c.map(x=>x.close),e3=ema(close,3),e9=ema(close,9),e13=ema(close,13),e50=ema(close,50),rv=rsi(close);
  const pv=pivots(pivotCandles,3,state.pivotTf*60),obPv=pivots(obStructureCandles,3,state.pivotTf*60);
+ // Objetivos calculados con estructura independiente de M3, M5 y M10.
+ const targetPivots=[3,5,10].map(mins=>({mins,pv:pivots(aggregate(targetRawCandles,mins),3,mins*60)}));
  const setups=[],obZones=[],usedOBs=new Set(),usedZones=new Set();
  for(let i=55;i<c.length;i++){
   const x=c[i];
@@ -83,9 +85,11 @@ function buildSetups(c,liquidityCandles=c,pivotCandles=liquidityCandles,obStruct
    if(state.obStructureOnly&&!isOBAtStructure(ob,side,obPv,obStructureCandles,x.time))continue;
    if(!usedZones.has(key)){usedZones.add(key);obZones.push({...ob,side});}
    if(usedOBs.has(key))continue;
-   const targets=side==='BUY'
-    ?pv.highs.filter(p=>p.confirmedTime<=x.time&&p.price>ob.entry).sort((a,b)=>a.price-b.price)
-    :pv.lows.filter(p=>p.confirmedTime<=x.time&&p.price<ob.entry).sort((a,b)=>b.price-a.price);
+   const targets=targetPivots.flatMap(({mins,pv:targetPv})=>(side==='BUY'?targetPv.highs:targetPv.lows)
+    .filter(p=>p.confirmedTime<=x.time&&(side==='BUY'?p.price>ob.entry:p.price<ob.entry))
+    .map(p=>({...p,timeframe:mins})))
+    .sort((a,b)=>side==='BUY'?a.price-b.price:b.price-a.price)
+    .filter((p,index,all)=>all.findIndex(q=>Math.abs(q.price-p.price)<=Math.max(1e-10,Math.abs(p.price)*1e-8))===index);
    if(!targets.length)continue;
    const slPivot=side==='BUY'
     ?pv.lows.filter(p=>p.confirmedTime<=x.time&&p.price<ob.entry).sort((a,b)=>Math.abs(a.price-ob.low)-Math.abs(b.price-ob.low))[0]||null
@@ -288,7 +292,7 @@ function showLatest(calc,trades,c,raw=state.rawCandles){
  $('entryValue').textContent=t?fmt(t.entry):'—';$('slValue').textContent=t?fmt(t.sl):'—';$('tp1Value').textContent=t?fmt(t.tp1):'—';$('tp2Value').textContent=t?fmt(t.tp2):'—';$('rsiValue').textContent=fmt(rv);
  $('rsiConfirm').textContent=t?'OB + TENDENCIA H1 + PIVOTE CONFIRMADOS':'Sin señal';$('rsiConfirm').style.color=t?'#20d69a':'#8b9bb0';
  $('signalState').textContent=t?(t.entryIndex>=0?'ACTIVA':'PREPARADA'):'ESPERANDO';
- $('signalDetails').textContent=(hourly.side?'Sesgo de 1 hora: '+trend+'. Mostrando únicamente el '+obLabel+' de H1'+(hourly.ob?' entre '+fmt(hourly.ob.low)+' y '+fmt(hourly.ob.high):' (zona no localizada en las últimas 9 velas H1)')+'. ':'La tendencia H1 está lateral; no se selecciona OB direccional. ')+(t?(t.entryIndex>=0?'Operación ACTIVA. ':'')+(t.side==='BUY'?'OB alcista + FVG':'OB bajista + FVG')+' alineado con la tendencia H1. Entrada en el OB; TP1 es el primer pivote M10 disponible. Entrada proyectada '+fmt(t.entry)+', SL '+fmt(t.sl)+', TP1 '+fmt(t.tp1)+' y TP2 '+fmt(t.tp2)+'.':'No hay una señal completa en la última vela M2.');
+ $('signalDetails').textContent=(hourly.side?'Sesgo de 1 hora: '+trend+'. Mostrando únicamente el '+obLabel+' de H1'+(hourly.ob?' entre '+fmt(hourly.ob.low)+' y '+fmt(hourly.ob.high):' (zona no localizada en las últimas 9 velas H1)')+'. ':'La tendencia H1 está lateral; no se selecciona OB direccional. ')+(t?(t.entryIndex>=0?'Operación ACTIVA. ':'')+(t.side==='BUY'?'OB alcista + FVG':'OB bajista + FVG')+' alineado con la tendencia H1. Entrada en el OB; TP1 es la primera resistencia/soporte disponible de M3, M5 o M10. Entrada proyectada '+fmt(t.entry)+', SL '+fmt(t.sl)+', TP1 '+fmt(t.tp1)+' y TP2 '+fmt(t.tp2)+'.':'No hay una señal completa en la última vela M2.');
  $('rsiLegend').textContent='Valor actual: '+fmt(rv);
 }
 function renderHistory(trades){
@@ -306,7 +310,7 @@ async function runUniverseBacktest(refresh=false){
  });
  await Promise.all(workers);
  const allTrades=[],shortHistory=[];
- for(const item of state.symbols){const source=state.rawBySymbol.get(item.symbol)||[];if(!source.length)continue;const cutoff=Math.floor(Date.now()/1000)-86400;const raw=source.filter(v=>v.time>=cutoff);if(raw.length<HISTORY_CANDLES)shortHistory.push(item.name+' ('+raw.length+' velas/24h)');const candles=aggregate(raw,2);if(candles.length<70)continue;const hourly=getHourlyBias(raw),obCandles=aggregate(raw,state.obTf),pivotCandles=aggregate(raw,state.pivotTf),calc=buildSetups(candles,obCandles,pivotCandles,pivotCandles,hourly.side),setups=hourly.side?calc.setups.filter(x=>x.side===hourly.side):[],trades=simulate(candles,setups);allTrades.push(...trades.map(t=>({...t,symbol:item.symbol})));}
+ for(const item of state.symbols){const source=state.rawBySymbol.get(item.symbol)||[];if(!source.length)continue;const cutoff=Math.floor(Date.now()/1000)-86400;const raw=source.filter(v=>v.time>=cutoff);if(raw.length<HISTORY_CANDLES)shortHistory.push(item.name+' ('+raw.length+' velas/24h)');const candles=aggregate(raw,2);if(candles.length<70)continue;const hourly=getHourlyBias(raw),obCandles=aggregate(raw,state.obTf),pivotCandles=aggregate(raw,state.pivotTf),calc=buildSetups(candles,obCandles,pivotCandles,pivotCandles,hourly.side,raw),setups=hourly.side?calc.setups.filter(x=>x.side===hourly.side):[],trades=simulate(candles,setups);allTrades.push(...trades.map(t=>({...t,symbol:item.symbol})));}
  state.marketBacktests=allTrades;
  const closed=allTrades.filter(t=>t.result==='GANADA'||t.result==='PERDIDA');
  $('wins').textContent=closed.filter(t=>t.result==='GANADA').length;$('losses').textContent=closed.filter(t=>t.result==='PERDIDA').length;
@@ -317,7 +321,7 @@ async function analyze(){
  if(state.busy){state.analyzeQueued=true;return;}state.busy=true;$('dataStatus').textContent='Cargando gráfico…';
  try{const raw=state.rawBySymbol.get(state.selected)||await getCandles(state.selected,1440);if(!raw.length)throw new Error('No llegaron velas para '+state.selected);state.rawBySymbol.set(state.selected,raw);
  state.rawCandles=raw;state.lastRecalcBucket=Math.floor(raw.at(-1).time/120);const c=aggregate(raw,state.tf);state.candles=c;const signalCandles=aggregate(raw,2);const obCandles=aggregate(raw,state.obTf);const pivotCandles=aggregate(raw,state.pivotTf);
- const hourly=getHourlyBias(raw),activeSide=hourly.side;const signalCalc=buildSetups(signalCandles,obCandles,pivotCandles,pivotCandles,activeSide);const chartCalc=buildSetups(c,obCandles,pivotCandles,pivotCandles,activeSide);
+ const hourly=getHourlyBias(raw),activeSide=hourly.side;const signalCalc=buildSetups(signalCandles,obCandles,pivotCandles,pivotCandles,activeSide,raw);const chartCalc=buildSetups(c,obCandles,pivotCandles,pivotCandles,activeSide,raw);
  // Una sola dirección gobierna las señales y los OB visibles: la tendencia H1.
  const alignedSetups=activeSide?signalCalc.setups.filter(setup=>setup.side===activeSide):[];
  const alignedZones=activeSide?chartCalc.obZones.filter(ob=>ob.side===activeSide):[];
