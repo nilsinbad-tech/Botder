@@ -19,3 +19,8 @@
 .ob-zone{min-height:18px!important;border-width:1.5px!important;border-style:solid!important;border-radius:3px;background-image:linear-gradient(90deg,#0b121e22,#0b121e08);padding:3px 7px!important;font-size:9px!important;line-height:1.2;overflow:hidden;white-space:nowrap}
 .bull-zone{background-color:#087c6538!important;box-shadow:inset 0 0 0 1px #20d69a22}
 .bear-zone{background-color:#a32d3b38!important;box-shadow:inset 0 0 0 1px #ff596822}
+
+/* v28: zonas OB visibles y líneas de pivote discretas */
+.ob-zone{min-height:30px!important;min-width:30px!important;padding:5px 9px!important;font-size:10px!important;font-weight:900!important;letter-spacing:.35px!important;opacity:.96!important;border-width:2px!important;border-radius:2px!important;white-space:nowrap!important;overflow:visible!important;text-shadow:0 1px 3px #000!important}
+.bull-zone{background:rgba(8,124,101,.30)!important;border-color:#20d69a!important;color:#64f0c9!important}
+.bear-zone{background:rgba(163,45,59,.34)!important;border-color:#ff5968!important;color:#ff9aa4!important}
