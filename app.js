@@ -177,19 +177,7 @@ function simulate(c,setups){
  }
  return trades;
 }
-function buildTradeMarkers(trades,c){
- const markers=[];
- for(const t of trades||[]){
-  const target=Number.isFinite(t.entryTime)?t.entryTime:t.time;
-  if(!c.length||target<c[0].time)continue;
-  let lo=0,hi=c.length;
-  while(lo<hi){const mid=(lo+hi)>>1;if(c[mid].time<=target)lo=mid+1;else hi=mid;}
-  const bar=c[Math.max(0,lo-1)];
-  if(!bar)continue;
-  markers.push({time:bar.time,position:t.side==='BUY'?'belowBar':'aboveBar',color:t.side==='BUY'?'#20d69a':'#ff5968',shape:t.side==='BUY'?'arrowUp':'arrowDown',text:t.result==='GANADA'?'GANADA':t.result==='PERDIDA'?'PERDIDA':t.result==='ESPERANDO DOJI'?'ESPERA DOJI':t.result==='ESPERANDO CAMBIO'?'ESPERA CAMBIO':t.side==='BUY'?'COMPRA':'VENTA'});
- }
- return markers.sort((a,b)=>a.time-b.time);
-}
+function buildTradeMarkers(){return [];}
 function draw(c,calc,trades,obZones=[],setups=[]){
  // Limpieza defensiva: ninguna EMA puede permanecer como serie visual del precio.
  for(const key of ['ema3','ema9','ema13','ema20','ema21','ema50']){if(state.series[key]&&state.main){try{state.main.removeSeries(state.series[key]);}catch{}}delete state.series[key];}
@@ -199,7 +187,7 @@ function draw(c,calc,trades,obZones=[],setups=[]){
  if(state.main&&state.rsi&&state.chartKey===chartKey){
   const lineData=values=>values.map((v,i)=>v==null?null:{time:c[i].time,value:v}).filter(Boolean);
   state.series.candle.setData(c);state.series.rsi.setData(lineData(calc.rv));
-  drawPivotLines();const markers=buildTradeMarkers(trades,c);if(state.markerPlugin)state.markerPlugin.setMarkers(markers);
+  drawPivotLines();if(state.markerPlugin)state.markerPlugin.setMarkers([]);
   const latest=trades.slice(-1)[0];drawOverlays(trades,c,$('mainChart'),obZones,setups);
   if(state.forceFitNext){const visibleFrom=Math.max(0,c.length-120);const visibleRange={from:visibleFrom,to:c.length+3};state.main.timeScale().setVisibleLogicalRange(visibleRange);state.rsi.timeScale().setVisibleLogicalRange(visibleRange);}else if(priorRange){state.main.timeScale().setVisibleLogicalRange(priorRange);state.rsi.timeScale().setVisibleLogicalRange(priorRange);}state.forceFitNext=false;return;
  }
@@ -208,8 +196,8 @@ function draw(c,calc,trades,obZones=[],setups=[]){
  state.chartKey=chartKey;state.main=L.createChart(main,{autoSize:true,layout:{background:{type:'solid',color:'#0b121e'},textColor:'#9aaac0',fontSize:6},grid:{vertLines:{color:'#172235'},horzLines:{color:'#172235'}},rightPriceScale:{borderColor:'#28364a'},timeScale:{borderColor:'#28364a',timeVisible:true,secondsVisible:false},handleScroll:{mouseWheel:true,pressedMouseMove:true,horzTouchDrag:true,vertTouchDrag:true},handleScale:{mouseWheel:true,pinch:true,axisPressedMouseMove:true}});
  const candle=state.main.addSeries(L.CandlestickSeries,{upColor:'#19c99a',downColor:'#ff5968',borderVisible:false,wickUpColor:'#19c99a',wickDownColor:'#ff5968',autoscaleInfoProvider:original=>{const info=original();const levels=state.overlayPriceLevels.filter(Number.isFinite);if(!info||!info.priceRange||!levels.length)return info;return{...info,priceRange:{minValue:Math.min(info.priceRange.minValue,...levels),maxValue:Math.max(info.priceRange.maxValue,...levels)}};}});state.series.candle=candle;
  candle.setData(c);
- drawPivotLines();const markers=buildTradeMarkers(trades,c);
- if(typeof L.createSeriesMarkers==='function'){state.markerPlugin=L.createSeriesMarkers(candle,markers);}else{console.error('No se pudo crear el marcador de entradas: falta createSeriesMarkers');}
+ drawPivotLines();
+ if(typeof L.createSeriesMarkers==='function'){state.markerPlugin=L.createSeriesMarkers(candle,[]);}else{state.markerPlugin=null;}
  const latest=trades.slice(-1)[0];
  drawOverlays(trades,c,main,obZones,setups);
  const rsiEl=$('rsiChart');rsiEl.innerHTML='';
@@ -274,11 +262,11 @@ function drawOverlays(trades,c,host,obZones=[],setups=[]){
  if(t&&overrideKey&&state.levelOverrides[overrideKey])Object.assign(t,state.levelOverrides[overrideKey]);
  state.overlayPriceLevels=t?[t.entry].filter(Number.isFinite):[];
  if(t){
-  const label=t.result==='ESPERANDO DOJI'?'OB · ESPERANDO DOJI':t.result==='ESPERANDO CAMBIO'?'OB · ESPERANDO VELA DE CAMBIO':t.side==='BUY'?'ENTRADA COMPRA':'ENTRADA VENTA';
+  const label=t.side==='BUY'?'ENTRADA COMPRA':'ENTRADA VENTA';
   const el=document.createElement('div');el.className='price-label entry-line';
   el.setAttribute('aria-label',label+' '+fmt(t.entry));
   el.innerHTML='<b>'+label+'</b><strong>'+fmt(t.entry)+'</strong>';
-  overlay.appendChild(el);lineEls.push({key:'entry',p:t.entry,label,cls:'entry-line',el});
+  overlay.appendChild(el);lineEls.push({key:'entry',p:t.entry,label,cls:'entry-line',el,time:Number.isFinite(t.entryTime)?t.entryTime:(t.doji?.time||t.time),side:t.side});
  }
  const update=()=>{
   const width=host.clientWidth,scale=state.main.timeScale(),candleSeries=state.series.candle;
@@ -294,7 +282,13 @@ function drawOverlays(trades,c,host,obZones=[],setups=[]){
    if(boxWidth<24){el.style.display='none';return;}
    el.style.display='flex';el.style.left=left+'px';el.style.width=boxWidth+'px';el.style.top=Math.max(0,mid-15)+'px';el.style.height='30px';
   });
-  lineEls.forEach(v=>{const y=candleSeries.priceToCoordinate(v.p);if(y==null){v.el.style.display='none';return;}v.el.style.display='flex';v.el.style.left='auto';v.el.style.right='4px';v.el.style.width='max-content';v.el.style.top=(y-11)+'px';});
+  lineEls.forEach(v=>{
+   const y=candleSeries.priceToCoordinate(v.p),x=scale.timeToCoordinate(v.time);
+   if(y==null||x==null){v.el.style.display='none';return;}
+   v.el.style.display='flex';v.el.style.left=Math.max(2,Math.min(width-145,x-68))+'px';
+   v.el.style.right='auto';v.el.style.width='max-content';
+   v.el.style.top=Math.max(2,y-38)+'px';
+  });
  };
  state.overlayUpdate=update;
  if(!state.overlayRangeHandler){state.overlayRangeHandler=()=>{
@@ -323,7 +317,7 @@ function showLatest(calc,trades,c,raw=state.rawCandles){
  const obLabel=hourly.side?(hourly.side==='BUY'?'OB ALCISTA':'OB BAJISTA'):'SIN OB · H1 LATERAL';
  $('signalValue').textContent=obLabel;
  $('signalValue').style.color=hourly.side?(hourly.side==='BUY'?'#20d69a':'#ff6876'):'#aab8ca';
- $('entryValue').textContent=t?fmt(t.entry):'—';$('slValue').textContent='—';$('tp1Value').textContent='—';$('tp2Value').textContent='—';$('rsiValue').textContent=fmt(rv);
+ $('entryValue').textContent=t?fmt(t.entry):'—';if($('slValue'))$('slValue').textContent=t?fmt(t.sl):'—';if($('tp1Value'))$('tp1Value').textContent=t?fmt(t.tp1):'—';if($('tp2Value'))$('tp2Value').textContent=t?fmt(t.tp2):'—';$('rsiValue').textContent=fmt(rv);
  $('rsiConfirm').textContent=t?'OB + TENDENCIA H1 + PIVOTE CONFIRMADOS':'Sin señal';$('rsiConfirm').style.color=t?'#20d69a':'#8b9bb0';
  $('signalState').textContent=t?(t.entryIndex>=0?'ACTIVA':'PREPARADA'):'ESPERANDO';
  $('signalDetails').textContent=(hourly.side?'Sesgo de 1 hora: '+trend+'. Mostrando únicamente el '+obLabel+' de H1'+(hourly.ob?' entre '+fmt(hourly.ob.low)+' y '+fmt(hourly.ob.high):' (zona no localizada en las últimas 9 velas H1)')+'. ':'La tendencia H1 está lateral; no se selecciona OB direccional. ')+(t?(t.entryIndex>=0?'Operación ACTIVA. ':'')+(t.side==='BUY'?'OB alcista + FVG':'OB bajista + FVG')+' alineado con la tendencia H1. Entrada en el OB; TP1 es la primera resistencia/soporte disponible de M3, M5 o M10. Entrada proyectada '+fmt(t.entry)+', SL '+fmt(t.sl)+', TP1 '+fmt(t.tp1)+' y TP2 '+fmt(t.tp2)+'.':'No hay una señal completa en la última vela M2.');
