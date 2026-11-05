@@ -270,7 +270,19 @@ function drawOverlays(trades,c,host,obZones=[],setups=[]){
  const overlay=document.createElement('div');overlay.className='chart-overlay';host.appendChild(overlay);
  const closedTrades=(trades||[]).filter(x=>(x.result==='GANADA'||x.result==='PERDIDA')&&Number.isFinite(x.points));const wonPoints=closedTrades.filter(x=>x.result==='GANADA').reduce((sum,x)=>sum+Math.max(0,x.points),0);const lostPoints=closedTrades.filter(x=>x.result==='PERDIDA').reduce((sum,x)=>sum+Math.abs(Math.min(0,x.points)),0);const wonMoney=closedTrades.filter(x=>x.result==='GANADA'&&Number.isFinite(x.exitPrice)).reduce((sum,x)=>sum+(tradeMoney(x,x.exitPrice)||0),0);const lostMoney=closedTrades.filter(x=>x.result==='PERDIDA'&&Number.isFinite(x.exitPrice)).reduce((sum,x)=>sum+Math.abs(tradeMoney(x,x.exitPrice)||0),0);const wonEl=$('chartWonPoints'),lostEl=$('chartLostPoints'),wonMoneyEl=$('chartWonMoney'),lostMoneyEl=$('chartLostMoney');if(wonEl)wonEl.textContent='+'+fmt(wonPoints)+' pts';if(lostEl)lostEl.textContent='-'+fmt(lostPoints)+' pts';if(wonMoneyEl)wonMoneyEl.textContent='+'+moneyFmtAbs(wonMoney);if(lostMoneyEl)lostMoneyEl.textContent='−'+moneyFmtAbs(lostMoney);
  const lockedTrade=[...(trades||[])].reverse().find(x=>['ESPERANDO DOJI','ESPERANDO CAMBIO','PENDIENTE'].includes(x.result));
- const zones=[...(obZones||[]),...(lockedTrade&&lockedTrade.ob?[{...lockedTrade.ob,side:lockedTrade.side,timeframe:state.obPrimaryTf,structureTime:lockedTrade.structureTime}]:[])].filter((ob,i,all)=>ob&&Number.isFinite(ob.time)&&all.findIndex(q=>q.time===ob.time&&q.side===ob.side)===i).sort((x,y)=>x.time-y.time);
+ const rawZones=[...(obZones||[]),...(lockedTrade&&lockedTrade.ob?[{...lockedTrade.ob,side:lockedTrade.side,timeframe:state.obPrimaryTf,structureTime:lockedTrade.structureTime}]:[])].filter((ob,i,all)=>ob&&Number.isFinite(ob.time)&&Number.isFinite(ob.high)&&Number.isFinite(ob.low)&&all.findIndex(q=>q.time===ob.time&&q.side===ob.side)===i).sort((x,y)=>x.time-y.time);
+ // Agrupa OB del mismo lado que ocupan prácticamente el mismo rango de precio.
+ // En cada zona conserva solo los dos OB más recientes para evitar etiquetas apiladas.
+ const obClusters=[];
+ for(const ob of rawZones){
+  const side=ob.side,lo=Math.min(ob.low,ob.high),hi=Math.max(ob.low,ob.high),height=Math.max(hi-lo,Math.abs((hi+lo)/2)*1e-8);
+  const cluster=obClusters.find(group=>group.side===side&&group.items.some(item=>{
+   const itemLo=Math.min(item.low,item.high),itemHi=Math.max(item.low,item.high),tol=Math.max(height,item.height)*.5;
+   return lo<=itemHi+tol&&hi>=itemLo-tol;
+  }));
+  if(cluster)cluster.items.push({...ob,height});else obClusters.push({side,items:[{...ob,height}]});
+ }
+ const zones=obClusters.flatMap(group=>group.items.sort((x,y)=>x.time-y.time).slice(-2)).sort((x,y)=>x.time-y.time);
  const zoneEls=zones.map(ob=>{
   const el=document.createElement('div');el.className='ob-zone '+(ob.fvg?'fvg-zone ':'')+(ob.side==='BUY'?'bull-zone':'bear-zone');
   const tag=document.createElement('b');tag.textContent=(ob.side==='BUY'?'OB ALCISTA':'OB BAJISTA')+' · M'+ob.timeframe;el.appendChild(tag);
