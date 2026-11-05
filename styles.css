@@ -150,18 +150,3 @@
 .chart-overlay .price-label.tp-line{color:#58e2b4!important}
 .chart-overlay .price-label.tp2-line{color:#70caff!important}
 .chart-overlay .price-label{z-index:21!important}
-
-/* Estimaciones monetarias por especificación Deriv */
-.money-estimate{margin-top:10px}
-.money-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:10px 0}
-.money-grid>div{background:#101a28;border:1px solid #253449;border-radius:10px;padding:10px;min-width:0}
-.money-grid small{display:block;color:#8fa2b9;font-size:10px;letter-spacing:.04em}
-.money-grid b{display:block;margin-top:5px;font-size:16px;color:#e8f0fb;overflow-wrap:anywhere}
-.money-grid>div:first-child b{color:#ff7b85}
-.money-grid>div:nth-child(2) b,.money-grid>div:nth-child(3) b{color:#31d6a0}
-.money-note{display:block;color:#8fa2b9;font-size:10px;line-height:1.4}
-.trade-level-rule{z-index:3}
-.price-label small{font-size:9px;line-height:1.1}
-.chart-points-summary{flex-wrap:wrap}
-.chart-points-summary span{white-space:nowrap}
-@media(max-width:480px){.money-grid{gap:5px}.money-grid>div{padding:8px 6px}.money-grid b{font-size:14px}.money-grid small{font-size:9px}}
