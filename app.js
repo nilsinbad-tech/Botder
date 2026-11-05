@@ -84,13 +84,13 @@ function buildSetups(c,liquidityCandles=c,pivotCandles=liquidityCandles){
   if(bearFvg){const candidate=findOBAtTime(liquidityCandles,x.time,'SELL');if(candidate&&(!state.obStructureOnly||isOBAtStructure(candidate,'SELL',obPv,pivotCandles,x.time))){const key='SELL:'+candidate.time;if(!usedZones.has(key)){usedZones.add(key);obZones.push({...candidate,side:'SELL'});}}}
   if(bullCross&&slopeUp&&separated&&bullFvg){
    const ob=findOBAtTime(liquidityCandles,x.time,'BUY');if(!ob||(state.obStructureOnly&&!isOBAtStructure(ob,'BUY',obPv,pivotCandles,x.time)))continue;
-   const targets=pv.highs.filter(p=>p.confirmedTime<=x.time&&p.price>ob.entry).sort((a,b)=>a.price-b.price);if(!targets.length)continue;
+   const targets=pv.highs.filter(p=>p.confirmedTime<=x.time&&p.price>ob.entry).sort((a,b)=>a.price-b.price);if(!targets.length)continue;const slPivot=pv.lows.filter(p=>p.confirmedTime<=x.time&&p.price<ob.entry).sort((a,b)=>Math.abs(a.price-ob.low)-Math.abs(b.price-ob.low))[0]||null;
    const sl=ob.low-(ob.high-ob.low)*.12,obKey='BUY:'+ob.time;if(usedOBs.has(obKey))continue;usedOBs.add(obKey);
-   setups.push({side:'BUY',index:i,time:x.time,entry:ob.entry,sl,tp1:targets[0].price,tp2:(targets[1]||targets[0]).price,ob,rsi:rv[i],fvg:{low:c[i-2].high,high:x.low},state:'PREPARADA'});
+   setups.push({side:'BUY',index:i,time:x.time,entry:ob.entry,sl,tp1:targets[0].price,tp2:(targets[1]||targets[0]).price,ob,slPivot,tp1Pivot:targets[0],tp2Pivot:targets[1]||targets[0],rsi:rv[i],fvg:{low:c[i-2].high,high:x.low},state:'PREPARADA'});
   }
   if(bearCross&&slopeDown&&separated&&bearFvg){
    const ob=findOBAtTime(liquidityCandles,x.time,'SELL');if(!ob||(state.obStructureOnly&&!isOBAtStructure(ob,'SELL',obPv,pivotCandles,x.time)))continue;
-   const targets=pv.lows.filter(p=>p.confirmedTime<=x.time&&p.price<ob.entry).sort((a,b)=>b.price-a.price);if(!targets.length)continue;
+   const targets=pv.lows.filter(p=>p.confirmedTime<=x.time&&p.price<ob.entry).sort((a,b)=>b.price-a.price);if(!targets.length)continue;const slPivot=pv.highs.filter(p=>p.confirmedTime<=x.time&&p.price>ob.entry).sort((a,b)=>Math.abs(a.price-ob.high)-Math.abs(b.price-ob.high))[0]||null;
    const sl=ob.high+(ob.high-ob.low)*.12,obKey='SELL:'+ob.time;if(usedOBs.has(obKey))continue;usedOBs.add(obKey);
    setups.push({side:'SELL',index:i,time:x.time,entry:ob.entry,sl,tp1:targets[0].price,tp2:(targets[1]||targets[0]).price,ob,rsi:rv[i],fvg:{low:x.high,high:c[i-2].low},state:'PREPARADA'});
   }
@@ -243,9 +243,9 @@ function drawOverlays(trades,c,host,obZones=[]){
  const t=[...trades].reverse().find(x=>x.result==='PENDIENTE')||trades[trades.length-1];
  const lineEls=[];
  if(t){
-  const levels=[{p:t.entry,label:'ENTRADA',cls:'entry-line',priority:0},{p:t.sl,label:'STOP LOSS',cls:'sl-line',priority:1},{p:t.tp1,label:'TP1 · OBJETIVO',cls:'tp-line',priority:2}];
-  if(Math.abs(t.tp2-t.tp1)>1e-10)levels.push({p:t.tp2,label:'TP2 · OBJETIVO',cls:'tp2-line',priority:3});
-  levels.forEach(v=>{const el=document.createElement('div');el.className='level-line '+v.cls;const tag=document.createElement('span');tag.className='level-tag';tag.innerHTML='<b>'+v.label+'</b><strong>'+fmt(v.p)+'</strong>';el.appendChild(tag);overlay.appendChild(el);lineEls.push({el,tag,...v});});
+  const levels=[{p:t.entry,label:'ENTRADA · OB',detail:t.side==='BUY'?'ZONA DE COMPRA':'ZONA DE VENTA',cls:'entry-line',priority:0},{p:t.sl,label:'STOP LOSS',detail:t.slPivot?(t.side==='BUY'?'PIVOTE SOPORTE':'PIVOTE RESISTENCIA'):'LÍMITE DEL OB',cls:'sl-line',priority:1},{p:t.tp1,label:'TP1 · OBJETIVO',detail:t.side==='BUY'?'RESISTENCIA M10':'PIVOTE M10',cls:'tp-line',priority:2}];
+  if(Math.abs(t.tp2-t.tp1)>1e-10)levels.push({p:t.tp2,label:'TP2 · OBJETIVO',detail:t.side==='BUY'?'RESISTENCIA M10':'PIVOTE M10',cls:'tp2-line',priority:3});
+  levels.forEach(v=>{const el=document.createElement('div');el.className='level-line '+v.cls;const tag=document.createElement('span');tag.className='level-tag';tag.innerHTML='<span class="level-copy"><b>'+v.label+'</b><small>'+v.detail+'</small></span><strong>'+fmt(v.p)+'</strong>';el.appendChild(tag);overlay.appendChild(el);lineEls.push({el,tag,...v});});
  }
  const update=()=>{
   const width=host.clientWidth,scale=state.main.timeScale(),candleSeries=state.series.candle;
@@ -257,13 +257,13 @@ function drawOverlays(trades,c,host,obZones=[]){
    const y1=candleSeries.priceToCoordinate(ob.high),y2=candleSeries.priceToCoordinate(ob.low);
    if(y1==null||y2==null){el.style.display='none';return;}
    if(x1==null){if(firstTime!=null&&ob.time<firstTime)x1=0;else{el.style.display='none';return;}}
-   const left=Math.max(0,Math.min(width-30,x1)),mid=(y1+y2)/2,height=Math.max(12,Math.abs(y2-y1));
-   el.style.display='flex';el.style.left=left+'px';el.style.width=Math.max(30,width-left-2)+'px';el.style.top=Math.max(0,mid-height/2)+'px';el.style.height=height+'px';
+   const left=Math.max(0,Math.min(width-112,x1)),mid=(y1+y2)/2;
+   el.style.display='flex';el.style.left=left+'px';el.style.width=Math.max(24,width-left-104)+'px';el.style.top=Math.max(0,mid-3)+'px';el.style.height='6px';
   });
-  const xSignal=t?scale.timeToCoordinate(t.time):null,xStart=Math.max(0,Math.min(width-8,xSignal==null?width*.45:xSignal)),positioned=[];
+  const xSignal=t?scale.timeToCoordinate(Number.isFinite(t.entryTime)?t.entryTime:t.time):null,xStart=Math.max(0,Math.min(width-8,xSignal==null?width*.35:xSignal)),positioned=[];
   lineEls.forEach(v=>{const y=candleSeries.priceToCoordinate(v.p);if(y==null){v.el.style.display='none';return;}v.el.style.display='block';v.el.style.left=xStart+'px';v.el.style.width=Math.max(30,width-xStart-3)+'px';v.el.style.top=y+'px';positioned.push({tag:v.tag,y,priority:v.priority});});
   positioned.sort((a,b)=>a.y-b.y);let previous=-Infinity;
-  positioned.forEach(item=>{const desired=Math.max(13,Math.min(host.clientHeight-13,item.y)),placed=Math.max(desired,previous+27);item.tag.style.top=Math.max(2,Math.min(host.clientHeight-27,placed-13))+'px';previous=placed;});
+  positioned.forEach(item=>{const desired=Math.max(16,Math.min(host.clientHeight-16,item.y)),placed=Math.max(desired,previous+34);item.tag.style.top=Math.max(2,Math.min(host.clientHeight-34,placed-16))+'px';previous=placed;});
  };
  state.overlayUpdate=update;
  if(!state.overlayRangeHandler){state.overlayRangeHandler=()=>{
