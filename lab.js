@@ -91,7 +91,7 @@ function buildTrades(m2,m1,strat){
 function updateTotals(){const wins=results.reduce((n,r)=>n+r.wins,0),losses=results.reduce((n,r)=>n+r.losses,0),ops=wins+losses;$("total-tested").textContent=results.length;$("total-wins").textContent=wins;$("total-losses").textContent=losses;$("total-ops").textContent=ops;$("total-markets").textContent=validInstruments+" válidos · "+failedInstruments+" con error";}
 function render(){
  updateTotals();
- $("strategy-list").innerHTML=strategies.map(s=>{const cells=symbols.map(m=>{const r=results.find(x=>x.symbol===m.symbol&&x.strategy.id===s.id);return '<div class="instrument-result"><b>'+(r?fmt(r.rate,1)+"%":"—")+'</b><span>'+esc(m.name)+' · '+(r?r.wins+"G / "+r.losses+"P · "+r.total+" ops":"pendiente")+'</span></div>'}).join("");return '<article class="strategy-card"><div class="strategy-top"><strong>'+s.id+'. '+esc(s.name)+'</strong><small>'+esc(s.group)+' · '+esc(s.rules)+'</small></div><div class="strategy-results">'+cells+'</div></article>'}).join("");
+ $("strategy-list").innerHTML=strategies.map(s=>{const cells=symbols.map(m=>{const r=results.find(x=>x.symbol===m.symbol&&x.strategy.id===s.id);return '<div class="instrument-result"><b>'+(r?fmt(r.rate,1)+"%":"—")+'</b><span>'+esc(m.name)+' · '+(r?(r.error?"ERROR · "+esc(r.error):r.wins+"G / "+r.losses+"P · "+r.total+" ops · "+r.entries.length+" señales"):"pendiente")+'</span></div>'}).join("");return '<article class="strategy-card"><div class="strategy-top"><strong>'+s.id+'. '+esc(s.name)+'</strong><small>'+esc(s.group)+' · '+esc(s.rules)+'</small></div><div class="strategy-results">'+cells+'</div></article>'}).join("");
  $("market-list").innerHTML=symbols.map(m=>'<div class="market-chip"><span>'+esc(m.name)+'</span><small>'+m.symbol+'</small></div>').join("");
  $("s-symbols").textContent=symbols.length;$("s-tests").textContent="8 por índice";
  const ranked=symbols.map(m=>({market:m,rows:results.filter(r=>r.symbol===m.symbol&&r.total>=5).sort((a,b)=>b.rate-a.rate||b.wins-a.wins)}));
@@ -186,7 +186,9 @@ function runInstrument(){
     for(const s of strategies){
      $("live-detail").textContent="TESTING · "+active.name+" · estrategia "+s.id+" de "+strategies.length+": "+s.name;
      $("progress-title").textContent="TESTING · "+active.name;
-     const r=buildTrades(m2,m1,s);
+     let r;
+     try{r=buildTrades(m2,m1,s)}
+     catch(err){r={strategy:s,wins:0,losses:0,total:0,rate:null,entries:[],trades:[],error:"Error en motor: "+(err?.message||String(err))};failedInstruments++}
      results.push({symbol:active.symbol,market:active.name,strategy:s,...r});
      updateTotals();
      $("live-count").textContent=results.length+" / "+(symbols.length*strategies.length)+" pruebas completadas";
