@@ -68,7 +68,7 @@ function aggregate(candles,mins){if(mins===1)return candles;const groups=new Map
 function ema(values,period){const out=Array(values.length).fill(null),k=2/(period+1);let prev=null;values.forEach((v,i)=>{prev=prev===null?v:v*k+prev*(1-k);out[i]=prev;});return out;}
 function rsi(values,period=14){const out=Array(values.length).fill(null);let gain=0,loss=0;for(let i=1;i<values.length;i++){const d=values[i]-values[i-1];const g=Math.max(d,0),l=Math.max(-d,0);if(i<=period){gain+=g;loss+=l;if(i===period){gain/=period;loss/=period;out[i]=loss===0?100:100-100/(1+gain/loss);}}else{gain=(gain*(period-1)+g)/period;loss=(loss*(period-1)+l)/period;out[i]=loss===0?100:100-100/(1+gain/loss);}}return out;}
 function pivots(c,span=3,candleSeconds=600){const highs=[],lows=[];for(let i=span;i<c.length-span;i++){let hi=true,lo=true;for(let j=1;j<=span;j++){if(c[i].high<=c[i-j].high||c[i].high<=c[i+j].high)hi=false;if(c[i].low>=c[i-j].low||c[i].low>=c[i+j].low)lo=false;}if(hi)highs.push({index:i,time:c[i].time,confirmedTime:c[i+span].time+candleSeconds,price:c[i].high});if(lo)lows.push({index:i,time:c[i].time,confirmedTime:c[i+span].time+candleSeconds,price:c[i].low});}const sample=c.slice(-30),avgRange=sample.length?sample.reduce((sum,v)=>sum+(v.high-v.low),0)/sample.length:0,tolerance=avgRange*.45;const merge=items=>{const kept=[];for(const p of items){const near=kept.findIndex(q=>Math.abs(q.price-p.price)<=tolerance);if(near<0)kept.push(p);else if(p.confirmedTime>kept[near].confirmedTime)kept[near]=p;}return kept.sort((a,b)=>a.time-b.time);};return{highs:merge(highs),lows:merge(lows)};}
-function buildSetups(c,liquidityCandles=c,pivotCandles=liquidityCandles,obStructureCandles=pivotCandles){
+function buildSetups(c,liquidityCandles=c,pivotCandles=liquidityCandles,obStructureCandles=pivotCandles,trendSide=null){
  const close=c.map(x=>x.close),e3=ema(close,3),e9=ema(close,9),e13=ema(close,13),e50=ema(close,50),rv=rsi(close);
  const pv=pivots(pivotCandles,3,600),obPv=pivots(obStructureCandles,3,state.obStructureTf*60);
  const setups=[],obZones=[],usedOBs=new Set(),usedZones=new Set();
@@ -77,6 +77,8 @@ function buildSetups(c,liquidityCandles=c,pivotCandles=liquidityCandles,obStruct
   for(const side of ['BUY','SELL']){
    const ob=findOBAtTime(liquidityCandles,x.time,side);
    if(!ob)continue;
+   // Los OB contra la tendencia H1 solo se permiten si son estrechos.
+   if(trendSide&&side!==trendSide&&!isSmallCounterTrendOB(ob,liquidityCandles,x.time))continue;
    const key=side+':'+ob.time;
    if(state.obStructureOnly&&!isOBAtStructure(ob,side,obPv,obStructureCandles,x.time))continue;
    if(!usedZones.has(key)){usedZones.add(key);obZones.push({...ob,side});}
@@ -95,6 +97,12 @@ function buildSetups(c,liquidityCandles=c,pivotCandles=liquidityCandles,obStruct
   }
  }
  return{setups,e3,e9,e13,e50,rv,pv,obZones};
+}
+function isSmallCounterTrendOB(ob,candles,time){
+ const recent=candles.filter(bar=>bar.time<=time).slice(-20);
+ if(recent.length<5)return false;
+ const avgRange=recent.reduce((sum,bar)=>sum+(bar.high-bar.low),0)/recent.length;
+ return avgRange>0&&(ob.high-ob.low)<=avgRange*1.25;
 }
 function isOBAtStructure(ob,side,pv,pivotCandles,time){
  const levels=side==='BUY'?pv.lows:pv.highs;
