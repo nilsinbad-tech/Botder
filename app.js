@@ -5,7 +5,7 @@ const HISTORY_CANDLES = 1440;
 const REQUEST_TIMEOUT_MS = 45000;
 const API_URL = 'wss://api.derivws.com/trading/v1/options/ws/public';
 const $ = id => document.getElementById(id);
-const state = { ws:null, req:0, pending:new Map(), symbols:[], selected:null, tf:1, candles:[], rawCandles:[], rawBySymbol:new Map(), marketBacktests:[], trades:[], liveSub:null, main:null, rsi:null, markerPlugin:null, overlayResizeObserver:null, overlayUpdate:null, overlayRangeHandler:null, pivotLines:[], tradePriceLines:[], pivotTfEnabled:{1:false,2:false,3:false,4:false,5:true,10:false}, obStructureOnly:true, obStructureTf:5, chartKey:null, series:{}, busy:false, analyzeQueued:false, forceFitNext:true, lastRecalcBucket:null, pendingLiveTick:null, liveFrame:0, overlayFrame:0 };
+const state = { ws:null, req:0, pending:new Map(), symbols:[], selected:null, tf:1, candles:[], rawCandles:[], rawBySymbol:new Map(), marketBacktests:[], trades:[], liveSub:null, main:null, rsi:null, markerPlugin:null, overlayResizeObserver:null, overlayUpdate:null, overlayRangeHandler:null, pivotLines:[], tradePriceLines:[], overlayPriceLevels:[], pivotTfEnabled:{1:false,2:false,3:false,4:false,5:true,10:false}, obStructureOnly:true, obStructureTf:5, chartKey:null, series:{}, busy:false, analyzeQueued:false, forceFitNext:true, lastRecalcBucket:null, pendingLiveTick:null, liveFrame:0, overlayFrame:0 };
 const CANDIDATES = [
  ['1HZ10V','Volatility 10 (1s)'],['1HZ15V','Volatility 15 (1s)'],['1HZ25V','Volatility 25 (1s)'],['1HZ30V','Volatility 30 (1s)'],['1HZ50V','Volatility 50 (1s)'],['1HZ75V','Volatility 75 (1s)'],['1HZ90V','Volatility 90 (1s)'],['1HZ100V','Volatility 100 (1s)'],['1HZ150V','Volatility 150 (1s)'],['1HZ250V','Volatility 250 (1s)'],
  ['R_10','Volatility 10'],['R_25','Volatility 25'],['R_50','Volatility 50'],['R_75','Volatility 75'],['R_100','Volatility 100'],
@@ -147,7 +147,7 @@ function buildTradeMarkers(trades,c){
  }
  return markers.sort((a,b)=>a.time-b.time);
 }
-function draw(c,calc,trades,obZones=[]){
+function draw(c,calc,trades,obZones=[],setups=[]){
  // Limpieza defensiva: ninguna EMA puede permanecer como serie visual del precio.
  for(const key of ['ema3','ema9','ema13','ema20','ema21','ema50']){if(state.series[key]&&state.main){try{state.main.removeSeries(state.series[key]);}catch{}}delete state.series[key];}
  const chartKey=state.selected+'|'+state.tf;const priorRange=state.main?state.main.timeScale().getVisibleLogicalRange():null;const preserveRange=!!priorRange&&!state.forceFitNext;
@@ -157,18 +157,18 @@ function draw(c,calc,trades,obZones=[]){
   const lineData=values=>values.map((v,i)=>v==null?null:{time:c[i].time,value:v}).filter(Boolean);
   state.series.candle.setData(c);state.series.rsi.setData(lineData(calc.rv));
   drawPivotLines();const markers=buildTradeMarkers(trades,c);if(state.markerPlugin)state.markerPlugin.setMarkers(markers);
-  const latest=trades.slice(-1)[0];drawOverlays(trades,c,$('mainChart'),obZones);
+  const latest=trades.slice(-1)[0];drawOverlays(trades,c,$('mainChart'),obZones,setups);
   if(state.forceFitNext){const visibleFrom=Math.max(0,c.length-120);const visibleRange={from:visibleFrom,to:c.length+3};state.main.timeScale().setVisibleLogicalRange(visibleRange);state.rsi.timeScale().setVisibleLogicalRange(visibleRange);}else if(priorRange){state.main.timeScale().setVisibleLogicalRange(priorRange);state.rsi.timeScale().setVisibleLogicalRange(priorRange);}state.forceFitNext=false;return;
  }
  if(state.main){state.main.remove();if(state.rsi)state.rsi.remove();}state.overlayUpdate=null;state.overlayRangeHandler=null;
  const L=LightweightCharts,main=$('mainChart');main.innerHTML='';
  state.chartKey=chartKey;state.main=L.createChart(main,{autoSize:true,layout:{background:{type:'solid',color:'#0b121e'},textColor:'#9aaac0',fontSize:6},grid:{vertLines:{color:'#172235'},horzLines:{color:'#172235'}},rightPriceScale:{borderColor:'#28364a'},timeScale:{borderColor:'#28364a',timeVisible:true,secondsVisible:false},handleScroll:{mouseWheel:true,pressedMouseMove:true,horzTouchDrag:true,vertTouchDrag:true},handleScale:{mouseWheel:true,pinch:true,axisPressedMouseMove:true}});
- const candle=state.main.addSeries(L.CandlestickSeries,{upColor:'#19c99a',downColor:'#ff5968',borderVisible:false,wickUpColor:'#19c99a',wickDownColor:'#ff5968'});state.series.candle=candle;
+ const candle=state.main.addSeries(L.CandlestickSeries,{upColor:'#19c99a',downColor:'#ff5968',borderVisible:false,wickUpColor:'#19c99a',wickDownColor:'#ff5968',autoscaleInfoProvider:original=>{const info=original();const levels=state.overlayPriceLevels.filter(Number.isFinite);if(!info||!info.priceRange||!levels.length)return info;return{...info,priceRange:{minValue:Math.min(info.priceRange.minValue,...levels),maxValue:Math.max(info.priceRange.maxValue,...levels)}};}});state.series.candle=candle;
  candle.setData(c);
  drawPivotLines();const markers=buildTradeMarkers(trades,c);
  if(typeof L.createSeriesMarkers==='function'){state.markerPlugin=L.createSeriesMarkers(candle,markers);}else{console.error('No se pudo crear el marcador de entradas: falta createSeriesMarkers');}
  const latest=trades.slice(-1)[0];
- drawOverlays(trades,c,main,obZones);
+ drawOverlays(trades,c,main,obZones,setups);
  const rsiEl=$('rsiChart');rsiEl.innerHTML='';
  state.rsi=L.createChart(rsiEl,{autoSize:true,layout:{background:{type:'solid',color:'#0b121e'},textColor:'#8b9bb0',fontSize:10},grid:{vertLines:{color:'#172235'},horzLines:{color:'#172235'}},rightPriceScale:{borderColor:'#28364a'},timeScale:{visible:false},handleScroll:{mouseWheel:true,pressedMouseMove:true,horzTouchDrag:true},handleScale:{mouseWheel:true,pinch:true}});
  const rs=state.rsi.addSeries(L.LineSeries,{color:'#a36aff',lineWidth:2,priceLineVisible:false,lastValueVisible:true});state.series.rsi=rs;rs.setData(calc.rv.map((v,i)=>v==null?null:{time:c[i].time,value:v}).filter(Boolean));
@@ -211,7 +211,7 @@ function drawPivotLines(){
   }
  }
 }
-function drawOverlays(trades,c,host,obZones=[]){
+function drawOverlays(trades,c,host,obZones=[],setups=[]){
   for(const line of state.tradePriceLines){try{state.series.candle.removePriceLine(line);}catch{}}
   state.tradePriceLines=[];
  const activeSide=getHourlyBias(state.rawCandles).side;
@@ -330,7 +330,7 @@ async function analyze(){
  const alignedSetups=activeSide?signalCalc.setups.filter(setup=>setup.side===activeSide):[];
  const alignedZones=activeSide?signalCalc.obZones.filter(zone=>zone.side===activeSide):[];
  state.trades=simulate(signalCandles,alignedSetups);
- draw(c,chartCalc,state.trades,alignedZones);showLatest(signalCalc,state.trades,signalCandles);renderHistory(state.trades);
+ draw(c,chartCalc,state.trades,alignedZones,alignedSetups);showLatest(signalCalc,state.trades,signalCandles);renderHistory(state.trades);
  $('chartTitle').textContent=(state.symbols.find(s=>s.symbol===state.selected)?.name||state.selected)+' · M'+state.tf;
  $('chartSubtitle').textContent='Velas '+c.length+' · últimas 24 horas · señales proyectadas';
  $('chartRange').textContent='Últimas 24 horas · '+new Date(c[0].time*1000).toLocaleTimeString('es-PA')+' — '+new Date(c.at(-1).time*1000).toLocaleTimeString('es-PA');
