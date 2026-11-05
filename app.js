@@ -244,15 +244,28 @@ function drawOverlays(trades,c,host,obZones=[]){
  requestAnimationFrame(update);
 }
 function fmt(n){return Number.isFinite(n)?Number(n).toFixed(2):'—';}
-function showLatest(calc,trades,c){
- const last=c[c.length-1],t=trades.filter(x=>x.result==='PENDIENTE').slice(-1)[0],rv=calc.rv[calc.rv.length-1];
- const trend=calc.e50.at(-1)>calc.e50.at(-4)?'ALCISTA':calc.e50.at(-1)<calc.e50.at(-4)?'BAJISTA':'LATERAL';
+function getHourlyBias(raw){
+ const h1=aggregate(raw,60);
+ if(h1.length<4)return{trend:'SIN DATOS',side:null,ob:null};
+ const close=h1.map(x=>x.close),fast=ema(close,3),slow=ema(close,13);
+ const up=fast.at(-1)>slow.at(-1)&&slow.at(-1)>slow.at(-3);
+ const down=fast.at(-1)<slow.at(-1)&&slow.at(-1)<slow.at(-3);
+ const trend=up?'ALCISTA':down?'BAJISTA':'LATERAL';
+ const side=up?'BUY':down?'SELL':null;
+ const ob=side?findOB(h1,h1.length,side):null;
+ return{trend,side,ob,h1};
+}
+function showLatest(calc,trades,c,raw=state.rawCandles){
+ const t=trades.filter(x=>x.result==='PENDIENTE').slice(-1)[0],rv=calc.rv[calc.rv.length-1];
+ const hourly=getHourlyBias(raw),trend=hourly.trend;
  $('trendValue').textContent=trend;$('trendValue').style.color=trend==='BAJISTA'?'#ff6876':trend==='ALCISTA'?'#20d69a':'#d5b35b';
- $('signalValue').textContent=t?(t.side==='BUY'?'COMPRA':'VENTA'):'ESPERANDO';$('signalValue').style.color=t?(t.side==='BUY'?'#20d69a':'#ff6876'):'#aab8ca';
+ const obLabel=hourly.side?(hourly.side==='BUY'?'OB ALCISTA':'OB BAJISTA'):'SIN OB · H1 LATERAL';
+ $('signalValue').textContent=obLabel;
+ $('signalValue').style.color=hourly.side?(hourly.side==='BUY'?'#20d69a':'#ff6876'):'#aab8ca';
  $('entryValue').textContent=t?fmt(t.entry):'—';$('slValue').textContent=t?fmt(t.sl):'—';$('tp1Value').textContent=t?fmt(t.tp1):'—';$('tp2Value').textContent=t?fmt(t.tp2):'—';$('rsiValue').textContent=fmt(rv);
- const confirms=t&&((t.side==='BUY'&&t.rsi>=50&&t.rsi<=60)||(t.side==='SELL'&&t.rsi<=55&&t.rsi>=40));
  $('rsiConfirm').textContent=t?'OB + FVG + EMA CONFIRMADOS':'Sin señal';$('rsiConfirm').style.color=t?'#20d69a':'#8b9bb0';
- $('signalState').textContent=t?(t.entryIndex>=0?'ACTIVA':'PREPARADA'):'ESPERANDO';$('signalDetails').textContent=t?(t.entryIndex>=0?'Operación ACTIVA. ':'')+(t.side==='BUY'?'OB alcista + FVG':'OB bajista + FVG')+' detectados con confirmación EMA en M2. Entrada proyectada '+fmt(t.entry)+', SL '+fmt(t.sl)+', TP1 en pivote '+fmt(t.tp1)+' y TP2 '+fmt(t.tp2)+'.':'No hay una señal completa en la última vela. El motor sigue analizando.';
+ $('signalState').textContent=t?(t.entryIndex>=0?'ACTIVA':'PREPARADA'):'ESPERANDO';
+ $('signalDetails').textContent=(hourly.side?'Sesgo de 1 hora: '+trend+'. Mostrando únicamente el '+obLabel+' de H1'+(hourly.ob?' entre '+fmt(hourly.ob.low)+' y '+fmt(hourly.ob.high):' (zona no localizada en las últimas 9 velas H1)')+'. ':'La tendencia H1 está lateral; no se selecciona OB direccional. ')+(t?(t.entryIndex>=0?'Operación ACTIVA. ':'')+(t.side==='BUY'?'OB alcista + FVG':'OB bajista + FVG')+' detectados con confirmación EMA en M2. Entrada proyectada '+fmt(t.entry)+', SL '+fmt(t.sl)+', TP1 '+fmt(t.tp1)+' y TP2 '+fmt(t.tp2)+'.':'No hay una señal completa en la última vela M2.');
  $('rsiLegend').textContent='Valor actual: '+fmt(rv);
 }
 function renderHistory(trades){
