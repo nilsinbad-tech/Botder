@@ -69,7 +69,8 @@ async function loadMinimumStakes(){
  const note=$('minimumStakeNote');
  note.textContent=winner?(winner==='EMPATE'?'Ambos muestran el mismo mínimo.':'Menor mínimo reportado: '+(winner==='CRASH300'?'Crash 300':'Boom 300')+'.'):'No se pudo comparar con datos mínimos verificables. No se estimará ni inventará un importe.';
 }
-\nfunction esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+
+function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
 async function getCandles(symbol){
  const r=await request({ticks_history:symbol,adjust_start_time:1,count:1440,end:'latest',granularity:60,style:'candles'});
  return (r.candles||[]).map(c=>({time:Number(c.epoch),open:+c.open,high:+c.high,low:+c.low,close:+c.close})).filter(c=>Number.isFinite(c.close));
