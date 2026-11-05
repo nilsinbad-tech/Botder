@@ -266,12 +266,17 @@ function drawOverlays(trades,c,host,obZones=[],setups=[]){
  const lineEls=[];
  const overrideKey=t?String(state.selected||'')+':'+String(t.time)+':'+t.side:null;
  if(t&&overrideKey&&state.levelOverrides[overrideKey])Object.assign(t,state.levelOverrides[overrideKey]);
- state.overlayPriceLevels=t?[t.entry,t.sl,t.tp1,t.tp2].filter(Number.isFinite):[];
+ state.overlayPriceLevels=t?[t.entry].filter(Number.isFinite):[];
+ let entryZoneEl=null;
  if(t){
-  const levels=[{key:'entry',p:t.entry,label:t.side==='BUY'?'ENTRADA · ZONA COMPRA':'ENTRADA · ZONA VENTA',cls:'entry-line',priority:0},{key:'sl',p:t.sl,label:t.side==='BUY'?'STOP LOSS · PIVOTE SOPORTE':'STOP LOSS · PIVOTE RESISTENCIA',cls:'sl-line',priority:1},{key:'tp1',p:t.tp1,label:'TP1 · OBJETIVO',cls:'tp-line',priority:2}];
-  if(Math.abs(t.tp2-t.tp1)>1e-10)levels.push({key:'tp2',p:t.tp2,label:'TP2 · OBJETIVO',cls:'tp2-line',priority:3});
-  state.series.candle.setData(c);
-  levels.forEach(v=>{const el=document.createElement('div');el.className='price-label '+v.cls;el.setAttribute('aria-label',v.label+' '+fmt(v.p));el.innerHTML='<b>'+v.label+'</b><strong>'+fmt(v.p)+'</strong>';overlay.appendChild(el);lineEls.push({...v,el});});
+  const label=t.side==='BUY'?'ENTRADA COMPRA':'ENTRADA VENTA';
+  const el=document.createElement('div');el.className='price-label entry-line';
+  el.setAttribute('aria-label',label+' '+fmt(t.entry));
+  el.innerHTML='<b>'+label+'</b><strong>'+fmt(t.entry)+'</strong>';
+  overlay.appendChild(el);lineEls.push({key:'entry',p:t.entry,label,cls:'entry-line',el});
+  // Recuadro horizontal de la zona exacta del OB donde se espera el retroceso para entrar.
+  const zone=document.createElement('div');zone.className='entry-search-zone '+(t.side==='BUY'?'entry-buy':'entry-sell');
+  zone.innerHTML='<b>'+label+'</b>';overlay.appendChild(zone);entryZoneEl=zone;
  }
  const update=()=>{
   const width=host.clientWidth,scale=state.main.timeScale(),candleSeries=state.series.candle;
@@ -288,6 +293,11 @@ function drawOverlays(trades,c,host,obZones=[],setups=[]){
   });
   const xSignal=t?scale.timeToCoordinate(Number.isFinite(t.entryTime)?t.entryTime:t.time):null,xStart=Math.max(0,Math.min(width-8,xSignal==null?width*.35:xSignal)),positioned=[];
   lineEls.forEach(v=>{const y=candleSeries.priceToCoordinate(v.p);if(y==null){v.el.style.display='none';return;}v.el.style.display='flex';v.el.style.left='auto';v.el.style.right='4px';v.el.style.width='max-content';v.el.style.top=(y-11)+'px';});
+  if(entryZoneEl&&t){
+   const top=candleSeries.priceToCoordinate(t.ob?.high??t.entry),bottom=candleSeries.priceToCoordinate(t.ob?.low??t.entry);
+   if(top==null||bottom==null){entryZoneEl.style.display='none';}
+   else{entryZoneEl.style.display='block';entryZoneEl.style.left='0px';entryZoneEl.style.width=Math.max(0,width-2)+'px';entryZoneEl.style.top=Math.min(top,bottom)+'px';entryZoneEl.style.height=Math.max(3,Math.abs(bottom-top))+'px';}
+  }
  };
  state.overlayUpdate=update;
  if(!state.overlayRangeHandler){state.overlayRangeHandler=()=>{
@@ -316,7 +326,7 @@ function showLatest(calc,trades,c,raw=state.rawCandles){
  const obLabel=hourly.side?(hourly.side==='BUY'?'OB ALCISTA':'OB BAJISTA'):'SIN OB · H1 LATERAL';
  $('signalValue').textContent=obLabel;
  $('signalValue').style.color=hourly.side?(hourly.side==='BUY'?'#20d69a':'#ff6876'):'#aab8ca';
- $('entryValue').textContent=t?fmt(t.entry):'—';$('slValue').textContent=t?fmt(t.sl):'—';$('tp1Value').textContent=t?fmt(t.tp1):'—';$('tp2Value').textContent=t?fmt(t.tp2):'—';$('rsiValue').textContent=fmt(rv);
+ $('entryValue').textContent=t?fmt(t.entry):'—';$('slValue').textContent='—';$('tp1Value').textContent='—';$('tp2Value').textContent='—';$('rsiValue').textContent=fmt(rv);
  $('rsiConfirm').textContent=t?'OB + TENDENCIA H1 + PIVOTE CONFIRMADOS':'Sin señal';$('rsiConfirm').style.color=t?'#20d69a':'#8b9bb0';
  $('signalState').textContent=t?(t.entryIndex>=0?'ACTIVA':'PREPARADA'):'ESPERANDO';
  $('signalDetails').textContent=(hourly.side?'Sesgo de 1 hora: '+trend+'. Mostrando únicamente el '+obLabel+' de H1'+(hourly.ob?' entre '+fmt(hourly.ob.low)+' y '+fmt(hourly.ob.high):' (zona no localizada en las últimas 9 velas H1)')+'. ':'La tendencia H1 está lateral; no se selecciona OB direccional. ')+(t?(t.entryIndex>=0?'Operación ACTIVA. ':'')+(t.side==='BUY'?'OB alcista + FVG':'OB bajista + FVG')+' alineado con la tendencia H1. Entrada en el OB; TP1 es la primera resistencia/soporte disponible de M3, M5 o M10. Entrada proyectada '+fmt(t.entry)+', SL '+fmt(t.sl)+', TP1 '+fmt(t.tp1)+' y TP2 '+fmt(t.tp2)+'.':'No hay una señal completa en la última vela M2.');
