@@ -114,3 +114,18 @@
 /* Niveles de operación alineados al margen derecho del gráfico, separados del precio de escala. */
 .chart-overlay .price-label{left:auto!important;right:4px!important;justify-content:flex-end!important;z-index:20!important;}
 
+
+
+/* v74: configuración plegable y compacta para móvil */
+.settings-drawer{margin:8px 0 12px;border:1px solid #26374b;border-radius:10px;background:#0d1725;overflow:hidden}
+.settings-drawer>summary{list-style:none;cursor:pointer;padding:9px 12px;font-size:11px;font-weight:900;letter-spacing:.45px;color:#dce8f5;display:flex;align-items:center;justify-content:space-between}
+.settings-drawer>summary::-webkit-details-marker{display:none}
+.settings-drawer>summary:after{content:"＋";font-size:15px;color:#8da5bd}
+.settings-drawer[open]>summary:after{content:"−"}
+.settings-drawer .compact-settings{margin:0;padding:8px 10px;border:0;border-top:1px solid #24364a;border-radius:0;background:transparent;box-shadow:none;display:flex;flex-direction:row;align-items:center;gap:10px;flex-wrap:wrap}
+.settings-drawer .compact-settings>strong{font-size:10px;white-space:nowrap;color:#9eb4ca;min-width:112px}
+.settings-drawer .compact-row{display:flex;align-items:center;gap:6px;min-width:0}
+.settings-drawer .pivot-tf-controls{display:flex;flex-wrap:wrap;gap:5px}
+.settings-drawer .pivot-tf-controls button{min-width:37px;padding:6px 8px;font-size:10px}
+.settings-drawer .compact-settings .pivot-tf-controls button:disabled{opacity:1;cursor:default}
+@media(max-width:600px){.settings-drawer{margin:6px 0 9px}.settings-drawer .compact-settings{gap:6px;padding:7px 8px}.settings-drawer .compact-settings>strong{min-width:94px;font-size:9px}.settings-drawer .pivot-tf-controls{gap:4px}.settings-drawer .pivot-tf-controls button{min-width:32px;padding:5px 6px;font-size:9px}}
