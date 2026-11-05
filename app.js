@@ -152,7 +152,7 @@ function isOBInvalidated(ob,side,structure,raw,time){
 function findOBAtTime(c,time,side,tf=state.obTf){const completed=c.filter(bar=>bar.time+tf*60<=time);return findOB(completed,completed.length,side);}
 function findOB(c,i,side){for(let j=i-1;j>=Math.max(0,i-9);j--){const q=c[j],opposite=side==='BUY'?q.close<q.open:q.close>q.open;if(opposite){const entry=(q.high+q.low)/2;return{time:q.time,high:q.high,low:q.low,entry};}}return null;}
 function simulate(c,setups){
- const trades=[];
+ const trades=[],entryRsiValues=rsi(c.map(x=>x.close));
  for(const s of setups){
   let entered=false,result='PENDIENTE',entryIndex=-1,entryTime=null,exitTime=null,exitPrice=null,oppositeCandles=0,cancelReason=null;
   for(let j=s.index+1;j<c.length;j++){
@@ -179,7 +179,7 @@ function simulate(c,setups){
    if(tp1Hit){result='GANADA';exitPrice=s.tp1;exitTime=k.time;break;}
   }
   const points=exitPrice==null?null:(s.side==='BUY'?exitPrice-s.entry:s.entry-exitPrice);
-  trades.push({...s,result,entryIndex,entryTime,exitTime,exitPrice,points,cancelReason});
+  trades.push({...s,result,entryIndex,entryTime,entryRsi:entryIndex>=0?entryRsiValues[entryIndex]:null,exitTime,exitPrice,points,cancelReason});
  }
  return trades;
 }
@@ -281,7 +281,7 @@ function drawOverlays(trades,c,host,obZones=[],setups=[]){
   const label=trade.side==='BUY'?'COMPRA':'VENTA';
   const el=document.createElement('div');el.className='price-label entry-line';
   el.setAttribute('aria-label','Entrada '+label+' '+fmt(trade.entry));
-  el.innerHTML='<b>'+label+'</b><strong>'+fmt(trade.entry)+'</strong>';
+  el.innerHTML='<b>'+label+'</b><strong>'+fmt(trade.entry)+'</strong><small>RSI '+fmt(Number.isFinite(trade.entryRsi)?trade.entryRsi:trade.rsi)+'</small>';
   overlay.appendChild(el);
   lineEls.push({key:'entry-'+index,p:trade.entry,label,cls:'entry-line',el,time:Number.isFinite(trade.entryTime)?trade.entryTime:trade.time,side:trade.side});
  });
@@ -427,6 +427,7 @@ function onLiveTick(tick){
    let high=p.high,low=p.low;for(const bar of group){if(bar.high>high)high=bar.high;if(bar.low<low)low=bar.low;}
    state.series.candle.update({time:bucket,open:group[group.length-1].open,high,low,close:p.quote});
   }
+  const liveChartCandles=aggregate(state.rawCandles,state.tf);const liveRsi=rsi(liveChartCandles.map(x=>x.close));const liveRsiValue=liveRsi.at(-1);if(state.series.rsi)state.series.rsi.setData(liveRsi.map((v,i)=>v==null?null:{time:liveChartCandles[i].time,value:v}).filter(Boolean));if(Number.isFinite(liveRsiValue)){if($('rsiValue'))$('rsiValue').textContent=fmt(liveRsiValue);if($('rsiLegend'))$('rsiLegend').textContent='Valor actual en formación: '+fmt(liveRsiValue);}
   const recalcBucket=Math.floor(p.epoch/120);
   if(state.lastRecalcBucket!==null&&recalcBucket>state.lastRecalcBucket){
    state.lastRecalcBucket=recalcBucket;state.rawBySymbol.set(state.selected,state.rawCandles);analyze();
