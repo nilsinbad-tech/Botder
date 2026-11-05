@@ -99,16 +99,7 @@ function contextSignal(id,i,d,f){
  case 6: if(prev<30&&r>=30&&bull)return 1;if(prev>70&&r<=70&&bearC)return -1;break;
  case 7: {let g=f.fvg.slice(Math.max(0,i-8),i).filter(Boolean).slice(-1)[0];if(g&&g.dir===1&&z.low<=g.high&&z.close>g.high)return 1;if(g&&g.dir===-1&&z.high>=g.low&&z.close<g.low)return -1;break}
  case 8: if(f.double[i]===1)return 1;if(f.double[i]===-1)return -1;break;
- case 9: if(bull&&f.body[i]>(f.avg[i]||0)*1.6&&z.close>p.high)return 1;if(bearC&&f.body[i]>(f.avg[i]||0)*1.6&&z.close<p.low)return -1;break;
- case 10: if(f.sweep[i]===1&&ob&&z.low<=ob.high&&z.close>ob.high)return 1;if(f.sweep[i]===-1&&bear&&z.high>=bear.low&&z.close<bear.low)return -1;break;
- case 11:{
-  const crossUp=f.e9[i]>f.e25[i]&&f.e9[i-1]<=f.e25[i-1],crossDn=f.e9[i]<f.e25[i]&&f.e9[i-1]>=f.e25[i-1];
-  const towardUp=f.e9[i]>f.e9[i-1]&&f.e25[i]>f.e25[i-1]&&z.close>f.e50[i],towardDn=f.e9[i]<f.e9[i-1]&&f.e25[i]<f.e25[i-1]&&z.close<f.e50[i];
-  const strong=f.avg[i]!=null&&f.body[i]>=f.avg[i]*1.35;
-  if(crossUp&&towardUp&&ob&&r>=50&&r<=60&&r>prev&&bull&&strong)return 1;
-  if(crossDn&&towardDn&&bear&&r<=55&&r>=40&&r<prev&&bearC&&strong)return -1;
-  break;
- }}
+  }
  return 0;
 }
 function entryConfirm(dir,m1,i){const c=m1[i],p=m1[i-1];if(!c||!p)return false;const body=Math.abs(c.close-c.open),range=c.high-c.low||1,solid=body/range>=.45;if(dir>0)return c.close>c.open&&c.close>p.high&&solid;return c.close<c.open&&c.close<p.low&&solid}
