@@ -225,7 +225,7 @@ function drawOverlays(trades,c,host,obZones=[],setups=[]){
  const zones=['BUY','SELL'].map(latestBySide).filter(Boolean);
  const zoneEls=zones.map(ob=>{
   const el=document.createElement('div');el.className='ob-zone '+(ob.fvg?'fvg-zone ':'')+(ob.side==='BUY'?'bull-zone':'bear-zone');
-  el.innerHTML='<b>'+(ob.fvg?(ob.side==='BUY'?'FVG ALCISTA':'FVG BAJISTA'):(ob.side==='BUY'?'OB ALCISTA':'OB BAJISTA'))+'</b>';
+  el.innerHTML='<b>'+(ob.fvg?(ob.side==='BUY'?'FVG ALCISTA':'FVG BAJISTA'):(ob.side==='BUY'?'OB COMPRA':'OB VENTA'))+'</b>';
   overlay.appendChild(el);return{el,ob};
  });
  const t=[...trades].reverse().find(x=>x.result==='PENDIENTE')||[...setups].reverse()[0]||trades[trades.length-1];
@@ -248,7 +248,7 @@ function drawOverlays(trades,c,host,obZones=[],setups=[]){
    if(y1==null||y2==null){el.style.display='none';return;}
    if(x1==null){if(firstTime!=null&&ob.time<firstTime)x1=0;else{el.style.display='none';return;}}
    const left=Math.max(0,Math.min(width-112,x1)),mid=(y1+y2)/2;
-   el.style.display='flex';el.style.left=left+'px';el.style.width=Math.max(24,width-left-104)+'px';el.style.top=Math.max(0,mid-3)+'px';el.style.height='6px';
+   el.style.display='flex';el.style.left=left+'px';el.style.width=Math.max(24,width-left-104)+'px';el.style.top=Math.max(0,mid-15)+'px';el.style.height='30px';
   });
   const xSignal=t?scale.timeToCoordinate(Number.isFinite(t.entryTime)?t.entryTime:t.time):null,xStart=Math.max(0,Math.min(width-8,xSignal==null?width*.35:xSignal)),positioned=[];
   lineEls.forEach(v=>{const y=candleSeries.priceToCoordinate(v.p);if(y==null){v.el.style.display='none';return;}v.el.style.display='block';v.el.style.left=xStart+'px';v.el.style.width=Math.max(30,width-xStart-3)+'px';v.el.style.top=y+'px';positioned.push({tag:v.tag,y,priority:v.priority});});
