@@ -14,7 +14,7 @@ const strategies=[
 {id:10,name:"OB + Liquidity Sweep",group:"Confluencia",rules:"Barrida de liquidez dentro de OB M1 + confirmación en 30s",ob:true},
 {id:11,name:"EMA 9/25 + EMA 50 + OB + RSI",group:"Estrategia personalizada",rules:"Cruce EMA 9/25 M1 hacia la dirección de EMA 50 + OB + vela fuerte + RSI; entrada en 30s",ob:true}
 ];
-let socket=null,busy=false,req=1,reqState=null,symbols=[],results=[],hist={},idx=0,active=null,queue=[],timer=null,connectTimer=null,symbolTimer=null;
+let socket=null,busy=false,req=1,reqState=null,symbols=[],results=[],hist={},idx=0,active=null,queue=[],timer=null,connectTimer=null,symbolTimer=null,validInstruments=0,failedInstruments=0;
 const $=id=>document.getElementById(id),esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const fmt=(v,n=5)=>Number.isFinite(v)?v.toFixed(n):"—";
 function status(s){$("status").textContent=s;$("live-status").textContent=s}
@@ -91,7 +91,9 @@ function buildTrades(m1,m30,strat){
  const wins=trades.filter(t=>t.result==="GANADA").length,losses=trades.length-wins;
  return{strategy:strat,wins,losses,total:trades.length,rate:trades.length?wins/trades.length*100:null,entries,trades,days:m30.length?(m30[m30.length-1].time-m30[0].time)/DAY:0};
 }
+function updateTotals(){const wins=results.reduce((n,r)=>n+r.wins,0),losses=results.reduce((n,r)=>n+r.losses,0),ops=wins+losses;$("total-tested").textContent=results.length;$("total-wins").textContent=wins;$("total-losses").textContent=losses;$("total-ops").textContent=ops;$("total-markets").textContent=validInstruments+" válidos · "+failedInstruments+" con error";}
 function render(){
+ updateTotals();
  $("strategy-list").innerHTML=strategies.map(s=>{const cells=symbols.map(m=>{const r=results.find(x=>x.symbol===m.symbol&&x.strategy.id===s.id);return '<div class="instrument-result"><b>'+(r?fmt(r.rate,1)+"%":"—")+'</b><span>'+esc(m.name)+' · '+(r?r.wins+"G / "+r.losses+"P · "+r.total+" ops":"pendiente")+'</span></div>'}).join("");return '<article class="strategy-card"><div class="strategy-top"><strong>'+s.id+'. '+esc(s.name)+'</strong><small>'+esc(s.group)+' · '+esc(s.rules)+'</small></div><div class="strategy-results">'+cells+'</div></article>'}).join("");
  $("market-list").innerHTML=symbols.map(m=>'<div class="market-chip"><span>'+esc(m.name)+'</span><small>'+m.symbol+'</small></div>').join("");
  $("s-symbols").textContent=symbols.length;$("s-tests").textContent="11 por índice";
@@ -122,9 +124,11 @@ function finish(msg){busy=false;clearTimeout(timer);clearTimeout(connectTimer);c
 function requestPage(){
  if(!busy||!reqState)return;
  req++;reqState.req=req;
- socket.send(JSON.stringify({ticks_history:reqState.symbol,count:COUNT,end:reqState.end,style:"ticks",req_id:req}));
+ $("live-detail").textContent="Descargando "+(active?.name||reqState.symbol)+" · página "+(reqState.pages+1)+" · "+reqState.data.length.toLocaleString("es-PA")+" ticks recibidos…";
+ try{socket.send(JSON.stringify({ticks_history:reqState.symbol,count:COUNT,end:reqState.end,style:"ticks",req_id:req}));}
+ catch(e){const st=reqState;reqState=null;st.done([],"No se pudo enviar la solicitud: "+(e.message||e));return}
  clearTimeout(timer);
- timer=setTimeout(()=>{if(busy&&reqState){const st=reqState;reqState=null;st.done([],"Deriv no respondió a la página de ticks a tiempo.")}},20000);
+ timer=setTimeout(()=>{if(busy&&reqState){const st=reqState;reqState=null;st.done([],"Deriv no respondió a la página de ticks en 60 segundos.")}},60000);
 }
 function parseTicks(m){
  const times=m.history?.times||[],prices=m.history?.prices||[];
@@ -173,13 +177,13 @@ function runInstrument(){
  loadTwoDayTicks(active.symbol,(series,error)=>{
   if(!busy)return;
   if(error){
-   $("live-detail").textContent=active.name+": ERROR DE HISTORIAL · "+error;
+   failedInstruments++;$("live-detail").textContent=active.name+": ERROR DE HISTORIAL · "+error;
   }else{
    const {m1,m30,tickCount,pages,coverage}=series;
    if(coverage<1.98||m1.length<2800||m30.length<5600){
-    $("live-detail").textContent=active.name+": datos insuficientes. Cobertura "+coverage.toFixed(2)+" días; M1 "+m1.length+" velas; 30s "+m30.length+" velas. No se publican resultados parciales.";
+    failedInstruments++;$("live-detail").textContent=active.name+": datos insuficientes. Cobertura "+coverage.toFixed(2)+" días; M1 "+m1.length+" velas; 30s "+m30.length+" velas. No se publican resultados parciales.";
    }else{
-    hist[active.symbol]={m1,m30};
+    hist[active.symbol]={m1,m30};validInstruments++;
     for(const s of strategies){const r=buildTrades(m1,m30,s);results.push({symbol:active.symbol,market:active.name,strategy:s,...r})}
     $("live-detail").textContent=active.name+": 2 días completos · "+m1.length+" velas M1 · "+m30.length+" velas 30s · "+tickCount.toLocaleString("es-PA")+" ticks descargados en "+pages+" páginas · 11 estrategias probadas.";
    }
@@ -191,7 +195,7 @@ function start(){
  if(busy)return;busy=true;idx=0;symbols=[];results=[];hist={};$("start").disabled=true;$("live-detail").textContent="Conectando con Deriv para descargar datos reales…";$("updated").textContent="Conectando…";$("strategy-list").innerHTML="";$("best-list").innerHTML="";$("worst-list").innerHTML="";$("market-list").innerHTML="";connection("CONECTANDO…",false);status("CONECTANDO CON DERIV");progress();
  try{socket=new WebSocket(WS)}catch(e){finish("NO SE PUDO ABRIR LA CONEXIÓN");return}
  connectTimer=setTimeout(()=>{if(busy&&socket?.readyState!==WebSocket.OPEN)finish("NO SE PUDO CONECTAR A DERIV EN 15 SEGUNDOS")},15000);
- timer=setTimeout(()=>{if(busy)finish("TIEMPO AGOTADO · REVISA LA CONEXIÓN")},900000);
+ timer=setTimeout(()=>{if(busy)finish("TIEMPO MÁXIMO · "+validInstruments+" instrumentos analizados · "+failedInstruments+" con error")},2700000);
  socket.onopen=()=>{clearTimeout(connectTimer);status("CONECTADO · PIDIENDO INSTRUMENTOS");$("live-detail").textContent="Conexión WebSocket abierta. Esperando la lista de instrumentos de Deriv…";try{socket.send(JSON.stringify({active_symbols:"brief",req_id:1}));symbolTimer=setTimeout(()=>{if(busy&&!symbols.length)finish("DERIV CONECTÓ, PERO NO RESPONDIÓ A active_symbols EN 12 SEGUNDOS");},12000)}catch(e){finish("ERROR AL PEDIR INSTRUMENTOS: "+(e.message||e))}};
  socket.onerror=()=>{if(busy)finish("ERROR DE RED: EL NAVEGADOR NO PUDO COMPLETAR EL WEBSOCKET DE DERIV")};
  socket.onclose=e=>{if(busy)finish("DERIV DESCONECTÓ · CÓDIGO "+e.code)};
