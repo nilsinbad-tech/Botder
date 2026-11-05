@@ -5,7 +5,7 @@ const HISTORY_CANDLES = 1440;
 const REQUEST_TIMEOUT_MS = 45000;
 const API_URL = 'wss://api.derivws.com/trading/v1/options/ws/public';
 const $ = id => document.getElementById(id);
-const state = { ws:null, req:0, pending:new Map(), symbols:[], selected:null, tf:1, candles:[], rawCandles:[], rawBySymbol:new Map(), marketBacktests:[], trades:[], liveSub:null, main:null, rsi:null, markerPlugin:null, overlayResizeObserver:null, overlayUpdate:null, overlayRangeHandler:null, pivotLines:[], tradePriceLines:[], overlayPriceLevels:[],levelOverrides:{}, pivotTfEnabled:{1:false,2:false,3:false,4:false,5:true,10:false}, obStructureOnly:true, obTf:2, pivotTf:5, chartKey:null, series:{}, busy:false, analyzeQueued:false, forceFitNext:true, lastRecalcBucket:null, pendingLiveTick:null, liveFrame:0, overlayFrame:0 };
+const state = { ws:null, req:0, pending:new Map(), symbols:[], selected:null, tf:1, candles:[], rawCandles:[], rawBySymbol:new Map(), marketBacktests:[], trades:[], liveSub:null, main:null, rsi:null, markerPlugin:null, overlayResizeObserver:null, overlayUpdate:null, overlayRangeHandler:null, pivotLines:[], tradePriceLines:[], overlayPriceLevels:[],levelOverrides:{}, pivotTfEnabled:{1:false,2:false,3:false,4:false,5:true,10:false}, tpTfs:[1,3,5,10], slTfs:[1,3,5,10], obStructureOnly:true, obTf:2, pivotTf:5, chartKey:null, series:{}, busy:false, analyzeQueued:false, forceFitNext:true, lastRecalcBucket:null, pendingLiveTick:null, liveFrame:0, overlayFrame:0 };
 const CANDIDATES = [
  ['1HZ10V','Volatility 10 (1s)'],['1HZ15V','Volatility 15 (1s)'],['1HZ25V','Volatility 25 (1s)'],['1HZ30V','Volatility 30 (1s)'],['1HZ50V','Volatility 50 (1s)'],['1HZ75V','Volatility 75 (1s)'],['1HZ90V','Volatility 90 (1s)'],['1HZ100V','Volatility 100 (1s)'],['1HZ150V','Volatility 150 (1s)'],['1HZ250V','Volatility 250 (1s)'],
  ['R_10','Volatility 10'],['R_25','Volatility 25'],['R_50','Volatility 50'],['R_75','Volatility 75'],['R_100','Volatility 100'],
@@ -71,8 +71,9 @@ function pivots(c,span=3,candleSeconds=600){const highs=[],lows=[];for(let i=spa
 function buildSetups(c,liquidityCandles=c,pivotCandles=liquidityCandles,obStructureCandles=pivotCandles,trendSide=null,targetRawCandles=pivotCandles){
  const close=c.map(x=>x.close),e3=ema(close,3),e9=ema(close,9),e13=ema(close,13),e50=ema(close,50),rv=rsi(close);
  const pv=pivots(pivotCandles,3,state.pivotTf*60),obPv=pivots(obStructureCandles,3,state.pivotTf*60);
- // Objetivos calculados con estructura independiente de M3, M5 y M10.
- const targetPivots=[3,5,10].map(mins=>({mins,pv:pivots(aggregate(targetRawCandles,mins),3,mins*60)}));
+ // TP usa exclusivamente las temporalidades activadas en configuración, incluida M1.
+ const targetPivots=state.tpTfs.map(mins=>({mins,pv:pivots(aggregate(targetRawCandles,mins),3,mins*60)}));
+ const stopPivots=state.slTfs.map(mins=>({mins,pv:pivots(aggregate(targetRawCandles,mins),3,mins*60)}));
  const setups=[],obZones=[],usedOBs=new Set(),usedZones=new Set(),higherOBs=new Map();
  const higherOBTf=state.obTf*2,higherOBCandles=aggregate(targetRawCandles,higherOBTf);
  for(let i=55;i<c.length;i++){
@@ -94,11 +95,14 @@ function buildSetups(c,liquidityCandles=c,pivotCandles=liquidityCandles,obStruct
     .sort((a,b)=>side==='BUY'?a.price-b.price:b.price-a.price)
     .filter((p,index,all)=>all.findIndex(q=>Math.abs(q.price-p.price)<=Math.max(1e-10,Math.abs(p.price)*1e-8))===index);
    if(!targets.length)continue;
-   const slPivot=side==='BUY'
-    ?pv.lows.filter(p=>p.confirmedTime<=x.time&&p.price<ob.entry).sort((a,b)=>Math.abs(a.price-ob.low)-Math.abs(b.price-ob.low))[0]||null
-    :pv.highs.filter(p=>p.confirmedTime<=x.time&&p.price>ob.entry).sort((a,b)=>Math.abs(a.price-ob.high)-Math.abs(b.price-ob.high))[0]||null;
+   const stopCandidates=stopPivots.flatMap(({mins,pv:stopPv})=>(side==='BUY'?stopPv.lows:stopPv.highs)
+    .filter(p=>p.confirmedTime<=x.time&&(side==='BUY'?p.price<ob.entry:p.price>ob.entry))
+    .map(p=>({...p,timeframe:mins})))
+    .sort((a,b)=>side==='BUY'?b.price-a.price:a.price-b.price);
+   const slPivot=stopCandidates[0]||null;
    const tp1Pivot=targets[0],tp2Pivot=targets[1]||targets[0];
-   const sl=side==='BUY'?ob.low-(ob.high-ob.low)*.12:ob.high+(ob.high-ob.low)*.12;
+   const slBuffer=(ob.high-ob.low)*.12;
+   const sl=slPivot?(side==='BUY'?slPivot.price-slBuffer:slPivot.price+slBuffer):(side==='BUY'?ob.low-slBuffer:ob.high+slBuffer);
    setups.push({side,index:i,time:x.time,entry:ob.entry,sl,tp1:tp1Pivot.price,tp2:tp2Pivot.price,ob,slPivot,tp1Pivot,tp2Pivot,rsi:rv[i],state:'PREPARADA'});
    usedOBs.add(key);
   }
@@ -377,12 +381,16 @@ function bindPivotControls(){
  root.addEventListener('click',event=>{const button=event.target.closest('button[data-pivot-tf]');if(!button)return;const mins=Number(button.dataset.pivotTf);state.pivotTfEnabled[mins]=!state.pivotTfEnabled[mins];try{localStorage.setItem('botder-pivot-tfs',JSON.stringify(state.pivotTfEnabled));}catch{}sync();drawPivotLines();});
 }
 function bindOBControls(){
- const obRoot=$('obTfControls'),pivotRoot=$('pivotStructureTfControls');
- try{const saved=JSON.parse(localStorage.getItem('botder-ob-settings')||'null');if(saved&&typeof saved==='object'){if([1,2,3,4,5].includes(Number(saved.obTf)))state.obTf=Number(saved.obTf);if([1,2,3,4,5,10].includes(Number(saved.pivotTf)))state.pivotTf=Number(saved.pivotTf);}}catch{}
- const save=()=>{try{localStorage.setItem('botder-ob-settings',JSON.stringify({obTf:state.obTf,pivotTf:state.pivotTf}));}catch{}};
+ const obRoot=$('obTfControls'),pivotRoot=$('pivotStructureTfControls'),tpRoot=$('tpTfControls'),slRoot=$('slTfControls');
+ try{const saved=JSON.parse(localStorage.getItem('botder-ob-settings')||'null');if(saved&&typeof saved==='object'){if([1,2,3,4,5].includes(Number(saved.obTf)))state.obTf=Number(saved.obTf);if([1,2,3,4,5,10].includes(Number(saved.pivotTf)))state.pivotTf=Number(saved.pivotTf);if(Array.isArray(saved.tpTfs))state.tpTfs=saved.tpTfs.map(Number).filter(v=>[1,3,5,10].includes(v));if(Array.isArray(saved.slTfs))state.slTfs=saved.slTfs.map(Number).filter(v=>[1,3,5,10].includes(v));}}catch{}
+ if(!state.tpTfs.length)state.tpTfs=[1,3,5,10];if(!state.slTfs.length)state.slTfs=[1,3,5,10];
+ const save=()=>{try{localStorage.setItem('botder-ob-settings',JSON.stringify({obTf:state.obTf,pivotTf:state.pivotTf,tpTfs:state.tpTfs,slTfs:state.slTfs}));}catch{}};
  const sync=(root,attr,value)=>{if(!root)return;root.querySelectorAll('button['+attr+']').forEach(b=>{const active=Number(b.getAttribute(attr))===value;b.classList.toggle('active',active);b.setAttribute('aria-pressed',String(active));});};
+ const syncMulti=(root,attr,values)=>{if(!root)return;root.querySelectorAll('button['+attr+']').forEach(b=>{const active=values.includes(Number(b.getAttribute(attr)));b.classList.toggle('active',active);b.setAttribute('aria-pressed',String(active));});};
  if(obRoot){sync(obRoot,'data-ob-tf',state.obTf);obRoot.addEventListener('click',e=>{const b=e.target.closest('button[data-ob-tf]');if(!b)return;state.obTf=Number(b.dataset.obTf);save();sync(obRoot,'data-ob-tf',state.obTf);analyze();});}
  if(pivotRoot){sync(pivotRoot,'data-pivot-structure-tf',state.pivotTf);pivotRoot.addEventListener('click',e=>{const b=e.target.closest('button[data-pivot-structure-tf]');if(!b)return;state.pivotTf=Number(b.dataset.pivotStructureTf);save();sync(pivotRoot,'data-pivot-structure-tf',state.pivotTf);analyze();});}
+ const bindMulti=(root,attr,key)=>{if(!root)return;syncMulti(root,attr,state[key]);root.addEventListener('click',e=>{const b=e.target.closest('button['+attr+']');if(!b)return;const tf=Number(b.getAttribute(attr)),set=new Set(state[key]);if(set.has(tf)){if(set.size===1)return;set.delete(tf);}else set.add(tf);state[key]=[1,3,5,10].filter(v=>set.has(v));save();syncMulti(root,attr,state[key]);analyze();});};
+ bindMulti(tpRoot,'data-tp-tf','tpTfs');bindMulti(slRoot,'data-sl-tf','slTfs');
 }
 
 function bind(){
