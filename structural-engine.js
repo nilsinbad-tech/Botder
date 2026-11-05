@@ -230,10 +230,10 @@ function analyzeCandles(symbol,market,candles){
  lastProjection=plan.projection;setText("side-analysis-status","● "+plan.status);setText("structure-diagnostic",plan.status+" · "+plan.recommendation+" · "+source.length+" velas · EMA 9/20/50");
  setText("trend-h4",plan.signal?.direction||"SIN CONFIRMACIÓN");setText("confirm-m30",plan.recommendation);setText("confirm-m1",plan.signal?"EMA 9/20/50 ALINEADAS":"ESPERANDO CONFLUENCIA");setText("touch-status",plan.signal?"OPORTUNIDAD":"BUSCANDO");setText("ob-status",plan.signal?.direction||"BUSCANDO");setText("channel-status",plan.signal?"FVG + LIQUIDEZ":"BUSCANDO");
  renderProjection(plan);
- const btKey=symbol+":"+tf;
- if(structuralBacktestValidatedKey!==btKey&&structuralBacktestRunningKey!==btKey&&source.length>=120)runStructuralBacktest(symbol,market,raw,tf);
+ const btKey=symbol+":"+tf,historyReady=tf!==30||!s30HistoryState;
+ if(historyReady&&structuralBacktestValidatedKey!==btKey&&structuralBacktestRunningKey!==btKey&&source.length>=120)runStructuralBacktest(symbol,market,raw,tf);
  if(typeof setStructureOverlay==="function")setStructureOverlay({items:plan.items,lines:[],ema:plan.ema,projection:plan.projection,activeTf:tf});
- if(plan.signal&&structuralBacktestValidatedKey===btKey){
+ if(plan.signal&&historyReady&&structuralBacktestValidatedKey===btKey){
   const s=plan.signal,structureKey=[symbol,tf,s.direction,s.pool.time,s.pool.level.toPrecision(12)].join(":");
   if(!botderSignalKeys.has(structureKey)&&!strategyJournal.some(t=>t.structureKey===structureKey)){
    botderSignalKeys.add(structureKey);const full={...s,symbol,market,structureKey};
