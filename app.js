@@ -380,7 +380,7 @@ function bindPivotControls(){
 }
 function bindOBControls(){
  const obRoot=$('obTfControls'),pivotRoot=$('pivotStructureTfControls');
- try{const saved=JSON.parse(localStorage.getItem('botder-ob-settings')||'null');if(saved&&typeof saved==='object'){if([1,2,3,4,5].includes(Number(saved.obTf)))state.obTf=Number(saved.obTf);if([1,2,3,4,5].includes(Number(saved.pivotTf)))state.pivotTf=Number(saved.pivotTf);}}catch{}
+ try{const saved=JSON.parse(localStorage.getItem('botder-ob-settings')||'null');if(saved&&typeof saved==='object'){if([1,2,3,4,5].includes(Number(saved.obTf)))state.obTf=Number(saved.obTf);if([1,2,3,4,5,10].includes(Number(saved.pivotTf)))state.pivotTf=Number(saved.pivotTf);}}catch{}
  const save=()=>{try{localStorage.setItem('botder-ob-settings',JSON.stringify({obTf:state.obTf,pivotTf:state.pivotTf}));}catch{}};
  const sync=(root,attr,value)=>{if(!root)return;root.querySelectorAll('button['+attr+']').forEach(b=>{const active=Number(b.getAttribute(attr))===value;b.classList.toggle('active',active);b.setAttribute('aria-pressed',String(active));});};
  if(obRoot){sync(obRoot,'data-ob-tf',state.obTf);obRoot.addEventListener('click',e=>{const b=e.target.closest('button[data-ob-tf]');if(!b)return;state.obTf=Number(b.dataset.obTf);save();sync(obRoot,'data-ob-tf',state.obTf);analyze();});}
