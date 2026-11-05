@@ -5,7 +5,7 @@ const HISTORY_CANDLES = 1440;
 const REQUEST_TIMEOUT_MS = 45000;
 const API_URL = 'wss://api.derivws.com/trading/v1/options/ws/public';
 const $ = id => document.getElementById(id);
-const state = { ws:null, req:0, pending:new Map(), symbols:[], selected:null, tf:1, candles:[], rawCandles:[], rawBySymbol:new Map(), marketBacktests:[], trades:[], liveSub:null, main:null, rsi:null, markerPlugin:null, overlayResizeObserver:null, overlayUpdate:null, overlayRangeHandler:null, pivotLines:[], chartKey:null, series:{}, busy:false, analyzeQueued:false, forceFitNext:true, lastRecalcBucket:null };
+const state = { ws:null, req:0, pending:new Map(), symbols:[], selected:null, tf:1, candles:[], rawCandles:[], rawBySymbol:new Map(), marketBacktests:[], trades:[], liveSub:null, main:null, rsi:null, markerPlugin:null, overlayResizeObserver:null, overlayUpdate:null, overlayRangeHandler:null, pivotLines:[], chartKey:null, series:{}, busy:false, analyzeQueued:false, forceFitNext:true, lastRecalcBucket:null, pendingLiveTick:null, liveFrame:0 };
 const CANDIDATES = [
  ['1HZ10V','Volatility 10 (1s)'],['1HZ15V','Volatility 15 (1s)'],['1HZ25V','Volatility 25 (1s)'],['1HZ30V','Volatility 30 (1s)'],['1HZ50V','Volatility 50 (1s)'],['1HZ75V','Volatility 75 (1s)'],['1HZ90V','Volatility 90 (1s)'],['1HZ100V','Volatility 100 (1s)'],['1HZ150V','Volatility 150 (1s)'],['1HZ250V','Volatility 250 (1s)'],
  ['R_10','Volatility 10'],['R_25','Volatility 25'],['R_50','Volatility 50'],['R_75','Volatility 75'],['R_100','Volatility 100'],
@@ -112,7 +112,7 @@ function draw(c,calc,trades){
  }
  if(state.main){state.main.remove();if(state.rsi)state.rsi.remove();}state.overlayUpdate=null;state.overlayRangeHandler=null;
  const L=LightweightCharts,main=$('mainChart');main.innerHTML='';
- state.chartKey=chartKey;state.main=L.createChart(main,{autoSize:true,layout:{background:{type:'solid',color:'#0b121e'},textColor:'#9aaac0',fontSize:7},grid:{vertLines:{color:'#172235'},horzLines:{color:'#172235'}},rightPriceScale:{borderColor:'#28364a'},timeScale:{borderColor:'#28364a',timeVisible:true,secondsVisible:false},handleScroll:{mouseWheel:true,pressedMouseMove:true,horzTouchDrag:true,vertTouchDrag:true},handleScale:{mouseWheel:true,pinch:true,axisPressedMouseMove:true}});
+ state.chartKey=chartKey;state.main=L.createChart(main,{autoSize:true,layout:{background:{type:'solid',color:'#0b121e'},textColor:'#9aaac0',fontSize:6},grid:{vertLines:{color:'#172235'},horzLines:{color:'#172235'}},rightPriceScale:{borderColor:'#28364a'},timeScale:{borderColor:'#28364a',timeVisible:true,secondsVisible:false},handleScroll:{mouseWheel:true,pressedMouseMove:true,horzTouchDrag:true,vertTouchDrag:true},handleScale:{mouseWheel:true,pinch:true,axisPressedMouseMove:true}});
  const candle=state.main.addSeries(L.CandlestickSeries,{upColor:'#19c99a',downColor:'#ff5968',borderVisible:false,wickUpColor:'#19c99a',wickDownColor:'#ff5968'});state.series.candle=candle;
  candle.setData(c);
  const addLine=(values,color)=>{const s=state.main.addSeries(L.LineSeries,{color,lineWidth:2,priceLineVisible:false,lastValueVisible:false});s.setData(values.map((v,i)=>v==null?null:{time:c[i].time,value:v}).filter(Boolean));return s;};
@@ -154,9 +154,9 @@ function drawPivotLines(){
   const isRecent=p.kind.startsWith('recent'),isResistance=p.kind.endsWith('resistance');
   const line=state.series.candle.createPriceLine({
    price:p.price,
-   color:isRecent?(isResistance?'#f0a34a':'#39b9a0'):(isResistance?'#c58a48':'#398f82'),
+   color:isRecent?(isResistance?'#b98242':'#287f70'):(isResistance?'#87663d':'#28675e'),
    lineWidth:1,
-   lineStyle:isRecent?L.LineStyle.Solid:L.LineStyle.Dashed,
+   lineStyle:L.LineStyle.Dashed,
    axisLabelVisible:true,title:isResistance?'Resistencia':'Pivote'
   });
   state.pivotLines.push(line);
@@ -251,14 +251,36 @@ async function analyze(){
 function onLiveTick(tick){
  if(!state.selected||tick.symbol!==state.selected||!state.rawCandles.length)return;
  const price=Number(tick.quote),epoch=Number(tick.epoch);if(!Number.isFinite(price)||!Number.isFinite(epoch))return;
- const minute=Math.floor(epoch/60)*60;let last=state.rawCandles[state.rawCandles.length-1];
- if(minute>last.time){state.rawCandles.push({time:minute,open:price,high:price,low:price,close:price});if(state.rawCandles.length>HISTORY_CANDLES)state.rawCandles.shift();}
- else if(minute===last.time){last.high=Math.max(last.high,price);last.low=Math.min(last.low,price);last.close=price;}
- const tfSeconds=state.tf*60,bucket=Math.floor(epoch/tfSeconds)*tfSeconds;
- const group=[];for(let i=state.rawCandles.length-1;i>=0;i--){const bar=state.rawCandles[i];if(Math.floor(bar.time/tfSeconds)*tfSeconds!==bucket)break;group.push(bar);}
- if(group.length&&state.series.candle){let high=-Infinity,low=Infinity;for(const bar of group){if(bar.high>high)high=bar.high;if(bar.low<low)low=bar.low;}state.series.candle.update({time:bucket,open:group[group.length-1].open,high,low,close:price});}
- const recalcBucket=Math.floor(epoch/tfSeconds);
- if(state.lastRecalcBucket!==null&&recalcBucket>state.lastRecalcBucket){state.lastRecalcBucket=recalcBucket;state.rawBySymbol.set(state.selected,state.rawCandles);analyze();}
+ const minute=Math.floor(epoch/60)*60;
+ // Agrupa ticks entre frames: como máximo una actualización visual por frame.
+ const pending=state.pendingLiveTick;
+ if(pending&&pending.symbol===tick.symbol&&pending.minute===minute){
+  pending.high=Math.max(pending.high,price);pending.low=Math.min(pending.low,price);
+  pending.quote=price;pending.epoch=epoch;
+ }else state.pendingLiveTick={symbol:tick.symbol,minute,quote:price,high:price,low:price,epoch};
+ if(state.liveFrame)return;
+ state.liveFrame=requestAnimationFrame(()=>{
+  state.liveFrame=0;
+  const p=state.pendingLiveTick;state.pendingLiveTick=null;
+  if(!p||p.symbol!==state.selected||!state.rawCandles.length)return;
+  let last=state.rawCandles[state.rawCandles.length-1];
+  if(p.minute>last.time){
+   state.rawCandles.push({time:p.minute,open:p.quote,high:p.high,low:p.low,close:p.quote});
+   if(state.rawCandles.length>HISTORY_CANDLES)state.rawCandles.shift();
+  }else if(p.minute===last.time){
+   last.high=Math.max(last.high,p.high);last.low=Math.min(last.low,p.low);last.close=p.quote;
+  }
+  const tfSeconds=state.tf*60,bucket=Math.floor(p.epoch/tfSeconds)*tfSeconds;
+  const group=[];for(let i=state.rawCandles.length-1;i>=0;i--){const bar=state.rawCandles[i];if(Math.floor(bar.time/tfSeconds)*tfSeconds!==bucket)break;group.push(bar);}
+  if(group.length&&state.series.candle){
+   let high=p.high,low=p.low;for(const bar of group){if(bar.high>high)high=bar.high;if(bar.low<low)low=bar.low;}
+   state.series.candle.update({time:bucket,open:group[group.length-1].open,high,low,close:p.quote});
+  }
+  const recalcBucket=Math.floor(p.epoch/tfSeconds);
+  if(state.lastRecalcBucket!==null&&recalcBucket>state.lastRecalcBucket){
+   state.lastRecalcBucket=recalcBucket;state.rawBySymbol.set(state.selected,state.rawCandles);analyze();
+  }
+ });
 }
 function subscribeLive(){if(state.liveSub){try{state.ws.send(JSON.stringify({forget:state.liveSub}));}catch{}}request({ticks:state.selected,subscribe:1}).then(r=>{state.liveSub=r.subscription?.id||null;}).catch(()=>{});}
 function selectSymbol(symbol){if(!state.symbols.some(s=>s.symbol===symbol))return;state.selected=symbol;state.forceFitNext=true;$('symbolSelect').value=symbol;document.querySelectorAll('.instrument-chip').forEach(b=>b.classList.toggle('selected',b.dataset.symbol===symbol));analyze();subscribeLive();}
