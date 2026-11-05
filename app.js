@@ -206,7 +206,15 @@ function drawOverlays(trades,c,host,obZones=[]){
  (obZones||[]).forEach(ob=>{if(ob&&bySide[ob.side]&&Number.isFinite(ob.time))bySide[ob.side].push({...ob,fvg:false});});
  (trades||[]).forEach(t=>{if(t.ob&&bySide[t.side])bySide[t.side].push({...t.ob,side:t.side,fvg:false});});
  const signalBars=aggregate(state.rawCandles,2);
- for(const side of ['BUY','SELL']){if(!bySide[side].length){const recent=findOB(signalBars,signalBars.length,side);if(recent)bySide[side].push({...recent,side,fvg:false});}}
+ // Si el backtesting no generó una zona de ese lado, toma la última vela contraria válida del historial M2.
+ for(const side of ['BUY','SELL']){
+  if(!bySide[side].length){
+   for(let j=signalBars.length-1;j>=Math.max(0,signalBars.length-720);j--){
+    const bar=signalBars[j],opposite=side==='BUY'?bar.close<bar.open:bar.close>bar.open;
+    if(opposite){bySide[side].push({time:bar.time,high:bar.high,low:bar.low,entry:(bar.high+bar.low)/2,side,fvg:false});break;}
+   }
+  }
+ }
  const latestBySide=side=>{const unique=new Map();bySide[side].forEach(ob=>unique.set(String(ob.time),ob));return [...unique.values()].sort((x,y)=>x.time-y.time).slice(-1)[0];};
  const zones=['BUY','SELL'].map(latestBySide).filter(Boolean);
  const zoneEls=zones.map(ob=>{
@@ -222,20 +230,20 @@ function drawOverlays(trades,c,host,obZones=[]){
   levels.forEach(v=>{const el=document.createElement('div');el.className='level-line '+v.cls;const tag=document.createElement('span');tag.className='level-tag';tag.innerHTML='<b>'+v.label+'</b><strong>'+fmt(v.p)+'</strong>';el.appendChild(tag);overlay.appendChild(el);lineEls.push({el,tag,...v});});
  }
  const update=()=>{
-  const width=host.clientWidth,scale=state.main.timeScale(),priceScale=state.main.priceScale('right');
+  const width=host.clientWidth,scale=state.main.timeScale(),candleSeries=state.series.candle;
   const range=scale.getVisibleLogicalRange(),first=range?Math.max(0,Math.floor(range.from)):0,last=range?Math.min(c.length-1,Math.ceil(range.to)):c.length-1;
   const firstTime=c[first]?.time;
   zoneEls.forEach(({el,ob})=>{
    let x1=scale.timeToCoordinate(ob.time);
    if(x1==null){let match=null;for(let i=c.length-1;i>=0;i--){if(c[i].time<=ob.time){match=c[i];break;}}if(match)x1=scale.timeToCoordinate(match.time);}
-   const y1=priceScale.priceToCoordinate(ob.high),y2=priceScale.priceToCoordinate(ob.low);
+   const y1=candleSeries.priceToCoordinate(ob.high),y2=candleSeries.priceToCoordinate(ob.low);
    if(y1==null||y2==null){el.style.display='none';return;}
    if(x1==null){if(firstTime!=null&&ob.time<firstTime)x1=0;else{el.style.display='none';return;}}
    const left=Math.max(0,Math.min(width-30,x1)),mid=(y1+y2)/2,height=Math.max(12,Math.abs(y2-y1));
    el.style.display='flex';el.style.left=left+'px';el.style.width=Math.max(30,width-left-2)+'px';el.style.top=Math.max(0,mid-height/2)+'px';el.style.height=height+'px';
   });
   const xSignal=t?scale.timeToCoordinate(t.time):null,xStart=Math.max(0,Math.min(width-8,xSignal==null?width*.45:xSignal)),positioned=[];
-  lineEls.forEach(v=>{const y=priceScale.priceToCoordinate(v.p);if(y==null){v.el.style.display='none';return;}v.el.style.display='block';v.el.style.left=xStart+'px';v.el.style.width=Math.max(30,width-xStart-3)+'px';v.el.style.top=y+'px';positioned.push({tag:v.tag,y,priority:v.priority});});
+  lineEls.forEach(v=>{const y=candleSeries.priceToCoordinate(v.p);if(y==null){v.el.style.display='none';return;}v.el.style.display='block';v.el.style.left=xStart+'px';v.el.style.width=Math.max(30,width-xStart-3)+'px';v.el.style.top=y+'px';positioned.push({tag:v.tag,y,priority:v.priority});});
   positioned.sort((a,b)=>a.y-b.y);let previous=-Infinity;
   positioned.forEach(item=>{const desired=Math.max(13,Math.min(host.clientHeight-13,item.y)),placed=Math.max(desired,previous+27);item.tag.style.top=Math.max(2,Math.min(host.clientHeight-27,placed-13))+'px';previous=placed;});
  };
