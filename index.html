@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#080d16"><title>BOTDER · Deriv Structural Lab</title>
-<link rel="stylesheet" href="styles.css?v=28">
+<link rel="stylesheet" href="styles.css?v=37">
 <script src="https://unpkg.com/lightweight-charts@5.0.8/dist/lightweight-charts.standalone.production.js" onerror="this.onerror=null;this.src='https://cdn.jsdelivr.net/npm/lightweight-charts@5.0.8/dist/lightweight-charts.standalone.production.js'"></script>
 </head>
 <body>
@@ -31,9 +31,10 @@
     <article><small>RSI (14)</small><b id="rsiValue">—</b><em id="rsiConfirm">Sin confirmación</em></article>
   </section>
 
+  <section class="pivot-settings" aria-label="Configuración de pivotes y resistencias"><strong>ACTIVAR / DESACTIVAR PIVOTES Y RESISTENCIAS</strong><div id="pivotTfControls" class="pivot-tf-controls"><button type="button" data-pivot-tf="1" aria-pressed="false">M1</button><button type="button" data-pivot-tf="2" aria-pressed="false">M2</button><button type="button" data-pivot-tf="3" aria-pressed="false">M3</button><button type="button" data-pivot-tf="4" aria-pressed="false">M4</button><button type="button" data-pivot-tf="5" aria-pressed="true" class="active">M5</button><button type="button" data-pivot-tf="10" aria-pressed="false">M10</button></div><small>Toca una temporalidad para mostrar u ocultar sus niveles. Verde = activada.</small></section>
+
   <section class="chart-card">
     <div class="chart-head"><div><b id="chartTitle">Gráfico Deriv</b><small id="chartSubtitle">Velas reales · histórico de 24 horas</small></div><div class="legend"><span><i class="ema9"></i>EMA 9</span><span><i class="ema21"></i>EMA 21</span><span><i class="ema50"></i>EMA 50</span></div></div>
-    <div class="pivot-settings"><span>Mostrar pivotes y resistencias:</span><div id="pivotTfControls" class="pivot-tf-controls"><button type="button" data-pivot-tf="1" aria-pressed="false">M1</button><button type="button" data-pivot-tf="2" aria-pressed="false">M2</button><button type="button" data-pivot-tf="3" aria-pressed="false">M3</button><button type="button" data-pivot-tf="4" aria-pressed="false">M4</button><button type="button" data-pivot-tf="5" aria-pressed="true" class="active">M5</button><button type="button" data-pivot-tf="10" aria-pressed="false">M10</button></div><small>Activa o desactiva cada temporalidad. Se guarda tu selección.</small></div>
     <div id="mainChart" class="main-chart"><div class="chart-placeholder">Esperando velas de Deriv…</div></div>
     <div class="rsi-head"><b>RSI (14)</b><span id="rsiLegend">—</span></div>
     <div id="rsiChart" class="rsi-chart"></div>
@@ -64,5 +65,5 @@
   </section>
   <footer>BOTDER · Solo análisis y simulación. No envía órdenes ni garantiza resultados futuros.</footer>
 </main>
-<script src="app.js?v=36"></script>
+<script src="app.js?v=37"></script>
 </body></html>
