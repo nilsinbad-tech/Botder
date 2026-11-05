@@ -124,7 +124,9 @@ function buildSetups(c,liquidityCandles=c,pivotCandles=liquidityCandles,obStruct
  const hourlySideAt=time=>{let lo=0,hi=hourlyBars.length;while(lo<hi){const mid=(lo+hi)>>1;if(hourlyBars[mid].time+3600<=time)lo=mid+1;else hi=mid;}const k=lo-1;if(k<49)return null;return hourlyFast[k]>hourlySlow[k]?'BUY':hourlyFast[k]<hourlySlow[k]?'SELL':null;};
  // Un cambio H1 solo queda confirmado al cierre de la vela horaria.
  const hourlyTransitions=[];
+ const latestRawTime=hourlyRawCandles.length?hourlyRawCandles[hourlyRawCandles.length-1].time:0;
  for(let k=50;k<hourlyBars.length;k++){
+  if(hourlyBars[k].time+3600>latestRawTime)continue;
   const previous=hourlyFast[k-1]-hourlySlow[k-1],current=hourlyFast[k]-hourlySlow[k];
   const side=previous<=0&&current>0?'BUY':previous>=0&&current<0?'SELL':null;
   if(side)hourlyTransitions.push({side,time:hourlyBars[k].time,confirmedTime:hourlyBars[k].time+3600,index:k});
