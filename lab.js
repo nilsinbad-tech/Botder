@@ -11,7 +11,7 @@ const strategies=[
 {id:7,name:"FVG + Reacción",group:"Desequilibrio",rules:"Regreso a FVG M2 + rechazo confirmado en M1"},
 {id:8,name:"Doble techo / suelo",group:"Price Action",rules:"Segundo test M2 + ruptura de neckline en M1"}
 ];
-let socket=null,busy=false,req=1,reqState=null,historyRequests=new Map(),symbols=[],results=[],hist={},idx=0,active=null,queue=[],timer=null,connectTimer=null,symbolTimer=null,overallTimer=null,validInstruments=0,failedInstruments=0;
+let socket=null,busy=false,req=1,historyRequests=new Map(),symbols=[],results=[],hist={},idx=0,active=null,queue=[],timer=null,connectTimer=null,symbolTimer=null,overallTimer=null,validInstruments=0,failedInstruments=0;
 const $=id=>document.getElementById(id),esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const fmt=(v,n=5)=>Number.isFinite(v)?v.toFixed(n):"—";
 function status(s){$("status").textContent=s;$("live-status").textContent=busy?"TESTING · "+s:s}
@@ -155,15 +155,6 @@ function drawChart(){
 }
 function progress(){const total=symbols.length;$("progress-count").textContent=idx+" / "+total+" instrumentos · 8 estrategias por instrumento";$("progress-bar").style.width=(total?idx/total*100:0)+"%";$("progress-title").textContent=busy?"Analizando "+(active?.name||"Deriv"):"Análisis finalizado"}
 function finish(msg){busy=false;historyRequests.forEach(x=>clearTimeout(x.timer));historyRequests.clear();clearTimeout(timer);clearTimeout(connectTimer);clearTimeout(symbolTimer);clearTimeout(overallTimer);if(socket){try{socket.close()}catch(e){}socket=null}status(msg);$("live-detail").textContent=msg;$("start").disabled=false;progress();render();$("updated").textContent="Actualizado: "+new Date().toLocaleString("es-PA")}
-function requestPage(){
- if(!busy||!reqState)return;
- req++;reqState.req=req;
- $("live-detail").textContent="Descargando velas M1 de "+(active?.name||reqState.symbol)+" · 2 días…";
- try{socket.send(JSON.stringify({ticks_history:reqState.symbol,start:reqState.start,end:String(reqState.targetEnd),style:"candles",granularity:60,adjust_start_time:1,req_id:req}));}
- catch(e){const st=reqState;reqState=null;st.done([], "No se pudo solicitar el gráfico M1: "+(e.message||e));return}
- clearTimeout(timer);
- timer=setTimeout(()=>{if(busy&&reqState){const st=reqState;reqState=null;st.done([], "Deriv no respondió al historial M1 en 30 segundos.")}},30000);
-}
 function requestCandles(symbol,start,end,done){
  const id=++req;
  const item={symbol,start,end,done,timer:null};
@@ -252,7 +243,7 @@ function start(){
  socket.onerror=()=>{if(busy)finish("ERROR DE RED: EL NAVEGADOR NO PUDO COMPLETAR EL WEBSOCKET DE DERIV")};
  socket.onclose=e=>{if(busy)finish("DERIV DESCONECTÓ · CÓDIGO "+e.code)};
  socket.onmessage=e=>{let m;try{m=JSON.parse(e.data)}catch(err){return}
-  if(m.error){const msg=m.error.message||"Error de API";if(m.req_id===1){finish("ERROR DE DERIV: "+msg);return}if(reqState&&m.req_id===reqState.req){const st=reqState;reqState=null;clearTimeout(timer);st.done([],"Deriv rechazó la descarga de velas: "+msg)}return}
+  if(m.error){const msg=m.error.message||"Error de API";if(m.req_id===1){finish("ERROR DE DERIV: "+msg);return}if(historyRequests.has(m.req_id)){const item=historyRequests.get(m.req_id);clearTimeout(item.timer);historyRequests.delete(m.req_id);item.done([], "Deriv rechazó el historial M1: "+msg)}return}
   if(m.msg_type==="active_symbols"||Array.isArray(m.active_symbols)){clearTimeout(symbolTimer);connection("DERIV API CONFIRMADA",true);const list=m.active_symbols||[];const found=list.map(s=>({symbol:s.underlying_symbol||s.symbol||"",name:s.underlying_symbol_name||s.display_name||s.symbol||""})).filter(s=>s.symbol&&/volatility/i.test(s.name)&&/1s/i.test(s.name));symbols=[...new Map(found.map(s=>[s.symbol,s])).values()].sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true})).slice(0,INSTRUMENT_LIMIT);$("updated").textContent="Deriv devolvió "+list.length+" símbolos · "+symbols.length+" índices 1s";if(!symbols.length){finish("DERIV NO DEVOLVIÓ ÍNDICES VOLATILITY 1s");return}$("live-detail").textContent="Índices encontrados: "+symbols.length+". Se analizarán "+strategies.length+" estrategias por instrumento.";runAllInstruments();return}
   if(historyRequests.has(m.req_id)){handleHistory(m);return}
  };
