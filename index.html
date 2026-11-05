@@ -27,6 +27,7 @@
   </header>
 
   <nav class="timeframe-bar" aria-label="Temporalidades">
+    <div class="timeframe-control"><button type="button" class="timeframe-button" data-tf="30">S30</button><button type="button" class="ob-toggle active" data-ob-tf="30" aria-label="Mostrar u ocultar OB S30" aria-pressed="true">OB</button></div>
     <div class="timeframe-control"><button type="button" class="timeframe-button active" data-tf="60">M1</button><button type="button" class="ob-toggle active" data-ob-tf="60" aria-label="Mostrar u ocultar OB M1" aria-pressed="true">OB</button></div>
     <div class="timeframe-control"><button type="button" class="timeframe-button" data-tf="120">M2</button><button type="button" class="ob-toggle active" data-ob-tf="120" aria-label="Mostrar u ocultar OB M2" aria-pressed="true">OB</button></div>
     <div class="timeframe-control"><button type="button" class="timeframe-button" data-tf="300">M5</button><button type="button" class="ob-toggle active" data-ob-tf="300" aria-label="Mostrar u ocultar OB M5" aria-pressed="true">OB</button></div>
@@ -60,7 +61,7 @@
         <div class="chart-controls">
           <label class="chart-tf-label">TEMPORALIDAD
             <select id="timeframe">
-              <option value="60" selected>M1</option><option value="120">M2</option><option value="300">M5</option><option value="600">M10</option><option value="900">M15</option><option value="1800">M30</option><option value="3600">H1</option><option value="14400">H4</option>
+              <option value="30">S30</option><option value="60" selected>M1</option><option value="120">M2</option><option value="300">M5</option><option value="600">M10</option><option value="900">M15</option><option value="1800">M30</option><option value="3600">H1</option><option value="14400">H4</option>
             </select>
           </label>
         </div>
@@ -70,19 +71,19 @@
 
     <section class="dashboard-bottom">
       <section class="dashboard-panel structure-summary">
-        <div class="panel-heading"><div><div class="eyebrow">ESTRUCTURA H4</div><h2>3 toques y zonas</h2></div><span class="panel-tag">ZIGZAG 5/3/3</span></div>
+        <div class="panel-heading"><div><div class="eyebrow">ESTRUCTURA H4</div><h2>FVG y liquidez</h2></div><span class="panel-tag">EMA 9/20/50</span></div>
         <div class="structure-grid">
-          <div class="structure-item"><span>3 TOQUES H4</span><strong id="touch-status">BUSCANDO</strong></div>
+          <div class="structure-item"><span>ZONAS SSL / BSL</span><strong id="touch-status">BUSCANDO</strong></div>
           <div class="structure-item"><span>OB H4</span><strong id="ob-status">BUSCANDO</strong></div>
           <div class="structure-item"><span>CANAL</span><strong id="channel-status">BUSCANDO</strong></div>
         </div>
       </section>
 
       <section class="dashboard-panel confirmation-panel">
-        <div class="panel-heading"><div><div class="eyebrow">DIRECCIÓN Y CONFIRMACIÓN</div><h2>Lectura del mercado</h2></div><span class="panel-tag">H4 + M30 + M1</span></div>
+        <div class="panel-heading"><div><div class="eyebrow">DIRECCIÓN Y CONFIRMACIÓN</div><h2>Lectura del mercado</h2></div><span class="panel-tag">EMA + FVG + SSL/BSL</span></div>
         <div class="trend-box"><span>TENDENCIA H4</span><strong id="trend-h4">ESPERANDO</strong></div>
-        <div class="confirm-row"><span>CONFIRMACIÓN M30</span><strong id="confirm-m30">ESPERANDO</strong></div>
-        <div class="confirm-row"><span>CONFIRMACIÓN M1</span><strong id="confirm-m1">ESPERANDO</strong></div>
+        <div class="confirm-row"><span>CONFIRMACIÓN EMA 9/20/50</span><strong id="confirm-m30">ESPERANDO</strong></div>
+        <div class="confirm-row"><span>CONFLUENCIA DE ZONAS</span><strong id="confirm-m1">ESPERANDO</strong></div>
         <div class="structure-detail"><span id="side-analysis-status">Esperando mercado</span><small id="structure-diagnostic">Esperando estructura H4 / M30</small></div>
       </section>
 
