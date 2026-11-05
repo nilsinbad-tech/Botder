@@ -122,6 +122,13 @@ function buildSetups(c,liquidityCandles=c,pivotCandles=liquidityCandles,obStruct
  const close=c.map(x=>x.close),e9=ema(close,9),e20=ema(close,20),rv=rsi(close);
  const hourlyBars=aggregate(hourlyRawCandles,60),hourlyClose=hourlyBars.map(x=>x.close),hourlyFast=ema(hourlyClose,20),hourlySlow=ema(hourlyClose,50);
  const hourlySideAt=time=>{let lo=0,hi=hourlyBars.length;while(lo<hi){const mid=(lo+hi)>>1;if(hourlyBars[mid].time+3600<=time)lo=mid+1;else hi=mid;}const k=lo-1;if(k<49)return null;return hourlyFast[k]>hourlySlow[k]?'BUY':hourlyFast[k]<hourlySlow[k]?'SELL':null;};
+ // Un cambio H1 solo queda confirmado al cierre de la vela horaria.
+ const hourlyTransitions=[];
+ for(let k=50;k<hourlyBars.length;k++){
+  const previous=hourlyFast[k-1]-hourlySlow[k-1],current=hourlyFast[k]-hourlySlow[k];
+  const side=previous<=0&&current>0?'BUY':previous>=0&&current<0?'SELL':null;
+  if(side)hourlyTransitions.push({side,time:hourlyBars[k].time,confirmedTime:hourlyBars[k].time+3600,index:k});
+ }
  const structureTf=state.tf,structureCandles=aggregate(targetRawCandles,structureTf),structurePv=pivots(structureCandles,3,structureTf*60);
  const m30Candles=aggregate(targetRawCandles,30),m30Pv=pivots(m30Candles,3,1800);
  const stopPivots=state.slTfs.map(mins=>({mins,pv:pivots(aggregate(targetRawCandles,mins),3,mins*60)}));
@@ -129,29 +136,30 @@ function buildSetups(c,liquidityCandles=c,pivotCandles=liquidityCandles,obStruct
  const primaryTf=state.obPrimaryTf,previousTf=state.obPreviousTf;
  const primaryCandles=aggregate(targetRawCandles,primaryTf),previousCandles=aggregate(targetRawCandles,previousTf);
  let emaBias=null;
+ // No se dibujan OB por el simple hecho de encontrar una vela opuesta.
+ // Se busca la zona de origen únicamente cuando una vela H1 cerrada confirma
+ // el cruce EMA20/EMA50 que cambia la tendencia.
+ for(const transition of hourlyTransitions){
+  const candidates=[{tf:primaryTf,candles:primaryCandles}];
+  if(state.obPreviousEnabled)candidates.push({tf:previousTf,candles:previousCandles});
+  for(const candidate of candidates){
+   const found=findValidOBAtTime(candidate.candles,transition.confirmedTime,transition.side,candidate.tf,structurePv,structureCandles,targetRawCandles);
+   if(!found)continue;
+   const key=transition.side+':'+candidate.tf+':'+found.ob.time+':'+transition.confirmedTime;
+   if(zoneKeys.has(key))continue;
+   obZones.push({...found.ob,side:transition.side,timeframe:candidate.tf,availableTime:transition.confirmedTime,trendChangeTime:transition.time,structurePrice:found.structure.price,structureTime:found.structure.time,structureConfirmedTime:found.structure.confirmedTime,structureType:transition.side==='BUY'?'SOPORTE':'RESISTENCIA'});
+   zoneKeys.add(key);
+  }
+ }
  for(let i=1;i<c.length;i++){
   const x=c[i],currentRsi=rv[i],previousRsi=rv[i-1];
   if(e9[i-1]<=e20[i-1]&&e9[i]>e20[i])emaBias='BUY';
   else if(e9[i-1]>=e20[i-1]&&e9[i]<e20[i])emaBias='SELL';
   if(i<55)continue;
-  // Los OB se detectan y dibujan independientemente de las confirmaciones de entrada.
-  for(const side of ['BUY','SELL']){
-   const candidates=[{tf:primaryTf,candles:primaryCandles}];
-   if(state.obPreviousEnabled)candidates.push({tf:previousTf,candles:previousCandles});
-   for(const candidate of candidates){
-    const found=findValidOBAtTime(candidate.candles,x.time,side,candidate.tf,structurePv,structureCandles,targetRawCandles);
-    if(!found)continue;
-    const key=side+':'+candidate.tf+':'+found.ob.time;
-    if(!zoneKeys.has(key)){
-     obZones.push({...found.ob,side,timeframe:candidate.tf,structurePrice:found.structure.price,structureTime:found.structure.time,structureConfirmedTime:found.structure.confirmedTime,structureType:side==='BUY'?'SOPORTE':'RESISTENCIA'});
-     zoneKeys.add(key);
-    }
-   }
-  }
   // Confirmación completa en M2: EMA 9/20 alineadas, retesteo del OB y cruce RSI en el rango.
   for(const ob of obZones){
    const key=ob.side+':'+ob.timeframe+':'+ob.time;
-   if(usedOBs.has(key)||x.time<=ob.time+ob.timeframe*60)continue;
+   if(usedOBs.has(key)||x.time<(ob.availableTime||ob.time+ob.timeframe*60)||x.time<=ob.time+ob.timeframe*60)continue;
    if(!(x.low<=ob.high&&x.high>=ob.low))continue;
    if(isOBInvalidated(ob,ob.side,{price:ob.structurePrice,confirmedTime:ob.structureConfirmedTime},targetRawCandles,x.time))continue;
    const side=ob.side;
@@ -186,7 +194,7 @@ function buildSetups(c,liquidityCandles=c,pivotCandles=liquidityCandles,obStruct
   }
  }
  const lastTime=targetRawCandles.length?targetRawCandles[targetRawCandles.length-1].time:0;
- const validZones=obZones.filter(z=>!isOBInvalidated(z,z.side,{price:z.structurePrice,confirmedTime:z.structureConfirmedTime},targetRawCandles,lastTime));
+ const validZones=obZones.filter(z=>(z.availableTime||0)<=lastTime&&!isOBInvalidated(z,z.side,{price:z.structurePrice,confirmedTime:z.structureConfirmedTime},targetRawCandles,lastTime));
  // Solo OB de la dirección dominante. El límite se aplica por zona de precio,
  // no por vela: distintas temporalidades no pueden apilar cajas sobre el mismo rango.
  const preferredOBSide=trendSide||emaBias;
