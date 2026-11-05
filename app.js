@@ -136,13 +136,15 @@ function buildSetups(c,liquidityCandles=c,pivotCandles=liquidityCandles,obStruct
  for(let i=50;i<primaryCandles.length;i++){
   const bar=primaryCandles[i],closeTime=bar.time+primaryTf*60;
   const side=m30SideAt(closeTime,targetRawCandles,m30Context);
-  if(!side||!ema20NearAt(obE20,obE50,primaryCandles,i))continue;
+  // Dibuja los OB de la tendencia M30 aunque no exista un pivote cercano:
+  // el pivote se adjunta cuando está disponible, pero nunca bloquea la zona.
+  if(!side)continue;
   for(let j=i-1;j>=Math.max(0,i-9);j--){
    const candidate=primaryCandles[j],opposite=side==='BUY'?candidate.close<candidate.open:candidate.close>candidate.open;
    if(!opposite)continue;
    const ob={time:candidate.time,high:candidate.high,low:candidate.low,entry:(candidate.high+candidate.low)/2};
    const structure=findPivotStructure(ob,side,structurePv,structureCandles,closeTime);
-   if(structure)addZone({ob,structure},side,primaryTf);
+   addZone({ob,structure},side,primaryTf);
    break;
   }
  }
