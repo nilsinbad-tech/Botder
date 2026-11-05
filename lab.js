@@ -17,61 +17,116 @@ function macd(c){let a=ema(c,12),b=ema(c,26),line=c.map((_,i)=>a[i]!=null&&b[i]!
 function hi(d,i,n,k="high"){let a=d.slice(Math.max(0,i-n),i).map(x=>x[k]);return a.length?Math.max(...a):null}
 function lo(d,i,n,k="low"){let a=d.slice(Math.max(0,i-n),i).map(x=>x[k]);return a.length?Math.min(...a):null}
 function bands(c,i,p=20,m=2){if(i<p-1)return null;let a=c.slice(i-p+1,i+1),v=a.reduce((x,y)=>x+y,0)/p,s=Math.sqrt(a.reduce((x,y)=>x+(y-v)**2,0)/p);return{mid:v,up:v+m*s,low:v-m*s,w:2*s}}
-function calc(d){let c=d.map(x=>x.close),e5=ema(c,5),e8=ema(c,8),e9=ema(c,9),e20=ema(c,20),e21=ema(c,21),e50=ema(c,50),e55=ema(c,55),s10=sma(c,10),s30=sma(c,30),r=rsi(c),r2=rsi(c,2),a=atr(d),ad=adx(d),m=macd(c),k=Array(c.length).fill(null),cci=k.slice(),wpr=k.slice(),ao=k.slice(),roc=k.slice(),dem=k.slice(),rvi=k.slice();for(let i=0;i<c.length;i++){if(i>=13){let h=hi(d,i+1,14),l=lo(d,i+1,14);k[i]=100*(c[i]-l)/(h-l||1)}if(i>=19){let z=d.slice(i-19,i+1).map(x=>(x.high+x.low+x.close)/3),av=z.reduce((x,y)=>x+y,0)/20,md=z.reduce((x,y)=>x+Math.abs(y-av),0)/20;cci[i]=(z[19]-av)/(.015*(md||1e-8));let h=hi(d,i+1,14),l=lo(d,i+1,14);wpr[i]=-100*(h-c[i])/(h-l||1)}if(i>=9)roc[i]=100*(c[i]/c[i-9]-1);if(i>=33)ao[i]=d.slice(i-4,i+1).reduce((x,z)=>x+(z.high+z.low)/2,0)/5-d.slice(i-33,i+1).reduce((x,z)=>x+(z.high+z.low)/2,0)/34;if(i>=13){let up=0,dn=0;for(let j=i-13;j<=i;j++){let z=d[j].close-d[j].open;up+=Math.max(z,0);dn+=Math.max(-z,0)}dem[i]=up/(up+dn||1)}if(i>=4)rvi[i]=(c[i]-c[i-1]+c[i-1]-c[i-2]+c[i-2]-c[i-3]+c[i-3]-c[i-4])/4}let hma16=ema(c,16),hma32=ema(c,32),trix=ema(ema(ema(c,15),15),15),trixSig=ema(trix.map(x=>x||0),5);return{c,e5,e8,e9,e20,e21,e50,e55,s10,s30,r,r2,a,ad,m,k,cci,wpr,ao,roc,dem,rvi,hma16,hma32,trix,trixSig}}
-function signal(id,i,d,x){let c=d[i],p=d[i-1],q=d[i-2],up=c.close>c.open,dn=c.close<c.open,r=x.r[i],ad=x.ad.v[i],a=x.a[i]||0,ph=hi(d,i,3),pl=lo(d,i,3),h20=hi(d,i,20),l20=lo(d,i,20),cross=(v)=>v[i]>v[i-1]&&v[i-1]<=v[i-2],down=v=>v[i]<v[i-1]&&v[i-1]>=v[i-2],m=x.m,b=bands(x.c,i);
-switch(id){
-case 1:if(cross(x.e9)&&x.e9[i]>x.e21[i]&&r>50&&ad>20)return 1;if(down(x.e9)&&x.e9[i]<x.e21[i]&&r<50&&ad>20)return -1;break;
-case 2:if(cross(x.s10)&&x.s10[i]>x.s30[i]&&x.s30[i]>x.s30[i-1]&&r>50)return 1;if(down(x.s10)&&x.s10[i]<x.s30[i]&&x.s30[i]<x.s30[i-1]&&r<50)return -1;break;
-case 3:if(x.e8[i]>x.e21[i]&&x.e21[i]>x.e55[i]&&x.e8[i]-x.e21[i]>x.e8[i-1]-x.e21[i-1]&&ad>20)return 1;if(x.e8[i]<x.e21[i]&&x.e21[i]<x.e55[i]&&x.e8[i]-x.e21[i]<x.e8[i-1]-x.e21[i-1]&&ad>20)return -1;break;
-case 4:if(c.close>x.e20[i]+a*1.2&&p.close<=x.e20[i-1]+x.a[i-1]*1.2&&c.close>x.e50[i]&&r>50)return 1;if(c.close<x.e20[i]-a*1.2&&p.close>=x.e20[i-1]-x.a[i-1]*1.2&&c.close<x.e50[i]&&r<50)return -1;break;
-case 5:{let ten=(hi(d,i+1,9)+lo(d,i+1,9))/2,kij=(hi(d,i+1,26)+lo(d,i+1,26))/2;if(c.close>Math.max(ten,kij)&&ten>kij&&c.close>d[i-26].close&&r>50)return 1;if(c.close<Math.min(ten,kij)&&ten<kij&&c.close<d[i-26].close&&r<50)return -1;break}
-case 6:if(c.close>x.e20[i]&&p.close<=x.e20[i-1]&&c.close>x.e50[i]&&ad>18)return 1;if(c.close<x.e20[i]&&p.close>=x.e20[i-1]&&c.close<x.e50[i]&&ad>18)return -1;break;
-case 7:if(x.ad.p[i]>x.ad.m[i]&&x.ad.p[i-1]<=x.ad.m[i-1]&&ad>20&&c.close>ph)return 1;if(x.ad.m[i]>x.ad.p[i]&&x.ad.m[i-1]<=x.ad.p[i-1]&&ad>20&&c.close<pl)return -1;break;
-case 8:{let z=d.slice(i-24,i),hh=z.map(v=>v.high),ll=z.map(v=>v.low),au=100*(23-hh.lastIndexOf(Math.max(...hh)))/24,al=100*(23-ll.lastIndexOf(Math.min(...ll)))/24;if(au>70&&au>al&&c.close>ph&&r>50)return 1;if(al>70&&al>au&&c.close<pl&&r<50)return -1;break}
-case 9:if(x.e5[i]>x.e20[i]&&x.e20[i]>x.e50[i]&&c.close>x.e5[i]&&x.ao[i]>x.ao[i-1]&&x.ao[i]>0)return 1;if(x.e5[i]<x.e20[i]&&x.e20[i]<x.e50[i]&&c.close<x.e5[i]&&x.ao[i]<x.ao[i-1]&&x.ao[i]<0)return -1;break;
-case 10:if(up&&p.close>p.open&&c.close-c.open>p.close-p.open&&c.close>x.e20[i]&&x.e20[i]>x.e20[i-1])return 1;if(dn&&p.close<p.open&&c.open-c.close>p.open-p.close&&c.close<x.e20[i]&&x.e20[i]<x.e20[i-1])return -1;break;
-case 11:if(x.r[i-1]<30&&r>=30&&up&&c.close>ph)return 1;if(x.r[i-1]>70&&r<=70&&dn&&c.close<pl)return -1;break;
-case 12:if(c.low<lo(d,i,8)&&r>Math.min(...x.r.slice(i-8,i))+5&&r>50&&c.close>p.high)return 1;if(c.high>hi(d,i,8)&&r<Math.max(...x.r.slice(i-8,i))-5&&r<50&&c.close<p.low)return -1;break;
-case 13:if(x.k[i-1]<20&&x.k[i]>20&&x.k[i]>x.k[i-1]&&up&&c.close>p.high)return 1;if(x.k[i-1]>80&&x.k[i]<80&&x.k[i]<x.k[i-1]&&dn&&c.close<p.low)return -1;break;
-case 14:if(x.wpr[i-1]<-80&&x.wpr[i]>-80&&x.cci[i]>0&&c.close>p.high)return 1;if(x.wpr[i-1]>-20&&x.wpr[i]<-20&&x.cci[i]<0&&c.close<p.low)return -1;break;
-case 15:if(x.cci[i-1]<-100&&x.cci[i]>-100&&x.cci[i]>0&&c.close>p.high)return 1;if(x.cci[i-1]>100&&x.cci[i]<100&&x.cci[i]<0&&c.close<p.low)return -1;break;
-case 16:if(b&&p.close<b.low&&c.close>b.low&&r>35&&up)return 1;if(b&&p.close>b.up&&c.close<b.up&&r<65&&dn)return -1;break;
-case 17:{let z=bands(x.c,i,30,2.2),score=z?(c.close-z.mid)/(z.w/2||1):0;if(z&&score<-1.8&&score>(p.close-z.mid)/(z.w/2||1)&&x.e20[i]>=x.e20[i-1]&&c.close>p.high)return 1;if(z&&score>1.8&&score<(p.close-z.mid)/(z.w/2||1)&&x.e20[i]<=x.e20[i-1]&&c.close<p.low)return -1;break}
-case 18:if(x.r2[i-1]<10&&x.r2[i]>=10&&c.close>x.e5[i]&&up)return 1;if(x.r2[i-1]>90&&x.r2[i]<=90&&c.close<x.e5[i]&&dn)return -1;break;
-case 19:if(c.low<x.e20[i]-a*1.5&&c.close>x.e20[i]-a*1.5&&r<45&&x.e20[i]>=x.e20[i-1])return 1;if(c.high>x.e20[i]+a*1.5&&c.close<x.e20[i]+a*1.5&&r>55&&x.e20[i]<=x.e20[i-1])return -1;break;
-case 20:if(x.dem[i-1]<.3&&x.dem[i]>.5&&up&&c.close>p.high)return 1;if(x.dem[i-1]>.7&&x.dem[i]<.5&&dn&&c.close<p.low)return -1;break;
-case 21:if(c.close>h20&&ad>20&&a>x.a[i-1])return 1;if(c.close<l20&&ad>20&&a>x.a[i-1])return -1;break;
-case 22:if(c.close>hi(d,i-2,5)&&ad>18&&up&&c.close>p.high)return 1;if(c.close<lo(d,i-2,5)&&ad>18&&dn&&c.close<p.low)return -1;break;
-case 23:if(c.close>x.e20[i]+a*1.5&&a>x.a[i-1]&&m.h[i]>m.h[i-1]&&m.h[i]>0)return 1;if(c.close<x.e20[i]-a*1.5&&a>x.a[i-1]&&m.h[i]<m.h[i-1]&&m.h[i]<0)return -1;break;
-case 24:{let old=bands(x.c,i-5);if(b&&old&&old.w<x.c[i-5]*.006&&b.w>old.w*1.25&&c.close>b.up&&ad>18)return 1;if(b&&old&&old.w<x.c[i-5]*.006&&b.w>old.w*1.25&&c.close<b.low&&ad>18)return -1;break}
-case 25:{let ranges=d.slice(i-7,i).map(z=>z.high-z.low),mn=Math.min(...ranges);if(p.high-p.low===mn&&c.close>p.high&&a>x.a[i-1]&&c.close>h20)return 1;if(p.high-p.low===mn&&c.close<p.low&&a>x.a[i-1]&&c.close<l20)return -1;break}
-case 26:if(p.high<q.high&&p.low>q.low&&c.close>q.high&&c.close>x.e20[i]&&ad>18)return 1;if(p.high<q.high&&p.low>q.low&&c.close<q.low&&c.close<x.e20[i]&&ad>18)return -1;break;
-case 27:if(c.close>h20&&c.close-c.open>1.5*a&&c.close>c.low+(c.high-c.low)*.75&&x.e20[i]>x.e20[i-1])return 1;if(c.close<l20&&c.open-c.close>1.5*a&&c.close<c.low+(c.high-c.low)*.25&&x.e20[i]<x.e20[i-1])return -1;break;
-case 28:{let mid=(h20+l20)/2;if(c.close>mid&&p.close<=mid&&r>50&&x.e20[i]>x.e20[i-5])return 1;if(c.close<mid&&p.close>=mid&&r<50&&x.e20[i]<x.e20[i-5])return -1;break}
-case 29:{let range=hi(d,i,4)-lo(d,i,4);if(c.close>p.close+range*.5&&a>x.a[i-1]&&c.close>x.e20[i])return 1;if(c.close<p.close-range*.5&&a>x.a[i-1]&&c.close<x.e20[i])return -1;break}
-case 30:{let pp=(p.high+p.low+p.close)/3,r1=2*pp-p.low,s1=2*pp-p.high;if(c.close>r1&&p.close<=r1&&c.low<=r1&&ad>20)return 1;if(c.close<s1&&p.close>=s1&&c.high>=s1&&ad>20)return -1;break}
-case 31:if(m.line[i]>m.sig[i]&&m.line[i-1]<=m.sig[i-1]&&m.line[i]>0&&m.h[i]>m.h[i-1])return 1;if(m.line[i]<m.sig[i]&&m.line[i-1]>=m.sig[i-1]&&m.line[i]<0&&m.h[i]<m.h[i-1])return -1;break;
-case 32:if(x.roc[i]>0&&x.roc[i-1]<=0&&x.roc[i]>x.roc[i-1]&&c.close>ph)return 1;if(x.roc[i]<0&&x.roc[i-1]>=0&&x.roc[i]<x.roc[i-1]&&c.close<pl)return -1;break;
-case 33:if(m.line[i]>m.sig[i]&&m.line[i-1]<=m.sig[i-1]&&m.line[i]>0&&c.close>x.e20[i])return 1;if(m.line[i]<m.sig[i]&&m.line[i-1]>=m.sig[i-1]&&m.line[i]<0&&c.close<x.e20[i])return -1;break;
-case 34:if(x.ao[i]>0&&x.ao[i-1]<=0&&x.ao[i]>x.ao[i-1]&&c.close>ph)return 1;if(x.ao[i]<0&&x.ao[i-1]>=0&&x.ao[i]<x.ao[i-1]&&c.close<pl)return -1;break;
-case 35:{let z=(x.e9[i]-x.e21[i])/(x.e21[i]||1),zp=(x.e9[i-1]-x.e21[i-1])/(x.e21[i-1]||1);if(z>0&&zp<=0&&z>zp&&r>50)return 1;if(z<0&&zp>=0&&z<zp&&r<50)return -1;break}
-case 36:if(x.hma16[i]>x.hma16[i-1]&&x.hma16[i-1]<=x.hma16[i-2]&&x.hma16[i]>x.hma32[i]&&r>50)return 1;if(x.hma16[i]<x.hma16[i-1]&&x.hma16[i-1]>=x.hma16[i-2]&&x.hma16[i]<x.hma32[i]&&r<50)return -1;break;
-case 37:if(x.e9[i]>x.e20[i]&&x.e20[i]>x.e50[i]&&c.low<=x.e20[i]&&c.close>x.e9[i]&&up)return 1;if(x.e9[i]<x.e20[i]&&x.e20[i]<x.e50[i]&&c.high>=x.e20[i]&&c.close<x.e9[i]&&dn)return -1;break;
-case 38:{let low=lo(d,i,30),high=hi(d,i,30),span=high-low,buy=high-span*.618,sell=low+span*.618;if(span>0&&c.low<=buy&&c.close>high-span*.5&&c.close>p.high&&x.e50[i]>x.e50[i-1])return 1;if(span>0&&c.high>=sell&&c.close<low+span*.5&&c.close<p.low&&x.e50[i]<x.e50[i-1])return -1;break}
-case 39:if(x.trix[i]>x.trix[i-1]&&x.trix[i-1]<=x.trix[i-2]&&x.trix[i]>x.trixSig[i]&&x.trix[i]>0&&c.close>x.e50[i])return 1;if(x.trix[i]<x.trix[i-1]&&x.trix[i-1]>=x.trix[i-2]&&x.trix[i]<x.trixSig[i]&&x.trix[i]<0&&c.close<x.e50[i])return -1;break;
-case 40:if(x.rvi[i]>0&&x.rvi[i-1]<=0&&c.close>x.e20[i]&&up)return 1;if(x.rvi[i]<0&&x.rvi[i-1]>=0&&c.close<x.e20[i]&&dn)return -1;break;
-case 41:if(up&&p.close<p.open&&c.open<=p.close&&c.close>=p.open&&c.close>x.e50[i]&&c.close>p.high)return 1;if(dn&&p.close>p.open&&c.open>=p.close&&c.close<=p.open&&c.close<x.e50[i]&&c.close<p.low)return -1;break;
-case 42:{let body=Math.abs(c.close-c.open),lower=Math.min(c.open,c.close)-c.low,upper=c.high-Math.max(c.open,c.close);if(lower>body*2.5&&c.close>c.low+(c.high-c.low)*.65&&c.low<=l20&&c.close>p.high)return 1;if(upper>body*2.5&&c.close<c.low+(c.high-c.low)*.35&&c.high>=h20&&c.close<p.low)return -1;break}
-case 43:{let low=lo(d,i,12),high=hi(d,i,12);if(c.low<low&&c.close>low&&c.close>p.high&&up)return 1;if(c.high>high&&c.close<high&&c.close<p.low&&dn)return -1;break}
-case 44:if(p.close<p.open&&c.close>hi(d,i-1,3)&&c.close>p.high&&r>50)return 1;if(p.close>p.open&&c.close<lo(d,i-1,3)&&c.close<p.low&&r<50)return -1;break;
-case 45:if(i>2&&c.low>d[i-2].high&&c.close>p.high&&x.e20[i]>x.e20[i-1])return 1;if(i>2&&c.high<d[i-2].low&&c.close<p.low&&x.e20[i]<x.e20[i-1])return -1;break;
-case 46:if(c.close>hi(d,i,8)&&c.close>x.e20[i]&&p.low>x.e20[i-1])return 1;if(c.close<lo(d,i,8)&&c.close<x.e20[i]&&p.high<x.e20[i-1])return -1;break;
-case 47:if(c.close<l20&&p.close>=l20&&c.close<x.e20[i]&&r<48)return -1;if(c.close>h20&&p.close<=h20&&c.close>x.e20[i]&&r>52)return 1;break;
-case 48:if(Math.abs(h20-hi(d,i-10,10))<a*.35&&c.close<l20&&r<48)return -1;if(Math.abs(l20-lo(d,i-10,10))<a*.35&&c.close>h20&&r>52)return 1;break;
-case 49:{let width=h20-l20,old=hi(d,i-8,8)-lo(d,i-8,8);if(width<old*.7&&c.close>h20&&a>x.a[i-1])return 1;if(width<old*.7&&c.close<l20&&a>x.a[i-1])return -1;break}
-case 50:{let slope=x.e20[i]-x.e20[i-8];if(slope>0&&c.low<=x.e20[i]-a*.7&&c.close>x.e20[i]&&c.close>p.high)return 1;if(slope<0&&c.high>=x.e20[i]+a*.7&&c.close<x.e20[i]&&c.close<p.low)return -1;break}
+function wma(a,p){let o=Array(a.length).fill(null),den=p*(p+1)/2;for(let i=p-1;i<a.length;i++){let s=0;for(let j=0;j<p;j++)s+=a[i-p+1+j]*(j+1);o[i]=s/den}return o}
+function smma(a,p){let o=Array(a.length).fill(null);if(a.length<p)return o;let z=a.slice(0,p).reduce((u,v)=>u+v,0)/p;o[p-1]=z;for(let i=p;i<a.length;i++){z=(z*(p-1)+a[i])/p;o[i]=z}return o}
+function crossUp(a,b,i){return a[i]!=null&&b[i]!=null&&a[i-1]!=null&&b[i-1]!=null&&a[i]>b[i]&&a[i-1]<=b[i-1]}
+function crossDn(a,b,i){return a[i]!=null&&b[i]!=null&&a[i-1]!=null&&b[i-1]!=null&&a[i]<b[i]&&a[i-1]>=b[i-1]}
+function pivots(d,left=2,right=2){let highs=Array(d.length).fill(null),lows=Array(d.length).fill(null);for(let i=left+right;i<d.length;i++){let k=i-right,h=true,l=true;for(let j=k-left;j<=k+right;j++){if(j===k)continue;if(d[j].high>=d[k].high)h=false;if(d[j].low<=d[k].low)l=false}if(h)highs[i]=d[k].high;if(l)lows[i]=d[k].low}return{highs,lows}}
+function calc(d){
+ const c=d.map(z=>z.close),hl2=d.map(z=>(z.high+z.low)/2),tp=d.map(z=>(z.high+z.low+z.close)/3),e5=ema(c,5),e8=ema(c,8),e9=ema(c,9),e20=ema(c,20),e21=ema(c,21),e50=ema(c,50),e55=ema(c,55),s10=sma(c,10),s30=sma(c,30),r=rsi(c,14),r2=rsi(c,2),a=atr(d,14),ad=adx(d,14),m=macd(c);
+ const k=Array(c.length).fill(null),kd=k.slice(),cci=k.slice(),wpr=k.slice(),ao=k.slice(),roc=k.slice(),dem=k.slice(),rvi=k.slice(),rvSig=k.slice(),tsi=k.slice(),tsiSig=k.slice(),ppo=k.slice(),ppoSig=k.slice(),trix=k.slice(),trixSig=k.slice(),zscore=k.slice(),stochRsi=k.slice();
+ const demUp=Array(c.length).fill(0),demDn=demUp.slice();
+ for(let i=0;i<c.length;i++){
+  if(i>=13){let h=hi(d,i+1,14),l=lo(d,i+1,14);k[i]=100*(c[i]-l)/(h-l||1)}
+  if(i>=2){let z=k.slice(Math.max(0,i-2),i+1).filter(Number.isFinite);if(z.length===3)kd[i]=z.reduce((u,v)=>u+v,0)/3}
+  if(i>=19){let z=tp.slice(i-19,i+1),av=z.reduce((u,v)=>u+v,0)/20,md=z.reduce((u,v)=>u+Math.abs(v-av),0)/20;cci[i]=(tp[i]-av)/(.015*(md||1e-10))}
+  if(i>=13){let h=hi(d,i+1,14),l=lo(d,i+1,14);wpr[i]=-100*(h-c[i])/(h-l||1)}
+  if(i>=9)roc[i]=100*(c[i]/c[i-9]-1);
+  if(i>=33)ao[i]=sma(hl2.slice(0,i+1),5)[i]-sma(hl2.slice(0,i+1),34)[i];
+  if(i>=13){for(let j=i-13;j<=i;j++){demUp[i]+=Math.max(d[j].high-d[j-1].high,0);demDn[i]+=Math.max(d[j-1].low-d[j].low,0)}dem[i]=demUp[i]/(demUp[i]+demDn[i]||1)}
+  if(i>=9){let up=0,dn=0;for(let j=i-9;j<=i;j++){let z=c[j]-c[j-1];up+=Math.max(z,0);dn+=Math.max(-z,0)}rvi[i]=(c[i]-c[i-1]+2*(c[i-1]-c[i-2])+2*(c[i-2]-c[i-3])+(c[i-3]-c[i-4]))/6}
+  if(i>=25){let diff=c[i]-c[i-1],abs=Math.abs(diff),num=0,den=0;for(let j=i-24;j<=i;j++){let v=c[j]-c[j-1];num+=v;den+=Math.abs(v)}tsi[i]=100*num/(den||1)}
+  if(i>=25){let f=ema(c,12),s=ema(c,26);ppo[i]=100*(f[i]-s[i])/(s[i]||1)}
+  if(i>=3){let a1=ema(c,15),a2=ema(a1.map(v=>v??0),15),a3=ema(a2.map(v=>v??0),15);trix[i]=100*(a3[i]-a3[i-1])/(a3[i-1]||1)}
+  if(i>=29){let av=c.slice(i-29,i+1).reduce((u,v)=>u+v,0)/30,sd=Math.sqrt(c.slice(i-29,i+1).reduce((u,v)=>u+(v-av)**2,0)/30);zscore[i]=(c[i]-av)/(sd||1)}
+  if(i>=13){let vals=r.slice(i-13,i+1).filter(Number.isFinite);if(vals.length===14){let mn=Math.min(...vals),mx=Math.max(...vals);stochRsi[i]=100*(r[i]-mn)/(mx-mn||1)}}
+ }
+ const rviNumerator=Array(c.length).fill(null),rviDenominator=Array(c.length).fill(null);
+ for(let i=3;i<c.length;i++){let n=0,v=0;for(let j=i-3;j<=i;j++){n+=(d[j].close-d[j].open);v+=(d[j].high-d[j].low)}rviNumerator[i]=n/4;rviDenominator[i]=v/4}
+ for(let i=0;i<c.length;i++)if(i>=6){let ns=rviNumerator.slice(i-3,i+1).filter(Number.isFinite),ds=rviDenominator.slice(i-3,i+1).filter(Number.isFinite);if(ns.length===4&&ds.length===4)rvi[i]=ns.reduce((u,v)=>u+v,0)/(ds.reduce((u,v)=>u+v,0)||1)}
+ const hmaCalc=p=>{let half=wma(c,Math.max(1,Math.floor(p/2))),full=wma(c,p),diff=c.map((_,i)=>half[i]!=null&&full[i]!=null?2*half[i]-full[i]:null);return wma(diff.map(v=>v??0),Math.max(1,Math.floor(Math.sqrt(p))))};
+ const hma16=hmaCalc(16),hma32=hmaCalc(32);
+ const ha=Array(c.length);for(let i=0;i<c.length;i++){let close=(d[i].open+d[i].high+d[i].low+d[i].close)/4,open=i?(ha[i-1].open+ha[i-1].close)/2:(d[i].open+d[i].close)/2;ha[i]={open,close,high:Math.max(d[i].high,open,close),low:Math.min(d[i].low,open,close)}}
+ const tenkan=Array(c.length).fill(null),kijun=tenkan.slice(),spanA=tenkan.slice(),spanB=tenkan.slice(),sar=tenkan.slice(),sarDir=tenkan.slice(),jaw=tenkan.slice(),teeth=tenkan.slice(),lips=tenkan.slice(),supertrend=tenkan.slice(),superDir=tenkan.slice();
+ for(let i=0;i<c.length;i++){
+  if(i>=8)tenkan[i]=(hi(d,i+1,9)+lo(d,i+1,9))/2;
+  if(i>=25)kijun[i]=(hi(d,i+1,26)+lo(d,i+1,26))/2;
+  if(tenkan[i]!=null&&kijun[i]!=null)spanA[i]=(tenkan[i]+kijun[i])/2;
+  if(i>=51)spanB[i]=(hi(d,i+1,52)+lo(d,i+1,52))/2;
+  if(i>=13){jaw[i]=smma(hl2.slice(0,i+1),13)[i];teeth[i]=smma(hl2.slice(0,i+1),8)[i];lips[i]=smma(hl2.slice(0,i+1),5)[i]}
+ }
+ let af=.02,maxAf=.2,ep=d[0]?.high||0,dir=1,sv=d[0]?.low||0;
+ for(let i=1;i<c.length;i++){if(i===1){dir=d[i].close>=d[i-1].close?1:-1;sv=dir>0?d[i-1].low:d[i-1].high;ep=dir>0?d[i].high:d[i].low}let next=sv+af*(ep-sv);if(dir>0){next=Math.min(next,d[i-1].low,i>1?d[i-2].low:d[i-1].low);if(d[i].low<next){dir=-1;next=ep;ep=d[i].low;af=.02}else if(d[i].high>ep){ep=d[i].high;af=Math.min(maxAf,af+.02)}}else{next=Math.max(next,d[i-1].high,i>1?d[i-2].high:d[i-1].high);if(d[i].high>next){dir=1;next=ep;ep=d[i].high;af=.02}else if(d[i].low<ep){ep=d[i].low;af=Math.min(maxAf,af+.02)}}sar[i]=next;sarDir[i]=dir}
+ let ub=Array(c.length).fill(null),lb=ub.slice();for(let i=0;i<c.length;i++){let mid=hl2[i],av=a[i]||0;ub[i]=mid+3*av;lb[i]=mid-3*av;if(i===0){supertrend[i]=ub[i];superDir[i]=-1;continue}ub[i]=ub[i]<ub[i-1]||d[i-1].close>ub[i-1]?ub[i]:ub[i-1];lb[i]=lb[i]>lb[i-1]||d[i-1].close<lb[i-1]?lb[i]:lb[i-1];if(superDir[i-1]<0){superDir[i]=c[i]>ub[i]?1:-1}else superDir[i]=c[i]<lb[i]?-1:1;supertrend[i]=superDir[i]>0?lb[i]:ub[i]}
+ const ps=pivots(d,2,2);
+ const atrRatio=Array(c.length).fill(null);for(let i=20;i<c.length;i++){let v=a.slice(i-19,i+1).filter(Number.isFinite);if(v.length===20)atrRatio[i]=a[i]/(v.reduce((u,z)=>u+z,0)/20||1)}
+ const ppoSig2=ema(ppo.map(v=>v??0),9),tsiSig2=ema(tsi.map(v=>v??0),7),trixSig2=ema(trix.map(v=>v??0),9),rvSig2=ema(rvi.map(v=>v??0),4);return{c,hl2,tp,e5,e8,e9,e20,e21,e50,e55,s10,s30,r,r2,a,ad,m,k,kd,cci,wpr,ao,roc,dem,rvi,rvSig:rvSig2,tsi,tsiSig:tsiSig2,ppo,ppoSig:ppoSig2,trix,trixSig:trixSig2,zscore,stochRsi,hma16,hma32,ha,tenkan,kijun,spanA,spanB,sar,sarDir,jaw,teeth,lips,supertrend,superDir,ps,atrRatio};
 }
-return 0}
+function signal(id,i,d,x){
+ if(i<60||!d[i-1]||!d[i-2])return 0;
+ const c=d[i],p=d[i-1],q=d[i-2],up=c.close>c.open,dn=c.close<c.open,r=x.r[i],ad=x.ad.v[i],a=x.a[i]||0;
+ const ph=hi(d,i,3),pl=lo(d,i,3),h20=hi(d,i,20),l20=lo(d,i,20),m=x.m;
+ const bull=(cond)=>cond?1:0,bear=(cond)=>cond?-1:0;
+ const confirmedHigh=(arr,i)=>{for(let j=i;j>=0;j--)if(arr[j]!=null)return arr[j];return null};
+ const lastH=confirmedHigh(x.ps.highs,i-1),lastL=confirmedHigh(x.ps.lows,i-1);
+ const crossedUp=(v)=>v[i]!=null&&v[i-1]!=null&&v[i-2]!=null&&v[i]>v[i-1]&&v[i-1]<=v[i-2];
+ const crossedDn=(v)=>v[i]!=null&&v[i-1]!=null&&v[i-2]!=null&&v[i]<v[i-1]&&v[i-1]>=v[i-2];
+ const bb=bands(x.c,i,20,2),bbPrev=bands(x.c,i-1,20,2);
+ const kcMid=x.e20[i],kcUp=kcMid+1.5*a,kcDn=kcMid-1.5*a;
+ switch(id){
+ case 1: if(crossUp(x.e9,x.e21,i)&&r>50&&ad>20)return 1;if(crossDn(x.e9,x.e21,i)&&r<50&&ad>20)return -1;break;
+ case 2: if(crossUp(x.s10,x.s30,i)&&x.s30[i]>x.s30[i-1]&&r>50)return 1;if(crossDn(x.s10,x.s30,i)&&x.s30[i]<x.s30[i-1]&&r<50)return -1;break;
+ case 3: if(x.e8[i]>x.e21[i]&&x.e21[i]>x.e55[i]&&x.e8[i-1]<=x.e21[i-1]&&x.e8[i]-x.e21[i]>x.e8[i-1]-x.e21[i-1]&&ad>20)return 1;if(x.e8[i]<x.e21[i]&&x.e21[i]<x.e55[i]&&x.e8[i-1]>=x.e21[i-1]&&x.e8[i]-x.e21[i]<x.e8[i-1]-x.e21[i-1]&&ad>20)return -1;break;
+ case 4: if(x.superDir[i]===1&&x.superDir[i-1]===-1&&c.close>x.e50[i]&&r>50)return 1;if(x.superDir[i]===-1&&x.superDir[i-1]===1&&c.close<x.e50[i]&&r<50)return -1;break;
+ case 5:{let top=Math.max(x.spanA[i-26]??Infinity,x.spanB[i-26]??Infinity),bot=Math.min(x.spanA[i-26]??-Infinity,x.spanB[i-26]??-Infinity);if(c.close>top&&x.tenkan[i]>x.kijun[i]&&c.close>d[i-26].close&&r>50)return 1;if(c.close<bot&&x.tenkan[i]<x.kijun[i]&&c.close<d[i-26].close&&r<50)return -1;break}
+ case 6: if(x.sarDir[i]===1&&x.sarDir[i-1]===-1&&c.close>x.e50[i]&&ad>18)return 1;if(x.sarDir[i]===-1&&x.sarDir[i-1]===1&&c.close<x.e50[i]&&ad>18)return -1;break;
+ case 7: if(x.ad.p[i]>x.ad.m[i]&&x.ad.p[i-1]<=x.ad.m[i-1]&&ad>20&&c.close>ph)return 1;if(x.ad.m[i]>x.ad.p[i]&&x.ad.m[i-1]<=x.ad.p[i-1]&&ad>20&&c.close<pl)return -1;break;
+ case 8:{let z=d.slice(i-24,i),hh=z.map(v=>v.high),ll=z.map(v=>v.low);if(z.length===24){let au=100*(23-hh.lastIndexOf(Math.max(...hh)))/24,al=100*(23-ll.lastIndexOf(Math.min(...ll)))/24;if(au>70&&au>al&&c.close>ph&&r>50)return 1;if(al>70&&al>au&&c.close<pl&&r<50)return -1}break}
+ case 9: if(x.lips[i]>x.teeth[i]&&x.teeth[i]>x.jaw[i]&&x.lips[i-1]<=x.teeth[i-1]&&c.close>x.lips[i]&&x.ao[i]>0)return 1;if(x.lips[i]<x.teeth[i]&&x.teeth[i]<x.jaw[i]&&x.lips[i-1]>=x.teeth[i-1]&&c.close<x.lips[i]&&x.ao[i]<0)return -1;break;
+ case 10:{let h=x.ha[i],hp=x.ha[i-1],body=Math.abs(h.close-h.open),pb=Math.abs(hp.close-hp.open);if(h.close>h.open&&hp.close>hp.open&&body>pb&&c.close>x.e20[i]&&x.e20[i]>x.e20[i-1])return 1;if(h.close<h.open&&hp.close<hp.open&&body>pb&&c.close<x.e20[i]&&x.e20[i]<x.e20[i-1])return -1;break}
+ case 11: if(x.r[i-1]<30&&r>=30&&up&&c.close>ph)return 1;if(x.r[i-1]>70&&r<=70&&dn&&c.close<pl)return -1;break;
+ case 12:{let lowP=null,prevLow=null,highP=null,prevHigh=null;for(let j=i-1;j>=0;j--){if(x.ps.lows[j]!=null){if(lowP==null)lowP={v:x.ps.lows[j],i:j-2};else{prevLow={v:x.ps.lows[j],i:j-2};break}}}for(let j=i-1;j>=0;j--){if(x.ps.highs[j]!=null){if(highP==null)highP={v:x.ps.highs[j],i:j-2};else{prevHigh={v:x.ps.highs[j],i:j-2};break}}}if(lowP&&prevLow&&lowP.v<prevLow.v&&x.r[lowP.i]>x.r[prevLow.i]&&r>50&&c.close>p.high)return 1;if(highP&&prevHigh&&highP.v>prevHigh.v&&x.r[highP.i]<x.r[prevHigh.i]&&r<50&&c.close<p.low)return -1;break}
+ case 13: if(x.k[i-1]<20&&x.kd[i-1]<20&&crossUp(x.k,x.kd,i)&&x.k[i]<50&&up)return 1;if(x.k[i-1]>80&&x.kd[i-1]>80&&crossDn(x.k,x.kd,i)&&x.k[i]>50&&dn)return -1;break;
+ case 14: if(x.wpr[i-1]<-80&&x.wpr[i]>=-80&&x.cci[i]>0&&c.close>p.high)return 1;if(x.wpr[i-1]>-20&&x.wpr[i]<=-20&&x.cci[i]<0&&c.close<p.low)return -1;break;
+ case 15: if(x.cci[i-1]<-100&&x.cci[i]>=-100&&x.cci[i]>0&&c.close>p.high)return 1;if(x.cci[i-1]>100&&x.cci[i]<=100&&x.cci[i]<0&&c.close<p.low)return -1;break;
+ case 16: if(bb&&p.close<bb.low&&c.close>bb.low&&r>35&&up)return 1;if(bb&&p.close>bb.up&&c.close<bb.up&&r<65&&dn)return -1;break;
+ case 17: if(x.zscore[i-1]<-2&&x.zscore[i]>=-2&&x.c[i]>x.c[i-1]&&c.close>p.high)return 1;if(x.zscore[i-1]>2&&x.zscore[i]<=2&&x.c[i]<x.c[i-1]&&c.close<p.low)return -1;break;
+ case 18: if(x.r2[i-1]<10&&x.r2[i]>=10&&c.close>x.e5[i]&&up)return 1;if(x.r2[i-1]>90&&x.r2[i]<=90&&c.close<x.e5[i]&&dn)return -1;break;
+ case 19: if(c.low<kcDn&&c.close>kcDn&&r<45&&x.e20[i]>=x.e20[i-1])return 1;if(c.high>kcUp&&c.close<kcUp&&r>55&&x.e20[i]<=x.e20[i-1])return -1;break;
+ case 20: if(x.dem[i-1]<.3&&x.dem[i]>.3&&up&&c.close>p.high)return 1;if(x.dem[i-1]>.7&&x.dem[i]<.7&&dn&&c.close<p.low)return -1;break;
+ case 21: if(c.close>h20&&ad>20&&a>x.a[i-1])return 1;if(c.close<l20&&ad>20&&a>x.a[i-1])return -1;break;
+ case 22: if(lastH!=null&&c.close>lastH&&ad>18&&up&&c.close>p.high)return 1;if(lastL!=null&&c.close<lastL&&ad>18&&dn&&c.close<p.low)return -1;break;
+ case 23: if(c.close>kcUp&&p.close<=x.e20[i-1]+1.5*(x.a[i-1]||0)&&a>x.a[i-1]&&m.h[i]>0&&m.h[i]>m.h[i-1])return 1;if(c.close<kcDn&&p.close>=x.e20[i-1]-1.5*(x.a[i-1]||0)&&a>x.a[i-1]&&m.h[i]<0&&m.h[i]<m.h[i-1])return -1;break;
+ case 24:{let old=bands(x.c,i-1,20,2);if(bb&&bbPrev&&old&&bbPrev.w/x.c[i-1]<.012&&bb.w>bbPrev.w*1.1&&c.close>bb.up&&ad>18)return 1;if(bb&&bbPrev&&old&&bbPrev.w/x.c[i-1]<.012&&bb.w>bbPrev.w*1.1&&c.close<bb.low&&ad>18)return -1;break}
+ case 25:{let ranges=d.slice(i-7,i).map(z=>z.high-z.low),mn=Math.min(...ranges);if(p.high-p.low<=mn*1.000001&&c.close>p.high&&a>x.a[i-1]&&c.close>h20)return 1;if(p.high-p.low<=mn*1.000001&&c.close<p.low&&a>x.a[i-1]&&c.close<l20)return -1;break}
+ case 26: if(p.high<q.high&&p.low>q.low&&c.close>q.high&&c.close>x.e20[i]&&ad>18)return 1;if(p.high<q.high&&p.low>q.low&&c.close<q.low&&c.close<x.e20[i]&&ad>18)return -1;break;
+ case 27: if(c.close>h20&&c.close-c.open>1.5*a&&c.close>c.low+(c.high-c.low)*.75&&x.e20[i]>x.e20[i-1])return 1;if(c.close<l20&&c.open-c.close>1.5*a&&c.close<c.low+(c.high-c.low)*.25&&x.e20[i]<x.e20[i-1])return -1;break;
+ case 28:{let mid=(h20+l20)/2,oldMid=(hi(d,i-1,20)+lo(d,i-1,20))/2;if(c.close>mid&&p.close<=mid&&mid>oldMid&&r>50)return 1;if(c.close<mid&&p.close>=mid&&mid<oldMid&&r<50)return -1;break}
+ case 29:{let look=d.slice(i-4,i),hh=Math.max(...look.map(z=>z.high)),ll=Math.min(...look.map(z=>z.low)),range=hh-ll,kup=c.close>p.close+range*.5,kdn=c.close<p.close-range*.5;if(kup&&a>x.a[i-1]&&c.close>x.e20[i])return 1;if(kdn&&a>x.a[i-1]&&c.close<x.e20[i])return -1;break}
+ case 30:{let pp=(p.high+p.low+p.close)/3,r1=2*pp-p.low,s1=2*pp-p.high;if(c.close>r1&&p.close<=r1&&c.low<=r1&&ad>20)return 1;if(c.close<s1&&p.close>=s1&&c.high>=s1&&ad>20)return -1;break}
+ case 31: if(m.line[i]>m.sig[i]&&m.line[i-1]<=m.sig[i-1]&&m.line[i]>0&&m.h[i]>m.h[i-1])return 1;if(m.line[i]<m.sig[i]&&m.line[i-1]>=m.sig[i-1]&&m.line[i]<0&&m.h[i]<m.h[i-1])return -1;break;
+ case 32: if(x.roc[i]>0&&x.roc[i-1]<=0&&x.roc[i]>x.roc[i-1]&&c.close>ph)return 1;if(x.roc[i]<0&&x.roc[i-1]>=0&&x.roc[i]<x.roc[i-1]&&c.close<pl)return -1;break;
+ case 33: if(crossUp(x.tsi,x.tsiSig,i)&&x.tsi[i]>0&&c.close>x.e20[i])return 1;if(crossDn(x.tsi,x.tsiSig,i)&&x.tsi[i]<0&&c.close<x.e20[i])return -1;break;
+ case 34: if(x.ao[i]>0&&x.ao[i-1]<=0&&x.ao[i]>x.ao[i-1]&&c.close>ph)return 1;if(x.ao[i]<0&&x.ao[i-1]>=0&&x.ao[i]<x.ao[i-1]&&c.close<pl)return -1;break;
+ case 35: if(crossUp(x.ppo,x.ppoSig,i)&&x.ppo[i]>0&&x.ppo[i]>x.ppo[i-1])return 1;if(crossDn(x.ppo,x.ppoSig,i)&&x.ppo[i]<0&&x.ppo[i]<x.ppo[i-1])return -1;break;
+ case 36: if(x.hma16[i]>x.hma16[i-1]&&x.hma16[i-1]<=x.hma16[i-2]&&x.hma16[i]>x.hma32[i]&&r>50)return 1;if(x.hma16[i]<x.hma16[i-1]&&x.hma16[i-1]>=x.hma16[i-2]&&x.hma16[i]<x.hma32[i]&&r<50)return -1;break;
+ case 37: if(x.e9[i]>x.e20[i]&&x.e20[i]>x.e50[i]&&c.low<=x.e20[i]&&c.close>x.e9[i]&&up)return 1;if(x.e9[i]<x.e20[i]&&x.e20[i]<x.e50[i]&&c.high>=x.e20[i]&&c.close<x.e9[i]&&dn)return -1;break;
+ case 38:{let swingH=lastH,swingL=lastL;if(swingH!=null&&swingL!=null&&swingH>swingL){let span=swingH-swingL,buyTop=swingH-span*.382,buyBot=swingH-span*.618,sellBot=swingL+span*.382,sellTop=swingL+span*.618;if(c.low<=buyTop&&c.low>=buyBot&&c.close>p.high&&x.e50[i]>x.e50[i-1])return 1;if(c.high>=sellBot&&c.high<=sellTop&&c.close<p.low&&x.e50[i]<x.e50[i-1])return -1}break}
+ case 39: if(crossUp(x.trix,x.trixSig,i)&&x.trix[i]>0&&c.close>x.e50[i])return 1;if(crossDn(x.trix,x.trixSig,i)&&x.trix[i]<0&&c.close<x.e50[i])return -1;break;
+ case 40: if(crossUp(x.rvi,x.rvSig,i)&&x.rvi[i]>0&&c.close>x.e20[i]&&up)return 1;if(crossDn(x.rvi,x.rvSig,i)&&x.rvi[i]<0&&c.close<x.e20[i]&&dn)return -1;break;
+ case 41: if(up&&p.close<p.open&&c.open<=p.close&&c.close>=p.open&&c.close>x.e50[i]&&c.close>p.high)return 1;if(dn&&p.close>p.open&&c.open>=p.close&&c.close<=p.open&&c.close<x.e50[i]&&c.close<p.low)return -1;break;
+ case 42:{let body=Math.abs(c.close-c.open),lower=Math.min(c.open,c.close)-c.low,upper=c.high-Math.max(c.open,c.close);if(body>0&&lower>body*2.5&&upper<body&&c.close>c.low+(c.high-c.low)*.65&&c.low<=l20&&c.close>p.high)return 1;if(body>0&&upper>body*2.5&&lower<body&&c.close<c.low+(c.high-c.low)*.35&&c.high>=h20&&c.close<p.low)return -1;break}
+ case 43:{let low=lo(d,i,12),high=hi(d,i,12);if(c.low<low&&c.close>low&&c.close>p.high&&up)return 1;if(c.high>high&&c.close<high&&c.close<p.low&&dn)return -1;break}
+ case 44:{let found=null;for(let j=i-1;j>=Math.max(2,i-30);j--){let prev=d[j-1],ob=d[j],imp=d[j+1];if(ob.close<ob.open&&imp.close>imp.open&&imp.close>ob.high&&imp.close-ob.low>(x.a[j]||0)*1.2){found={lo:ob.low,hi:ob.open,dir:1};break}if(ob.close>ob.open&&imp.close<imp.open&&imp.close<ob.low&&ob.high-imp.close>(x.a[j]||0)*1.2){found={lo:ob.open,hi:ob.high,dir:-1};break}}if(found&&found.dir===1&&c.low<=found.hi&&c.close>=found.lo&&c.close>c.open&&c.close>p.high)return 1;if(found&&found.dir===-1&&c.high>=found.lo&&c.close<=found.hi&&c.close<c.open&&c.close<p.low)return -1;break}
+ case 45: if(i>=2&&d[i-2].high<c.low&&c.close>p.high&&c.low<=d[i-2].high+a*.15&&x.e20[i]>x.e20[i-1])return 1;if(i>=2&&d[i-2].low>c.high&&c.close<p.low&&c.high>=d[i-2].low-a*.15&&x.e20[i]<x.e20[i-1])return -1;break;
+ case 46: if(lastH!=null&&c.close>lastH&&p.close<=lastH&&c.low<=lastH&&c.close>x.e20[i])return 1;if(lastL!=null&&c.close<lastL&&p.close>=lastL&&c.high>=lastL&&c.close<x.e20[i])return -1;break;
+ case 47:{let highs=[],lows=[];for(let j=Math.max(0,i-80);j<i;j++){if(x.ps.highs[j]!=null)highs.push({v:x.ps.highs[j],i:j});if(x.ps.lows[j]!=null)lows.push({v:x.ps.lows[j],i:j})}if(highs.length>=3){let a1=highs[highs.length-3],head=highs[highs.length-2],a2=highs[highs.length-1];let neckL=lows.filter(z=>z.i>a1.i&&z.i<head.i).slice(-1)[0],neckR=lows.filter(z=>z.i>head.i&&z.i<a2.i).slice(-1)[0];if(neckL&&neckR&&head.v>a1.v&&head.v>a2.v&&Math.abs(a1.v-a2.v)<a*.8){let neck=(neckL.v+neckR.v)/2;if(c.close<neck&&p.close>=neck&&r<50)return -1}}if(lows.length>=3){let a1=lows[lows.length-3],head=lows[lows.length-2],a2=lows[lows.length-1];let neckL=highs.filter(z=>z.i>a1.i&&z.i<head.i).slice(-1)[0],neckR=highs.filter(z=>z.i>head.i&&z.i<a2.i).slice(-1)[0];if(neckL&&neckR&&head.v<a1.v&&head.v<a2.v&&Math.abs(a1.v-a2.v)<a*.8){let neck=(neckL.v+neckR.v)/2;if(c.close>neck&&p.close<=neck&&r>50)return 1}}break}
+ case 48:{let hs=[],ls=[];for(let j=Math.max(0,i-60);j<i;j++){if(x.ps.highs[j]!=null)hs.push(x.ps.highs[j]);if(x.ps.lows[j]!=null)ls.push(x.ps.lows[j])}if(hs.length>=2){let a1=hs[hs.length-2],a2=hs[hs.length-1];if(Math.abs(a1-a2)<a*.4&&c.close<lo(d,i,15)&&r<48)return -1}if(ls.length>=2){let a1=ls[ls.length-2],a2=ls[ls.length-1];if(Math.abs(a1-a2)<a*.4&&c.close>hi(d,i,15)&&r>52)return 1}break}
+ case 49:{let hs=[],ls=[];for(let j=Math.max(0,i-30);j<i;j++){if(x.ps.highs[j]!=null)hs.push({v:x.ps.highs[j],i:j});if(x.ps.lows[j]!=null)ls.push({v:x.ps.lows[j],i:j})}if(hs.length>=2&&ls.length>=2){let h1=hs[hs.length-2],h2=hs[hs.length-1],l1=ls[ls.length-2],l2=ls[ls.length-1],downSlope=(h2.v-h1.v)/(h2.i-h1.i),upSlope=(l2.v-l1.v)/(l2.i-l1.i);if(downSlope<0&&upSlope>0&&h2.v>l2.v&&c.close>h2.v&&a>x.a[i-1])return 1;if(downSlope<0&&upSlope>0&&h2.v>l2.v&&c.close<l2.v&&a>x.a[i-1])return -1}break}
+ case 50:{let highs=[],lows=[];for(let j=Math.max(0,i-40);j<i;j++){if(x.ps.highs[j]!=null)highs.push({v:x.ps.highs[j],i:j});if(x.ps.lows[j]!=null)lows.push({v:x.ps.lows[j],i:j})}if(highs.length>=2&&lows.length>=2){let h1=highs[highs.length-2],h2=highs[highs.length-1],l1=lows[lows.length-2],l2=lows[lows.length-1],hs=(h2.v-h1.v)/(h2.i-h1.i),ls=(l2.v-l1.v)/(l2.i-l1.i);if(hs>0&&ls>0&&Math.abs(hs-ls)<Math.max(Math.abs(hs),Math.abs(ls))*.35&&c.low<=l2.v+a*.2&&c.close>l2.v&&c.close>p.high)return 1;if(hs<0&&ls<0&&Math.abs(hs-ls)<Math.max(Math.abs(hs),Math.abs(ls))*.35&&c.high>=h2.v-a*.2&&c.close<h2.v&&c.close<p.low)return -1}break}
+ }
+ return 0;
+}
 function backtest(d,s){
  let x=calc(d),start=Math.max(100,d.length-720),trades=[],entries=[],next=start;
  for(let i=start;i<d.length-1;i++){
