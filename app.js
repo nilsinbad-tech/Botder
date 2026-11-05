@@ -70,25 +70,23 @@ function rsi(values,period=14){const out=Array(values.length).fill(null);let gai
 function pivots(c,span=3,candleSeconds=600){const highs=[],lows=[];for(let i=span;i<c.length-span;i++){let hi=true,lo=true;for(let j=1;j<=span;j++){if(c[i].high<=c[i-j].high||c[i].high<=c[i+j].high)hi=false;if(c[i].low>=c[i-j].low||c[i].low>=c[i+j].low)lo=false;}if(hi)highs.push({index:i,time:c[i].time,confirmedTime:c[i+span].time+candleSeconds,price:c[i].high});if(lo)lows.push({index:i,time:c[i].time,confirmedTime:c[i+span].time+candleSeconds,price:c[i].low});}const sample=c.slice(-30),avgRange=sample.length?sample.reduce((sum,v)=>sum+(v.high-v.low),0)/sample.length:0,tolerance=avgRange*.45;const merge=items=>{const kept=[];for(const p of items){const near=kept.findIndex(q=>Math.abs(q.price-p.price)<=tolerance);if(near<0)kept.push(p);else if(p.confirmedTime>kept[near].confirmedTime)kept[near]=p;}return kept.sort((a,b)=>a.time-b.time);};return{highs:merge(highs),lows:merge(lows)};}
 function buildSetups(c,liquidityCandles=c,pivotCandles=liquidityCandles,obStructureCandles=pivotCandles,trendSide=null,targetRawCandles=pivotCandles){
  const close=c.map(x=>x.close),e3=ema(close,3),e9=ema(close,9),e13=ema(close,13),e50=ema(close,50),rv=rsi(close);
- const pv=pivots(pivotCandles,3,state.pivotTf*60),obPv=pivots(obStructureCandles,3,state.pivotTf*60);
- // TP usa exclusivamente las temporalidades activadas en configuración, incluida M1.
+ const pv=pivots(pivotCandles,3,state.pivotTf*60);
+ // La estructura que valida los OB queda fija en M10, independiente del selector visual de pivotes.
+ const m10Candles=aggregate(targetRawCandles,10),m10Pv=pivots(m10Candles,3,600);
  const targetPivots=state.tpTfs.map(mins=>({mins,pv:pivots(aggregate(targetRawCandles,mins),3,mins*60)}));
  const stopPivots=state.slTfs.map(mins=>({mins,pv:pivots(aggregate(targetRawCandles,mins),3,mins*60)}));
- const setups=[],obZones=[],usedOBs=new Set(),usedZones=new Set(),higherOBs=new Map();
- const higherOBTf=state.obTf*2,higherOBCandles=aggregate(targetRawCandles,higherOBTf);
+ const setups=[],latestZones=new Map(),usedOBs=new Set();
  for(let i=55;i<c.length;i++){
   const x=c[i];
   for(const side of ['BUY','SELL']){
    const ob=findOBAtTime(liquidityCandles,x.time,side,state.obTf);
    if(!ob)continue;
-   // Los OB contra la tendencia H1 no se muestran.
-   if(!trendSide||side!==trendSide)continue;
-   const higherOB=findOBAtTime(higherOBCandles,x.time,side,higherOBTf);
-   if(higherOB){const higherKey=side+':'+higherOB.time;if(!higherOBs.has(higherKey))higherOBs.set(higherKey,{...higherOB,side,timeframe:higherOBTf});}
-   const key=side+':'+ob.time;
-   if(state.obStructureOnly&&!isOBAtStructure(ob,side,obPv,obStructureCandles,x.time))continue;
-   if(!usedZones.has(key)){usedZones.add(key);obZones.push({...ob,side,timeframe:state.obTf});}
-   if(usedOBs.has(key))continue;
+   const key=side+':'+ob.time,structure=findM10Structure(ob,side,m10Pv,m10Candles,x.time);
+   if(!structure||isOBInvalidated(ob,side,structure,targetRawCandles,x.time))continue;
+   if(!latestZones.has(side)||ob.time>latestZones.get(side).time)
+    latestZones.set(side,{...ob,side,timeframe:state.obTf,structurePrice:structure.price,structureTime:structure.time,structureType:side==='BUY'?'SOPORTE M10':'RESISTENCIA M10'});
+   // Los setups/backtesting siguen respetando el sesgo H1; los dos OB se dibujan independientemente.
+   if(!trendSide||side!==trendSide||usedOBs.has(key))continue;
    const targets=targetPivots.flatMap(({mins,pv:targetPv})=>(side==='BUY'?targetPv.highs:targetPv.lows)
     .filter(p=>p.confirmedTime<=x.time&&(side==='BUY'?p.price>ob.entry:p.price<ob.entry))
     .map(p=>({...p,timeframe:mins})))
@@ -99,25 +97,27 @@ function buildSetups(c,liquidityCandles=c,pivotCandles=liquidityCandles,obStruct
     .filter(p=>p.confirmedTime<=x.time&&(side==='BUY'?p.price<ob.entry:p.price>ob.entry))
     .map(p=>({...p,timeframe:mins})))
     .sort((a,b)=>side==='BUY'?b.price-a.price:a.price-b.price);
-   const slPivot=stopCandidates[0]||null;
-   const tp1Pivot=targets[0],tp2Pivot=targets[1]||targets[0];
+   const slPivot=stopCandidates[0]||null,tp1Pivot=targets[0],tp2Pivot=targets[1]||targets[0];
    const slBuffer=(ob.high-ob.low)*.12;
    const sl=slPivot?(side==='BUY'?slPivot.price-slBuffer:slPivot.price+slBuffer):(side==='BUY'?ob.low-slBuffer:ob.high+slBuffer);
    setups.push({side,index:i,time:x.time,entry:ob.entry,sl,tp1:tp1Pivot.price,tp2:tp2Pivot.price,ob,slPivot,tp1Pivot,tp2Pivot,rsi:rv[i],state:'PREPARADA'});
    usedOBs.add(key);
   }
  }
- const latestCurrent=new Map();obZones.forEach(z=>{const k=z.side;if(!latestCurrent.has(k)||z.time>latestCurrent.get(k).time)latestCurrent.set(k,z);});
- const latestHigher=new Map();[...higherOBs.values()].forEach(z=>{const k=z.side;if(!latestHigher.has(k)||z.time>latestHigher.get(k).time)latestHigher.set(k,z);});
- return{setups,e3,e9,e13,e50,rv,pv,obZones:[...latestCurrent.values(),...latestHigher.values()]};
+ return{setups,e3,e9,e13,e50,rv,pv,obZones:[...latestZones.values()]};
 }
-function isOBAtStructure(ob,side,pv,pivotCandles,time){
- const levels=side==='BUY'?pv.lows:pv.highs;
- const valid=levels.filter(p=>p.confirmedTime<=time);
- if(!valid.length)return false;
- const sample=pivotCandles.slice(-30),avg=sample.length?sample.reduce((sum,b)=>sum+(b.high-b.low),0)/sample.length:0;
- const tolerance=Math.max(avg*.45,(ob.high-ob.low)*1.5);
- return valid.some(p=>p.price>=ob.low-tolerance&&p.price<=ob.high+tolerance);
+function findM10Structure(ob,side,pv,candles,time){
+ const levels=(side==='BUY'?pv.lows:pv.highs).filter(p=>p.confirmedTime<=time);
+ const matches=levels.map(p=>{
+  const bar=candles[p.index];if(!bar)return null;
+  const tolerance=Math.max((bar.high-bar.low)*.45,(ob.high-ob.low)*1.5);
+  return p.price>=ob.low-tolerance&&p.price<=ob.high+tolerance?{...p,tolerance}:null;
+ }).filter(Boolean);
+ if(!matches.length)return null;
+ return matches.sort((a,b)=>Math.abs(a.price-(ob.high+ob.low)/2)-Math.abs(b.price-(ob.high+ob.low)/2))[0];
+}
+function isOBInvalidated(ob,side,structure,raw,time){
+ return raw.some(bar=>bar.time>ob.time&&bar.time<=time&&(side==='SELL'?bar.close>structure.price:bar.close<structure.price));
 }
 function findOBAtTime(c,time,side,tf=state.obTf){const completed=c.filter(bar=>bar.time+tf*60<=time);return findOB(completed,completed.length,side);}
 function findOB(c,i,side){for(let j=i-1;j>=Math.max(0,i-9);j--){const q=c[j],opposite=side==='BUY'?q.close<q.open:q.close>q.open;if(opposite){const entry=(q.high+q.low)/2;return{time:q.time,high:q.high,low:q.low,entry};}}return null;}
@@ -230,13 +230,13 @@ function drawOverlays(trades,c,host,obZones=[],setups=[]){
   for(const line of state.tradePriceLines){try{state.series.candle.removePriceLine(line);}catch{}}
   state.tradePriceLines=[];
  if(state.overlayResizeObserver){state.overlayResizeObserver.disconnect();state.overlayResizeObserver=null;}
- // Elimina las capas anteriores y muestra el OB más reciente de cada dirección.
+ // Elimina las capas anteriores y muestra el último OB válido de compra y el último de venta.
  host.querySelectorAll('.chart-overlay').forEach(node=>node.remove());state.overlayUpdate=null;
  const overlay=document.createElement('div');overlay.className='chart-overlay';host.appendChild(overlay);
- const zones=(obZones||[]).filter(ob=>ob&&Number.isFinite(ob.time)).sort((x,y)=>(x.timeframe||0)-(y.timeframe||0));
+ const zones=(obZones||[]).filter(ob=>ob&&Number.isFinite(ob.time)).sort((x,y)=>x.time-y.time);
  const zoneEls=zones.map(ob=>{
   const el=document.createElement('div');el.className='ob-zone '+(ob.fvg?'fvg-zone ':'')+(ob.side==='BUY'?'bull-zone':'bear-zone');
-  el.innerHTML='<b>'+(ob.fvg?(ob.side==='BUY'?'FVG ALCISTA':'FVG BAJISTA'):(ob.side==='BUY'?'OB COMPRA':'OB VENTA')+' · M'+(ob.timeframe||state.obTf))+'</b>';
+  el.innerHTML='<b>'+(ob.side==='BUY'?'OB COMPRA':'OB VENTA')+' · M'+(ob.timeframe||state.obTf)+' · '+(ob.structureType||'M10')+'</b>';
   overlay.appendChild(el);return{el,ob};
  });
  const t=[...trades].reverse().find(x=>x.result==='PENDIENTE')||[...setups].reverse()[0]||trades[trades.length-1];
@@ -328,7 +328,7 @@ async function analyze(){
  const hourly=getHourlyBias(raw),activeSide=hourly.side;const signalCalc=buildSetups(signalCandles,obCandles,pivotCandles,pivotCandles,activeSide,raw);const chartCalc=buildSetups(c,obCandles,pivotCandles,pivotCandles,activeSide,raw);
  // Una sola dirección gobierna las señales y los OB visibles: la tendencia H1.
  const alignedSetups=activeSide?signalCalc.setups.filter(setup=>setup.side===activeSide):[];
- const alignedZones=activeSide?chartCalc.obZones.filter(ob=>ob.side===activeSide):[];
+ const alignedZones=chartCalc.obZones;
  state.trades=simulate(signalCandles,alignedSetups);
  draw(c,chartCalc,state.trades,alignedZones,alignedSetups);showLatest(signalCalc,state.trades,signalCandles);renderHistory(state.trades);
  $('chartTitle').textContent=(state.symbols.find(s=>s.symbol===state.selected)?.name||state.selected)+' · M'+state.tf;
@@ -382,7 +382,7 @@ function bindPivotControls(){
 }
 function bindOBControls(){
  const obRoot=$('obTfControls'),pivotRoot=$('pivotStructureTfControls'),tpRoot=$('tpTfControls'),slRoot=$('slTfControls');
- try{const saved=JSON.parse(localStorage.getItem('botder-ob-settings')||'null');if(saved&&typeof saved==='object'){if([1,2,3,4,5].includes(Number(saved.obTf)))state.obTf=Number(saved.obTf);if([1,2,3,4,5,10].includes(Number(saved.pivotTf)))state.pivotTf=Number(saved.pivotTf);if(Array.isArray(saved.tpTfs))state.tpTfs=saved.tpTfs.map(Number).filter(v=>[1,3,5,10,15,30].includes(v));if(Array.isArray(saved.slTfs))state.slTfs=saved.slTfs.map(Number).filter(v=>[1,3,5,10].includes(v));}}catch{}
+ try{const saved=JSON.parse(localStorage.getItem('botder-ob-settings')||'null');if(saved&&typeof saved==='object'){if([1,2,3,4,5].includes(Number(saved.obTf)))state.obTf=Number(saved.obTf);if([1,2,3,4,5,10].includes(Number(saved.pivotTf)))state.pivotTf=Number(saved.pivotTf);if(Array.isArray(saved.tpTfs))state.tpTfs=saved.tpTfs.map(Number).filter(v=>[1,3,5,10,15,30].includes(v));if(Array.isArray(saved.slTfs))state.slTfs=saved.slTfs.map(Number).filter(v=>[1,3,5,10,15,30].includes(v));}}catch{}
  if(!state.tpTfs.length)state.tpTfs=[1,3,5,10];if(!state.slTfs.length)state.slTfs=[1,3,5,10];
  const save=()=>{try{localStorage.setItem('botder-ob-settings',JSON.stringify({obTf:state.obTf,pivotTf:state.pivotTf,tpTfs:state.tpTfs,slTfs:state.slTfs}));}catch{}};
  const sync=(root,attr,value)=>{if(!root)return;root.querySelectorAll('button['+attr+']').forEach(b=>{const active=Number(b.getAttribute(attr))===value;b.classList.toggle('active',active);b.setAttribute('aria-pressed',String(active));});};
