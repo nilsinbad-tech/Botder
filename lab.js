@@ -19,7 +19,7 @@ const $=id=>document.getElementById(id),esc=s=>String(s??"").replace(/[&<>"]/g,c
 const fmt=(v,n=5)=>Number.isFinite(v)?v.toFixed(n):"—";
 function status(s){$("status").textContent=s;$("live-status").textContent=s}
 function connection(s,ok){$("connection-state").textContent=s;$("connection-state").className=ok?"connected":"disconnected"}
-function ema(a,p){let o=Array(a.length).fill(null);if(a.length<p)return o;let v=a.slice(0,p).reduce((x,y)=>x+y,0)/p,k=2/(p+1);o[p-1]=v;for(let i=p;i<a.length;i++){v=a[i]*k+a[i-1]*0+v*(1-k);o[i]=v}return o}
+function ema(a,p){let o=Array(a.length).fill(null);if(a.length<p)return o;let v=a.slice(0,p).reduce((x,y)=>x+y,0)/p,k=2/(p+1);o[p-1]=v;for(let i=p;i<a.length;i++){v=a[i]*k+v*(1-k);o[i]=v}return o}
 function rsi(c,p=14){let o=Array(c.length).fill(null),g=0,l=0;if(c.length<=p)return o;for(let i=1;i<=p;i++){let d=c[i]-c[i-1];g+=Math.max(d,0);l+=Math.max(-d,0)}g/=p;l/=p;o[p]=l?100-100/(1+g/l):100;for(let i=p+1;i<c.length;i++){let d=c[i]-c[i-1];g=(g*(p-1)+Math.max(d,0))/p;l=(l*(p-1)+Math.max(-d,0))/p;o[i]=l?100-100/(1+g/l):100}return o}
 function atr(d,p=14){let tr=d.map((c,i)=>i?Math.max(c.high-c.low,Math.abs(c.high-d[i-1].close),Math.abs(c.low-d[i-1].close)):c.high-c.low),o=Array(d.length).fill(null);if(d.length<p)return o;let v=tr.slice(0,p).reduce((a,b)=>a+b,0)/p;o[p-1]=v;for(let i=p;i<d.length;i++){v=(v*(p-1)+tr[i])/p;o[i]=v}return o}
 function max(a){return a.length?Math.max(...a):null}function min(a){return a.length?Math.min(...a):null}
@@ -80,7 +80,7 @@ function buildTrades(m1,m30,strat){
   let sl=zone?(dir>0?zone.low-pad:zone.high+pad):(dir>0?swing-pad:swing+pad);
   let risk=Math.abs(entry-sl);if(!Number.isFinite(risk)||risk<=0||risk>Math.max(a30[i]||0,Math.abs(entry)*.00001)*4)continue;
   const targetR=1.25;let tp=entry+dir*risk*targetR,tp2=entry+dir*risk*2;
-  const liquidity=dir>0?max(m1.slice(Math.max(0,mi-15),mi+1).map(x=>x.high).filter(v=>v>entry)):min(m1.slice(Math.max(0,mi-15),mi+1).map(x=>x.low).filter(v=>v<entry));
+  const liquidity=dir>0?min(m1.slice(Math.max(0,mi-15),mi+1).map(x=>x.high).filter(v=>v>entry)):max(m1.slice(Math.max(0,mi-15),mi+1).map(x=>x.low).filter(v=>v<entry));
   if(liquidity!=null&&Math.abs(liquidity-entry)>=risk*.75&&Math.abs(liquidity-entry)<Math.abs(tp-entry))tp=liquidity;
   let result="ABIERTA",exitIndex=-1,exitPrice=null;
   for(let j=i+1;j<Math.min(m30.length,i+41);j++){const c=m30[j],stop=dir>0?c.low<=sl:c.high>=sl,target=dir>0?c.high>=tp:c.low<=tp;if(stop){result="PERDIDA";exitIndex=j;exitPrice=sl;break}if(target){result="GANADA";exitIndex=j;exitPrice=tp;break}}
