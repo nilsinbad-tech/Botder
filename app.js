@@ -155,7 +155,7 @@ function drawPivotLines(){
   const line=state.series.candle.createPriceLine({
    price:p.price,
    color:isRecent?(isResistance?'#f0a34a':'#39b9a0'):(isResistance?'#c58a48':'#398f82'),
-   lineWidth:isRecent?2:1,
+   lineWidth:1,
    lineStyle:isRecent?L.LineStyle.Solid:L.LineStyle.Dashed,
    axisLabelVisible:true,title:isResistance?'Resistencia':'Pivote'
   });
@@ -166,8 +166,6 @@ function drawOverlays(trades,c,host){
  if(state.overlayResizeObserver){state.overlayResizeObserver.disconnect();state.overlayResizeObserver=null;}
  const old=host.querySelector('.chart-overlay');if(old)old.remove();state.overlayUpdate=null;
  const overlay=document.createElement('div');overlay.className='chart-overlay';host.appendChild(overlay);
- // Solo dos OB actuales: el último bloque bajista y el último bloque alcista del historial M5.
- // No se dibujan OB antiguos de operaciones anteriores.
  const m5=aggregate(state.rawCandles,5);
  const latestOB=(side)=>{
   for(let i=m5.length-1;i>=0;i--){
@@ -182,44 +180,29 @@ function drawOverlays(trades,c,host){
   el.innerHTML='<b>'+(ob.side==='BUY'?'OB ALCISTA · COMPRA':'OB BAJISTA · VENTA')+'</b>';
   overlay.appendChild(el);return{el,ob};
  });
- // Mantiene los niveles de la señal más reciente, pero nunca reutiliza sus OB anteriores.
  const t=[...trades].reverse().find(x=>x.result==='PENDIENTE')||trades[trades.length-1];
  const lineEls=[];
  if(t){
-  const levels=[
-   {p:t.entry,label:'ENTRADA',cls:'entry-line',priority:0},
-   {p:t.sl,label:'STOP LOSS',cls:'sl-line',priority:1},
-   {p:t.tp1,label:'TP1 · OBJETIVO',cls:'tp-line',priority:2}
-  ];
+  const levels=[{p:t.entry,label:'ENTRADA',cls:'entry-line',priority:0},{p:t.sl,label:'STOP LOSS',cls:'sl-line',priority:1},{p:t.tp1,label:'TP1 · OBJETIVO',cls:'tp-line',priority:2}];
   if(Math.abs(t.tp2-t.tp1)>1e-10)levels.push({p:t.tp2,label:'TP2 · OBJETIVO',cls:'tp2-line',priority:3});
-  levels.forEach(v=>{
-   const el=document.createElement('div');el.className='level-line '+v.cls;
-   const tag=document.createElement('span');tag.className='level-tag';tag.innerHTML='<b>'+v.label+'</b><strong>'+fmt(v.p)+'</strong>';el.appendChild(tag);
-   overlay.appendChild(el);lineEls.push({el,tag,...v});
-  });
+  levels.forEach(v=>{const el=document.createElement('div');el.className='level-line '+v.cls;const tag=document.createElement('span');tag.className='level-tag';tag.innerHTML='<b>'+v.label+'</b><strong>'+fmt(v.p)+'</strong>';el.appendChild(tag);overlay.appendChild(el);lineEls.push({el,tag,...v});});
  }
  const update=()=>{
   const width=host.clientWidth,scale=state.main.timeScale(),priceScale=state.main.priceScale('right');
+  const range=scale.getVisibleLogicalRange(),first=range?Math.max(0,Math.floor(range.from)):0,last=range?Math.min(c.length-1,Math.ceil(range.to)):c.length-1;
+  const firstTime=c[first]?.time;
   zoneEls.forEach(({el,ob})=>{
-   const x1=scale.timeToCoordinate(ob.time),x2=scale.timeToCoordinate(ob.time+5*300);
+   let x1=scale.timeToCoordinate(ob.time);
    const y1=priceScale.priceToCoordinate(ob.high),y2=priceScale.priceToCoordinate(ob.low);
-   if(x1==null||x2==null||y1==null||y2==null){el.style.display='none';return;}
-   // Ancho temporal fijo: cinco velas M5. No se alarga con cada vela nueva.
-   const left=Math.max(0,Math.min(width-4,x1)),right=Math.max(left+24,Math.min(width-2,x2));
-   el.style.display='flex';el.style.left=left+'px';el.style.width=Math.max(24,right-left)+'px';
-   el.style.top=Math.min(y1,y2)+'px';el.style.height=Math.max(18,Math.abs(y2-y1))+'px';
+   if(y1==null||y2==null){el.style.display='none';return;}
+   if(x1==null){if(firstTime!=null&&ob.time<firstTime)x1=0;else{el.style.display='none';return;}}
+   const left=Math.max(0,Math.min(width-30,x1)),mid=(y1+y2)/2,height=Math.max(30,Math.abs(y2-y1));
+   el.style.display='flex';el.style.left=left+'px';el.style.width=Math.max(30,width-left-2)+'px';el.style.top=Math.max(0,mid-height/2)+'px';el.style.height=height+'px';
   });
-  const xSignal=t?scale.timeToCoordinate(t.time):null;
-  const xStart=Math.max(0,Math.min(width-8,xSignal==null?width*.45:xSignal));
-  const positioned=[];
-  lineEls.forEach(v=>{
-   const y=priceScale.priceToCoordinate(v.p);
-   if(y==null){v.el.style.display='none';return;}
-   v.el.style.display='block';v.el.style.left=xStart+'px';v.el.style.width=Math.max(30,width-xStart-3)+'px';v.el.style.top=y+'px';
-   positioned.push({tag:v.tag,y,priority:v.priority});
-  });
+  const xSignal=t?scale.timeToCoordinate(t.time):null,xStart=Math.max(0,Math.min(width-8,xSignal==null?width*.45:xSignal)),positioned=[];
+  lineEls.forEach(v=>{const y=priceScale.priceToCoordinate(v.p);if(y==null){v.el.style.display='none';return;}v.el.style.display='block';v.el.style.left=xStart+'px';v.el.style.width=Math.max(30,width-xStart-3)+'px';v.el.style.top=y+'px';positioned.push({tag:v.tag,y,priority:v.priority});});
   positioned.sort((a,b)=>a.y-b.y);let previous=-Infinity;
-  positioned.forEach(item=>{const desired=Math.max(13,Math.min(host.clientHeight-13,item.y));const placed=Math.max(desired,previous+27);item.tag.style.top=Math.max(2,Math.min(host.clientHeight-27,placed-13))+'px';previous=placed;});
+  positioned.forEach(item=>{const desired=Math.max(13,Math.min(host.clientHeight-13,item.y)),placed=Math.max(desired,previous+27);item.tag.style.top=Math.max(2,Math.min(host.clientHeight-27,placed-13))+'px';previous=placed;});
  };
  state.overlayUpdate=update;
  if(!state.overlayRangeHandler){state.overlayRangeHandler=()=>{if(state.overlayUpdate)state.overlayUpdate();};state.main.timeScale().subscribeVisibleLogicalRangeChange(state.overlayRangeHandler);}
@@ -272,8 +255,8 @@ function onLiveTick(tick){
  if(minute>last.time){state.rawCandles.push({time:minute,open:price,high:price,low:price,close:price});if(state.rawCandles.length>HISTORY_CANDLES)state.rawCandles.shift();}
  else if(minute===last.time){last.high=Math.max(last.high,price);last.low=Math.min(last.low,price);last.close=price;}
  const tfSeconds=state.tf*60,bucket=Math.floor(epoch/tfSeconds)*tfSeconds;
- const group=state.rawCandles.filter(x=>Math.floor(x.time/tfSeconds)*tfSeconds===bucket);
- if(group.length&&state.series.candle){state.series.candle.update({time:bucket,open:group[0].open,high:Math.max(...group.map(x=>x.high)),low:Math.min(...group.map(x=>x.low)),close:price});}
+ const group=[];for(let i=state.rawCandles.length-1;i>=0;i--){const bar=state.rawCandles[i];if(Math.floor(bar.time/tfSeconds)*tfSeconds!==bucket)break;group.push(bar);}
+ if(group.length&&state.series.candle){let high=-Infinity,low=Infinity;for(const bar of group){if(bar.high>high)high=bar.high;if(bar.low<low)low=bar.low;}state.series.candle.update({time:bucket,open:group[group.length-1].open,high,low,close:price});}
  const recalcBucket=Math.floor(epoch/tfSeconds);
  if(state.lastRecalcBucket!==null&&recalcBucket>state.lastRecalcBucket){state.lastRecalcBucket=recalcBucket;state.rawBySymbol.set(state.selected,state.rawCandles);analyze();}
 }
