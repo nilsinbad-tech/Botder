@@ -136,7 +136,7 @@ function drawPivotLines(pv){
  for(const line of state.pivotLines){try{state.series.candle.removePriceLine(line);}catch{}}
  state.pivotLines=[];
  const add=(items,title,color)=>items.slice(-5).forEach(p=>{
-  const line=state.series.candle.createPriceLine({price:p.price,color,lineWidth:1,lineStyle:2,axisLabelVisible:true,title});
+  const line=state.series.candle.createPriceLine({price:p.price,color,lineWidth:1,lineStyle:2,axisLabelVisible:false,title:''});
   state.pivotLines.push(line);
  });
  add(pv.highs,'R','#ff6876');
