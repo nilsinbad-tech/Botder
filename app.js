@@ -196,6 +196,17 @@ function simulate(c,setups,rsiM5Values=[]){
  }
  return trades;
 }
+function emaM5ForChart(chartCandles,raw){
+ const source=aggregate(raw,5),close=source.map(x=>x.close),e20=ema(close,20),e50=ema(close,50);
+ let j=0,last20=null,last50=null;
+ const line20=[],line50=[];
+ for(const candle of chartCandles){
+  while(j<source.length&&source[j].time+300<=candle.time){last20=e20[j];last50=e50[j];j++;}
+  if(Number.isFinite(last20))line20.push({time:candle.time,value:last20});
+  if(Number.isFinite(last50))line50.push({time:candle.time,value:last50});
+ }
+ return{line20,line50};
+}
 function buildTradeMarkers(){return [];}
 function draw(c,calc,trades,obZones=[],setups=[]){
  // Limpieza defensiva: ninguna EMA puede permanecer como serie visual del precio.
@@ -204,8 +215,8 @@ function draw(c,calc,trades,obZones=[],setups=[]){
  if(!window.LightweightCharts){$('mainChart').innerHTML='<div class="chart-placeholder">No se pudo cargar el motor del gráfico. Comprueba tu conexión e intenta actualizar.</div>';throw new Error('No cargó Lightweight Charts desde el CDN');}
  if(state.overlayResizeObserver){state.overlayResizeObserver.disconnect();state.overlayResizeObserver=null;}
  if(state.main&&state.rsi&&state.chartKey===chartKey){
-  const lineData=values=>values.map((v,i)=>v==null?null:{time:c[i].time,value:v}).filter(Boolean);
-  state.series.candle.setData(c);state.series.rsi.setData(lineData(calc.rv));
+  const lineData=values=>values.map((v,i)=>v==null?null:{time:c[i].time,value:v}).filter(Boolean);const m5Ema=emaM5ForChart(c,state.rawCandles);
+  state.series.candle.setData(c);state.series.rsi.setData(lineData(calc.rv));state.series.ema20M5.setData(m5Ema.line20);state.series.ema50M5.setData(m5Ema.line50);
   drawPivotLines();if(state.markerPlugin)state.markerPlugin.setMarkers([]);
   const latest=trades.slice(-1)[0];drawOverlays(trades,c,$('mainChart'),obZones,setups);
   if(state.forceFitNext){const visibleFrom=Math.max(0,c.length-120);const visibleRange={from:visibleFrom,to:c.length+3};state.main.timeScale().setVisibleLogicalRange(visibleRange);state.rsi.timeScale().setVisibleLogicalRange(visibleRange);}else if(priorRange){state.main.timeScale().setVisibleLogicalRange(priorRange);state.rsi.timeScale().setVisibleLogicalRange(priorRange);}state.forceFitNext=false;return;
@@ -215,6 +226,9 @@ function draw(c,calc,trades,obZones=[],setups=[]){
  state.chartKey=chartKey;state.main=L.createChart(main,{autoSize:true,layout:{background:{type:'solid',color:'#0b121e'},textColor:'#9aaac0',fontSize:6},grid:{vertLines:{color:'#172235'},horzLines:{color:'#172235'}},rightPriceScale:{borderColor:'#28364a'},timeScale:{borderColor:'#28364a',timeVisible:true,secondsVisible:false},handleScroll:{mouseWheel:true,pressedMouseMove:true,horzTouchDrag:true,vertTouchDrag:true},handleScale:{mouseWheel:true,pinch:true,axisPressedMouseMove:true}});
  const candle=state.main.addSeries(L.CandlestickSeries,{upColor:'#19c99a',downColor:'#ff5968',borderVisible:false,wickUpColor:'#19c99a',wickDownColor:'#ff5968',autoscaleInfoProvider:original=>{const info=original();const levels=state.overlayPriceLevels.filter(Number.isFinite);if(!info||!info.priceRange||!levels.length)return info;return{...info,priceRange:{minValue:Math.min(info.priceRange.minValue,...levels),maxValue:Math.max(info.priceRange.maxValue,...levels)}};}});state.series.candle=candle;
  candle.setData(c);
+ const m5Ema=emaM5ForChart(c,state.rawCandles);
+ state.series.ema20M5=state.main.addSeries(L.LineSeries,{color:'#f5b942',lineWidth:2,priceLineVisible:false,lastValueVisible:true,title:'EMA 20 M5'});state.series.ema20M5.setData(m5Ema.line20);
+ state.series.ema50M5=state.main.addSeries(L.LineSeries,{color:'#48a9ff',lineWidth:2,priceLineVisible:false,lastValueVisible:true,title:'EMA 50 M5'});state.series.ema50M5.setData(m5Ema.line50);
  drawPivotLines();
  if(typeof L.createSeriesMarkers==='function'){state.markerPlugin=L.createSeriesMarkers(candle,[]);}else{state.markerPlugin=null;}
  const latest=trades.slice(-1)[0];
