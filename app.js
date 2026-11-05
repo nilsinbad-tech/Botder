@@ -279,7 +279,7 @@ function drawOverlays(trades,c,host,obZones=[],setups=[]){
    el.style.top=((y1+y2)/2-15)+'px';el.style.height='30px';
   });
   entryEls.forEach(({el,t})=>{
-   const x=scale.timeToCoordinate(t.entryTime),y=candleSeries.priceToCoordinate(t.entry);
+   const x=scale.timeToCoordinate(t.entryTime),y=candleSeries.priceToCoordinate(t.ob?(t.ob.high+t.ob.low)/2:t.entry);
    if(x==null||x<0||x>width||y==null){el.style.display='none';return;}
    el.style.display='block';el.style.left=Math.max(0,Math.min(width-68,x-34))+'px';el.style.top=(y-27)+'px';
   });
@@ -313,7 +313,7 @@ function showLatest(calc,trades,c,raw=state.rawCandles){
  $('signalValue').textContent=obLabel;
  $('signalValue').style.color=latestOb?(latestOb.side==='BUY'?'#20d69a':'#ff6876'):'#aab8ca';
  $('entryValue').textContent=t?fmt(t.entry):'—';if($('slValue'))$('slValue').textContent=t?fmt(t.sl):'—';if($('tp1Value'))$('tp1Value').textContent=t?fmt(t.tp1):'—';if($('tp2Value'))$('tp2Value').textContent=t?fmt(t.tp2):'—';$('rsiValue').textContent=fmt(rv);
- $('rsiConfirm').textContent=t?'PRECIO RETESTEÓ EL OB':'Esperando toque de OB';$('rsiConfirm').style.color=t?'#20d69a':'#8b9bb0';
+ $('rsiConfirm').textContent=t?'EMA + OB + RSI CONFIRMADOS':'Esperando confirmación M2';$('rsiConfirm').style.color=t?'#20d69a':'#8b9bb0';
  $('signalState').textContent=t?(t.entryIndex>=0?'ACTIVA':'PREPARADA'):'ESPERANDO';
  $('signalDetails').textContent=(latestOb?'Zona OB válida anclada a pivote de M'+state.tf+'. ':'No hay OB válido en la zona visible. ')+(t?(t.entryIndex>=0?'Operación ACTIVA. ':'')+(t.side==='BUY'?'COMPRA por OB ALCISTA':'VENTA por OB BAJISTA')+' tras retesteo. Entrada en el OB; TP es el siguiente pivote M30. Confirmación M2 y entrada en vela M1. Entrada '+fmt(t.entry)+', SL '+fmt(t.sl)+', TP M30 '+fmt(t.tp1)+'.':'Esperando que el precio regrese a un OB válido.');
  $('rsiLegend').textContent='Valor actual: '+fmt(rv);
@@ -323,7 +323,7 @@ function renderHistory(trades){
  const rows=[...source].sort((a,b)=>Number(a.time)-Number(b.time)).slice(-550).reverse();
  const shown=Math.min(rows.length,550);
  $('historyCount').textContent='Mostrando '+shown+' de '+source.length+' · +'+fmt(source.filter(t=>t.result==='GANADA'&&Number.isFinite(t.points)).reduce((a,t)=>a+Math.max(0,t.points),0))+' / -'+fmt(source.filter(t=>t.result==='PERDIDA'&&Number.isFinite(t.points)).reduce((a,t)=>a+Math.abs(Math.min(0,t.points)),0))+' pts';
- $('historyBody').innerHTML=rows.length?rows.map(t=>'<tr><td>'+new Date(t.time*1000).toLocaleTimeString('es-PA',{hour:'2-digit',minute:'2-digit'})+'</td><td>'+esc(state.symbols.find(x=>x.symbol===t.symbol)?.name||t.symbol||state.selected)+'</td><td style="color:'+(t.side==='BUY'?'#20d69a':'#ff6876')+'">'+(t.side==='BUY'?'COMPRA':'VENTA')+'</td><td>'+fmt(t.entry)+'</td><td>'+fmt(Number.isFinite(t.entryRsi)?t.entryRsi:t.rsi)+'</td><td>'+fmt(t.sl)+'</td><td>'+fmt(t.tp1)+'</td><td>'+fmt(t.tp2)+'</td><td>'+t.result+'</td><td style="color:'+(t.points==null?'#8b9bb0':t.points>=0?'#20d69a':'#ff6876')+'">'+(t.points==null?'—':(t.points>0?'+':'')+fmt(t.points)+' pts')+'</td></tr>').join(''):'<tr><td colspan="10" class="empty-cell">No hay operaciones detectadas en este período.</td></tr>';
+ $('historyBody').innerHTML=rows.length?rows.map(t=>'<tr><td>'+new Date((t.entryTime||t.time)*1000).toLocaleTimeString('es-PA',{hour:'2-digit',minute:'2-digit'})+'</td><td>'+esc(state.symbols.find(x=>x.symbol===t.symbol)?.name||t.symbol||state.selected)+'</td><td style="color:'+(t.side==='BUY'?'#20d69a':'#ff6876')+'">'+(t.side==='BUY'?'COMPRA':'VENTA')+'</td><td>'+fmt(t.entry)+'</td><td>'+fmt(Number.isFinite(t.entryRsi)?t.entryRsi:t.rsi)+'</td><td>'+fmt(t.sl)+'</td><td>'+fmt(t.tp1)+'</td><td>'+t.result+'</td><td style="color:'+(t.points==null?'#8b9bb0':t.points>=0?'#20d69a':'#ff6876')+'">'+(t.points==null?'—':(t.points>0?'+':'')+fmt(t.points)+' pts')+'</td></tr>').join(''):'<tr><td colspan="9" class="empty-cell">No hay operaciones detectadas en este período.</td></tr>';
  const closed=source.filter(t=>t.result==='GANADA'||t.result==='PERDIDA');
  $('wins').textContent=closed.filter(t=>t.result==='GANADA').length;$('losses').textContent=closed.filter(t=>t.result==='PERDIDA').length;$('pending').textContent=source.filter(t=>t.result==='PENDIENTE').length;$('expired').textContent=source.filter(t=>t.result==='CANCELADA').length;
 }
