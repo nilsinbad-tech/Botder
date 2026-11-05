@@ -14,7 +14,7 @@ const strategies=[
 {id:10,name:"OB + Liquidity Sweep",group:"Confluencia",rules:"Barrida de liquidez dentro de OB M1 + confirmación en 30s",ob:true},
 {id:11,name:"EMA 9/25 + EMA 50 + OB + RSI",group:"Estrategia personalizada",rules:"Cruce EMA 9/25 M1 hacia la dirección de EMA 50 + OB + vela fuerte + RSI; entrada en 30s",ob:true}
 ];
-let socket=null,busy=false,req=1,reqState=null,symbols=[],results=[],hist={},idx=0,active=null,queue=[],timer=null,connectTimer=null,symbolTimer=null,validInstruments=0,failedInstruments=0;
+let socket=null,busy=false,req=1,reqState=null,symbols=[],results=[],hist={},idx=0,active=null,queue=[],timer=null,connectTimer=null,symbolTimer=null,overallTimer=null,validInstruments=0,failedInstruments=0;
 const $=id=>document.getElementById(id),esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const fmt=(v,n=5)=>Number.isFinite(v)?v.toFixed(n):"—";
 function status(s){$("status").textContent=s;$("live-status").textContent=s}
@@ -120,7 +120,7 @@ function drawChart(){
  $("trade-audit-list").innerHTML=r.entries.slice(-30).reverse().map(t=>'<article class="audit-trade"><b class="'+(t.result==="GANADA"?"rate":"loss")+'">'+t.result+' · '+t.direction+'</b><span>Entrada '+fmt(t.entry)+' · '+new Date(t.entryTime*1000).toLocaleString("es-PA")+'</span><span>TP1 '+fmt(t.tp)+' · TP2 '+fmt(t.tp2)+' · SL '+fmt(t.sl)+'</span><span>Salida '+fmt(t.exitPrice)+' · '+(t.exitTime?new Date(t.exitTime*1000).toLocaleString("es-PA"):"sin salida")+'</span></article>').join("");
 }
 function progress(){const total=symbols.length;$("progress-count").textContent=idx+" / "+total+" instrumentos · 11 estrategias por instrumento";$("progress-bar").style.width=(total?idx/total*100:0)+"%";$("progress-title").textContent=busy?"Analizando "+(active?.name||"Deriv"):"Análisis finalizado"}
-function finish(msg){busy=false;clearTimeout(timer);clearTimeout(connectTimer);clearTimeout(symbolTimer);if(socket){try{socket.close()}catch(e){}socket=null}status(msg);$("live-detail").textContent=msg;$("start").disabled=false;progress();render();$("updated").textContent="Actualizado: "+new Date().toLocaleString("es-PA")}
+function finish(msg){busy=false;clearTimeout(timer);clearTimeout(connectTimer);clearTimeout(symbolTimer);clearTimeout(overallTimer);if(socket){try{socket.close()}catch(e){}socket=null}status(msg);$("live-detail").textContent=msg;$("start").disabled=false;progress();render();$("updated").textContent="Actualizado: "+new Date().toLocaleString("es-PA")}
 function requestPage(){
  if(!busy||!reqState)return;
  req++;reqState.req=req;
@@ -195,7 +195,7 @@ function start(){
  if(busy)return;busy=true;idx=0;symbols=[];results=[];hist={};$("start").disabled=true;$("live-detail").textContent="Conectando con Deriv para descargar datos reales…";$("updated").textContent="Conectando…";$("strategy-list").innerHTML="";$("best-list").innerHTML="";$("worst-list").innerHTML="";$("market-list").innerHTML="";connection("CONECTANDO…",false);status("CONECTANDO CON DERIV");progress();
  try{socket=new WebSocket(WS)}catch(e){finish("NO SE PUDO ABRIR LA CONEXIÓN");return}
  connectTimer=setTimeout(()=>{if(busy&&socket?.readyState!==WebSocket.OPEN)finish("NO SE PUDO CONECTAR A DERIV EN 15 SEGUNDOS")},15000);
- timer=setTimeout(()=>{if(busy)finish("TIEMPO MÁXIMO · "+validInstruments+" instrumentos analizados · "+failedInstruments+" con error")},2700000);
+ overallTimer=setTimeout(()=>{if(busy)finish("TIEMPO MÁXIMO · "+validInstruments+" instrumentos analizados · "+failedInstruments+" con error")},2700000);
  socket.onopen=()=>{clearTimeout(connectTimer);status("CONECTADO · PIDIENDO INSTRUMENTOS");$("live-detail").textContent="Conexión WebSocket abierta. Esperando la lista de instrumentos de Deriv…";try{socket.send(JSON.stringify({active_symbols:"brief",req_id:1}));symbolTimer=setTimeout(()=>{if(busy&&!symbols.length)finish("DERIV CONECTÓ, PERO NO RESPONDIÓ A active_symbols EN 12 SEGUNDOS");},12000)}catch(e){finish("ERROR AL PEDIR INSTRUMENTOS: "+(e.message||e))}};
  socket.onerror=()=>{if(busy)finish("ERROR DE RED: EL NAVEGADOR NO PUDO COMPLETAR EL WEBSOCKET DE DERIV")};
  socket.onclose=e=>{if(busy)finish("DERIV DESCONECTÓ · CÓDIGO "+e.code)};
