@@ -50,9 +50,9 @@ async function loadSymbols(){
 }
 
 function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
-async function getCandles(symbol){
- let lastError=null;
- for(const count of [HISTORY_CANDLES,5000,1440]){
+async function getCandles(symbol,preferredCount=HISTORY_CANDLES){
+ let lastError=null;const counts=[...new Set([preferredCount,HISTORY_CANDLES,5000,1440])];
+ for(const count of counts){
   try{const r=await request({ticks_history:symbol,adjust_start_time:1,count,end:'latest',granularity:60,style:'candles'});const candles=(r.candles||[]).map(c=>({time:Number(c.epoch),open:+c.open,high:+c.high,low:+c.low,close:+c.close})).filter(c=>Number.isFinite(c.time)&&Number.isFinite(c.open)&&Number.isFinite(c.high)&&Number.isFinite(c.low)&&Number.isFinite(c.close));if(candles.length)return candles;lastError=new Error('Deriv devolvió 0 velas para '+symbol);}catch(e){lastError=e;}
  }
  throw new Error('No se pudo descargar el historial de '+symbol+': '+(lastError?.message||'sin datos'));
@@ -164,7 +164,7 @@ async function runUniverseBacktest(refresh=false){
  $('dataStatus').textContent='Backtesting '+state.symbols.length+' instrumentos…';
  if(refresh){state.rawBySymbol.clear();state.downloadErrors=[];}else if(!state.downloadErrors)state.downloadErrors=[];
  let cursor=0,done=0;const workers=Array.from({length:Math.min(4,state.symbols.length)},async()=>{
-  while(cursor<state.symbols.length){const item=state.symbols[cursor++];try{if(!state.rawBySymbol.has(item.symbol)){const raw=await getCandles(item.symbol);state.rawBySymbol.set(item.symbol,raw);}done++;$('backtestInfo').textContent='Descargando historial: '+done+' / '+state.symbols.length+' instrumentos…';}catch(e){state.rawBySymbol.set(item.symbol,[]);if(!state.downloadErrors)state.downloadErrors=[];state.downloadErrors.push(item.name+': '+e.message);done++;$('backtestInfo').textContent='Descargas '+done+' / '+state.symbols.length+' · falló '+item.name;}}
+  while(cursor<state.symbols.length){const item=state.symbols[cursor++];try{if(!state.rawBySymbol.has(item.symbol)||(state.rawBySymbol.get(item.symbol)||[]).length<HISTORY_CANDLES){const raw=await getCandles(item.symbol);state.rawBySymbol.set(item.symbol,raw);}done++;$('backtestInfo').textContent='Descargando historial: '+done+' / '+state.symbols.length+' instrumentos…';}catch(e){state.rawBySymbol.set(item.symbol,[]);if(!state.downloadErrors)state.downloadErrors=[];state.downloadErrors.push(item.name+': '+e.message);done++;$('backtestInfo').textContent='Descargas '+done+' / '+state.symbols.length+' · falló '+item.name;}}
  });
  await Promise.all(workers);
  const allTrades=[];
@@ -177,7 +177,7 @@ async function runUniverseBacktest(refresh=false){
 }
 async function analyze(){
  if(state.busy){state.analyzeQueued=true;return;}state.busy=true;$('dataStatus').textContent='Cargando gráfico…';
- try{const raw=state.rawBySymbol.get(state.selected)||await getCandles(state.selected);if(!raw.length)throw new Error('No llegaron velas para '+state.selected);
+ try{const raw=state.rawBySymbol.get(state.selected)||await getCandles(state.selected,1440);if(!raw.length)throw new Error('No llegaron velas para '+state.selected);
  state.rawCandles=raw;state.lastRecalcBucket=Math.floor(raw.at(-1).time/(state.tf*60));const c=aggregate(raw,state.tf);state.candles=c;const calc=buildSetups(c,aggregate(raw,5));state.trades=simulate(c,calc.setups);
  draw(c,calc,state.trades);showLatest(calc,state.trades,c);renderHistory(state.trades);
  $('chartTitle').textContent=(state.symbols.find(s=>s.symbol===state.selected)?.name||state.selected)+' · M'+state.tf;
@@ -206,6 +206,6 @@ function bind(){
  $('timeframes').addEventListener('click',async e=>{const b=e.target.closest('button[data-tf]');if(!b)return;state.tf=+b.dataset.tf;state.forceFitNext=true;document.querySelectorAll('#timeframes button').forEach(x=>x.classList.toggle('active',x===b));await runUniverseBacktest(false);await analyze();});
  $('refreshBtn').addEventListener('click',async()=>{await runUniverseBacktest(true);await analyze();});$('runBacktest').addEventListener('click',async()=>{await runUniverseBacktest(true);await analyze();});
 }
-async function start(){bind();try{await loadSymbols();setConnection(true,'Deriv API conectada');$('dataStatus').textContent='Instrumentos listos · cargando gráfico principal…';await analyze();subscribeLive();$('backtestInfo').textContent='Gráfico listo. Cargando backtesting de los 25 instrumentos en segundo plano…';runUniverseBacktest(false).catch(e=>{$('backtestInfo').textContent='Error en backtesting: '+e.message;});}catch(e){setConnection(false,'Error de datos');$('dataStatus').textContent='No se pudo iniciar: '+e.message;$('signalDetails').textContent=e.message;}}
+async function start(){bind();try{await loadSymbols();setConnection(true,'Deriv API conectada');$('dataStatus').textContent='Instrumentos listos · cargando gráfico principal…';await analyze();subscribeLive();$('backtestInfo').textContent='Gráfico listo. Cargando backtesting de los 25 instrumentos en segundo plano…';runUniverseBacktest(false).then(()=>{const improved=state.rawBySymbol.get(state.selected)||[];if(improved.length>state.rawCandles.length)analyze();}).catch(e=>{$('backtestInfo').textContent='Error en backtesting: '+e.message;});}catch(e){setConnection(false,'Error de datos');$('dataStatus').textContent='No se pudo iniciar: '+e.message;$('signalDetails').textContent=e.message;}}
 start();
 })();
