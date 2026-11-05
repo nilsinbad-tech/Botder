@@ -46,7 +46,30 @@ async function loadSymbols(){
  $('symbolSelect').innerHTML=state.symbols.map(s=>'<option value="'+esc(s.symbol)+'">'+esc(s.name)+'</option>').join('');
  state.selected=state.symbols[0].symbol;
 }
-function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+
+async function loadMinimumStakes(){
+ const box=$('minimumStakeResults');
+ if(!box)return;
+ box.textContent='Consultando mínimos publicados por Deriv…';
+ const targets=[{symbol:'CRASH300',name:'Crash 300'},{symbol:'BOOM300',name:'Boom 300'}];
+ const results=await Promise.all(targets.map(async item=>{
+  try{
+   const r=await request({contracts_for:item.symbol});
+   const data=r.contracts_for?.available||r.available||[];
+   const directional=data.filter(x=>['CALL','PUT'].includes(String(x.contract_type||'').toUpperCase()));
+   const candidates=(directional.length?directional:data).filter(x=>Number.isFinite(Number(x.min_stake)));
+   if(!candidates.length)return {...item,min:null,types:[],reported:false};
+   const min=Math.min(...candidates.map(x=>Number(x.min_stake)));
+   return {...item,min,types:candidates.filter(x=>Number(x.min_stake)===min).map(x=>x.contract_type),reported:true};
+  }catch(e){return {...item,min:null,types:[],reported:false,error:e.message};}
+ }));
+ const valid=results.filter(x=>x.reported);
+ const winner=valid.length===2?(valid[0].min<valid[1].min?results[0].symbol:valid[1].min<valid[0].min?results[1].symbol:'EMPATE'):null;
+ box.innerHTML=results.map(x=>'<div class="stake-result"><b>'+esc(x.name)+'</b><strong>'+(x.reported?fmt(x.min)+' mínimo':'No informado')+'</strong><small>'+(x.reported?'Contrato: '+esc(x.types.join('/')):esc(x.error||'Deriv no publicó min_stake en esta respuesta'))+'</small></div>').join('');
+ const note=$('minimumStakeNote');
+ note.textContent=winner?(winner==='EMPATE'?'Ambos muestran el mismo mínimo.':'Menor mínimo reportado: '+(winner==='CRASH300'?'Crash 300':'Boom 300')+'.'):'No se pudo comparar con datos mínimos verificables. No se estimará ni inventará un importe.';
+}
+\nfunction esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
 async function getCandles(symbol){
  const r=await request({ticks_history:symbol,adjust_start_time:1,count:1440,end:'latest',granularity:60,style:'candles'});
  return (r.candles||[]).map(c=>({time:Number(c.epoch),open:+c.open,high:+c.high,low:+c.low,close:+c.close})).filter(c=>Number.isFinite(c.close));
@@ -186,6 +209,6 @@ function bind(){
  $('timeframes').addEventListener('click',async e=>{const b=e.target.closest('button[data-tf]');if(!b)return;state.tf=+b.dataset.tf;document.querySelectorAll('#timeframes button').forEach(x=>x.classList.toggle('active',x===b));await runUniverseBacktest(false);await analyze();});
  $('refreshBtn').addEventListener('click',async()=>{await runUniverseBacktest(true);await analyze();});$('runBacktest').addEventListener('click',async()=>{await runUniverseBacktest(true);await analyze();});
 }
-async function start(){bind();try{await loadSymbols();await runUniverseBacktest(false);await analyze();subscribeLive();}catch(e){setConnection(false,'No conectado');$('dataStatus').textContent=e.message;}}
+async function start(){bind();try{await loadSymbols();await loadMinimumStakes();await runUniverseBacktest(false);await analyze();subscribeLive();}catch(e){setConnection(false,'No conectado');$('dataStatus').textContent=e.message;}}
 start();
 })();
