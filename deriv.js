@@ -1,6 +1,6 @@
 const DERIV_CONFIG = { endpoint: "wss://api.derivws.com/trading/v1/options/ws/public" };
 let derivSocket = null, availableSymbols = [], selectedSymbol = null;
-let candleBuffer = [], higherTfBuffers={120:[],300:[],600:[],900:[],1800:[],3600:[],14400:[],86400:[]}, tickSubId = null, candleSubId = null, reconnectTimer = null, symbolsTimer = null, selectedGranularity = 60, lastTickAt = 0, lastTickResubscribeAt = 0;
+let s30HistoryState=null;\nlet candleBuffer = [], higherTfBuffers={120:[],300:[],600:[],900:[],1800:[],3600:[],14400:[],86400:[]}, tickSubId = null, candleSubId = null, reconnectTimer = null, symbolsTimer = null, selectedGranularity = 60, lastTickAt = 0, lastTickResubscribeAt = 0;
 
 function getHigherTimeframeHistory(seconds){const raw=higherTfBuffers[Number(seconds)]||[];if(!raw.length||!candleBuffer.length)return raw;const live=aggregateForDisplay(candleBuffer,Number(seconds)).at(-1);if(!live)return raw;const merged=raw.filter(c=>c.time!==live.time);merged.push(live);return merged.sort((a,b)=>a.time-b.time);}
 function getDisplayCandles(seconds){if(Number(seconds)===60)return candleBuffer.slice();const direct=getHigherTimeframeHistory(Number(seconds));if(direct.length)return direct;return aggregateForDisplay(candleBuffer,Number(seconds));}
@@ -53,29 +53,49 @@ function connectDeriv() {
     }
     if([13,14,15,16,17,18,19,20].includes(data.req_id)&&selectedSymbol&&responseSymbol(data)===selectedSymbol&&(data.msg_type==="history"||data.msg_type==="candles")){const seconds=({13:3600,14:14400,15:86400,16:1800,17:600,18:300,19:900,20:120})[data.req_id],rows=data.candles||data.history?.candles||[],parsed=rows.map(c=>({time:Number(c.epoch??c.open_time),open:Number(c.open),high:Number(c.high),low:Number(c.low),close:Number(c.close)})).filter(c=>[c.time,c.open,c.high,c.low,c.close].every(Number.isFinite));if(parsed.length){higherTfBuffers[seconds]=parsed.sort((a,b)=>a.time-b.time);if(selectedGranularity===seconds&&typeof updateCandles==="function")updateCandles(getDisplayCandles(seconds));if(typeof analyzeCandles==="function"&&candleBuffer.length>=100)analyzeCandles(selectedSymbol,selectedMarketName(),candleBuffer);showApiDiagnostic("Historial HTF cargado · "+(seconds===120?"M2":seconds===300?"M5":seconds===600?"M10":seconds===900?"M15":seconds===1800?"M30":seconds===3600?"H1":seconds===14400?"H4":"D1")+" · "+parsed.length+" velas.");}}
     if (data.req_id === 12 && selectedSymbol && responseSymbol(data)===selectedSymbol && (data.msg_type === "history" || data.msg_type === "candles")) {
-      const history = data.history || {};
-      let historical = [];
-      const rows = Array.isArray(data.candles) ? data.candles : (Array.isArray(history.candles) ? history.candles : null);
-      if (rows) {
-        historical = rows.map(c => ({time:Number(c.epoch ?? c.open_time),open:Number(c.open),high:Number(c.high),low:Number(c.low),close:Number(c.close)})).filter(c => [c.time,c.open,c.high,c.low,c.close].every(Number.isFinite));
-      } else if (Array.isArray(history.times) && Array.isArray(history.prices)) {
-        historical = aggregateTicks(history.times, history.prices, selectedGranularity === 30 ? 30 : 60);
+      const history=data.history||{};
+      let historical=[];
+      const rows=Array.isArray(data.candles)?data.candles:(Array.isArray(history.candles)?history.candles:null);
+      if(selectedGranularity===30&&Array.isArray(history.times)&&Array.isArray(history.prices)){
+        if(!s30HistoryState||s30HistoryState.symbol!==selectedSymbol)s30HistoryState={symbol:selectedSymbol,times:[],prices:[],pages:0};
+        const state=s30HistoryState;
+        state.times.push(...history.times.map(Number));state.prices.push(...history.prices.map(Number));state.pages++;
+        const ordered=state.times.map((time,i)=>({time,price:state.prices[i]})).filter(x=>Number.isFinite(x.time)&&Number.isFinite(x.price)).sort((a,b)=>a.time-b.time);
+        const allCandles=aggregateTicks(ordered.map(x=>x.time),ordered.map(x=>x.price),30);
+        const pageFull=history.times.length>=5000;
+        if(allCandles.length<5000&&pageFull&&state.pages<100&&ordered.length){
+          const previousEnd=ordered[0].time-1;
+          sendDeriv({ticks_history:selectedSymbol,count:5000,end:previousEnd,style:"ticks",req_id:12});
+          showChartMessage("Historial S30: "+allCandles.length+" / 5.000 velas · descargando bloque "+(state.pages+1)+"...");
+          showApiDiagnostic("S30 · "+state.pages+" bloques de ticks recibidos · "+allCandles.length+" velas construidas.");
+          return;
+        }
+        historical=allCandles.slice(-5000);
+        const loaded=historical.length,pages=state.pages;
+        s30HistoryState=null;
+        showChartMessage("Historial S30 cargado · "+loaded+" / 5.000 velas · "+pages+" bloques de ticks.");
+        showApiDiagnostic("Historial S30: "+loaded+" velas de 30 segundos reconstruidas.");
+      }else if(rows){
+        historical=rows.map(c=>({time:Number(c.epoch??c.open_time),open:Number(c.open),high:Number(c.high),low:Number(c.low),close:Number(c.close)})).filter(c=>[c.time,c.open,c.high,c.low,c.close].every(Number.isFinite));
+      }else if(Array.isArray(history.times)&&Array.isArray(history.prices)){
+        historical=aggregateTicks(history.times,history.prices,selectedGranularity===30?30:60);
       }
-      if (historical.length) {
-        // Conserva los ticks que hayan llegado mientras se descargaba el historial.
+      if(historical.length){
         const liveByTime=new Map(candleBuffer.map(c=>[c.time,c]));
         historical=historical.map(c=>{const live=liveByTime.get(c.time);return live?{...c,high:Math.max(c.high,live.high),low:Math.min(c.low,live.low),close:live.close}:c;});
         const lastHistoryTime=historical.at(-1)?.time??-Infinity;
         const newerLive=[...liveByTime.values()].filter(c=>c.time>lastHistoryTime).sort((a,b)=>a.time-b.time);
         candleBuffer=[...historical,...newerLive];
-        if (typeof setBacktestHistory === "function") setBacktestHistory(selectedSymbol, selectedMarketName(), historical);
-        if (typeof updateCandles === "function") updateCandles(getDisplayCandles(selectedGranularity));
-        if (typeof analyzeCandles === "function") analyzeCandles(selectedSymbol, selectedMarketName(), candleBuffer);
-        showChartMessage("Historial base M1 · "+historical.length+" velas · vista "+(selectedGranularity===3600?"H1":selectedGranularity===14400?"H4":"M"+(selectedGranularity/60))+".");
-        showApiDiagnostic("Deriv entregó " + historical.length + " velas para " + selectedSymbol + ".");
-      } else {
-        showChartMessage("Deriv respondió, pero no entregó velas en el historial. Esperando ticks para construirlas...");
-        showApiDiagnostic("Respuesta de historial recibida sin datos de velas. Tipo: " + data.msg_type + ".");
+        if(typeof updateCandles==="function")updateCandles(getDisplayCandles(selectedGranularity));
+        if(typeof analyzeCandles==="function")analyzeCandles(selectedSymbol,selectedMarketName(),candleBuffer);
+        if(selectedGranularity!==30){
+          showChartMessage("Historial cargado · "+historical.length+" velas · vista "+(selectedGranularity===3600?"H1":selectedGranularity===14400?"H4":"M"+(selectedGranularity/60))+".");
+          showApiDiagnostic("Deriv entregó "+historical.length+" velas para "+selectedSymbol+".");
+        }
+      }else{
+        s30HistoryState=null;
+        showChartMessage("Deriv respondió, pero no entregó datos suficientes para construir el historial.");
+        showApiDiagnostic("Respuesta de historial sin velas. Tipo: "+data.msg_type+".");
       }
     }
     if (data.msg_type === "candles" && responseSymbol(data) === selectedSymbol && ![12,13,14,15,16,17,18,19,20].includes(data.req_id)) {
