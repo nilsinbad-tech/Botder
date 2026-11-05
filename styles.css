@@ -199,3 +199,72 @@
  .summary-grid article b{font-size:15px!important}
 }
 .rsi-level-settings{align-items:flex-start!important;gap:9px!important}.rsi-config-grid{display:flex;gap:12px;flex-wrap:wrap;width:100%}.rsi-config-grid label,.rsi-level-group label{display:flex;align-items:center;gap:6px;color:#aebdd0;font-size:11px}.rsi-config-grid select,.rsi-config-grid input,.rsi-level-group input{min-height:32px;max-width:82px;padding:5px;border:1px solid #40516a;border-radius:6px;background:#081321;color:#fff;font-size:12px;font-weight:700}.rsi-level-group{display:flex;gap:10px;flex-wrap:wrap;width:100%}.rsi-level-group input{width:54px}.rsi-settings-status{font-size:10px;color:#aab8ca}
+
+/* BOTDER · modo compacto optimizado para Samsung Galaxy A06 (ancho móvil 360-600px). */
+@media(max-width:600px){
+ html,body{width:100%;max-width:100%;overflow-x:hidden}
+ body{font-size:12px;line-height:1.3}
+ .topbar{height:46px!important;min-height:46px!important;padding:0 8px!important;gap:8px!important}
+ .brand{gap:6px!important}.brand-mark{width:27px!important;height:27px!important;border-radius:7px!important;font-size:16px!important}
+ .brand b{font-size:13px!important;letter-spacing:1px!important}.brand small{font-size:7px!important;letter-spacing:.7px!important}
+ .connection{gap:5px!important;font-size:9px!important}.connection i{width:6px!important;height:6px!important}
+ .icon-btn{width:30px!important;height:30px!important;font-size:17px!important;border-radius:7px!important}
+ .app{padding:5px!important;gap:6px!important}
+ .toolbar{gap:5px!important;align-items:center!important}
+ .toolbar label{font-size:9px!important;gap:3px!important}
+ .toolbar select{min-height:34px!important;height:34px!important;padding:5px 7px!important;font-size:11px!important;border-radius:6px!important}
+ .timeframes{gap:2px!important;padding:2px!important;border-radius:6px!important}
+ .timeframes button{min-height:30px!important;height:30px!important;padding:4px 7px!important;font-size:10px!important;border-radius:4px!important}
+ .data-status{font-size:9px!important;padding:1px 0!important;line-height:1.2!important}
+ .summary-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:4px!important}
+ .summary-grid article{min-height:48px!important;padding:6px 7px!important;border-radius:7px!important}
+ .summary-grid article small{font-size:8px!important;letter-spacing:.3px!important;margin-bottom:2px!important}
+ .summary-grid article b{font-size:11px!important;line-height:1.2!important}
+ .summary-grid article em{font-size:8px!important;margin-top:1px!important}
+ .chart-card{border-radius:8px!important}
+ .chart-head,.rsi-head,.chart-foot{padding:6px 8px!important}
+ .chart-head b{font-size:11px!important}.chart-head small{font-size:8px!important}
+ .chart-mode{font-size:8px!important;max-width:90px!important}
+ .chart-points-summary{gap:6px!important;padding:5px 7px!important;font-size:9px!important}
+ .chart-points-summary small{font-size:8px!important}
+ .main-chart{height:330px!important;min-height:330px!important}
+ #rsiChart{height:100px!important;min-height:100px!important}
+ .rsi-head{min-height:27px!important;font-size:9px!important}
+ .rsi-head span{font-size:9px!important}
+ .chart-foot{font-size:8px!important;gap:5px!important}
+ .chart-overlay .ob-zone{min-width:70px!important;min-height:21px!important;height:21px!important;padding:2px 4px!important;font-size:8px!important}
+ .chart-overlay .ob-zone b{font-size:8px!important;line-height:10px!important}
+ .chart-overlay .price-label{font-size:7px!important;padding:2px 3px!important;gap:3px!important}
+ .chart-overlay .price-label b{font-size:6px!important}.chart-overlay .price-label strong{font-size:7px!important}
+ .level-line .level-tag{min-width:0!important;padding:2px 3px!important;font-size:7px!important}
+ .settings-drawer{margin:4px 0 5px!important;border-radius:7px!important}
+ .settings-drawer>summary{font-size:10px!important;padding:7px 9px!important}
+ .settings-drawer .compact-settings{gap:5px!important;padding:6px!important}
+ .settings-drawer .compact-settings>strong{min-width:75px!important;font-size:8px!important}
+ .settings-drawer .pivot-tf-controls{gap:3px!important}
+ .settings-drawer .pivot-tf-controls button,#pivotTfControls button,#obTfControls button,#obPreviousTfControls button{min-width:29px!important;min-height:29px!important;padding:4px 5px!important;font-size:9px!important}
+ .ob-toggle,.ob-previous-toggle{font-size:9px!important;gap:5px!important}
+ .ob-toggle input,.ob-previous-toggle input{width:14px!important;height:14px!important}
+ .pivot-settings{gap:5px!important;padding:7px!important;margin:4px 0!important}
+ .pivot-settings strong,.pivot-settings>span{font-size:9px!important}
+ .pivot-settings small{font-size:8px!important}
+ .lower-grid{gap:6px!important}
+ .panel{padding:0 8px 7px!important;border-radius:7px!important}
+ .panel-title{font-size:10px!important;padding:7px 0!important}
+ .stats-row{gap:4px!important;padding:7px 0 3px!important}
+ .stats-row small{font-size:8px!important;margin-bottom:2px!important}
+ .stats-row b{font-size:15px!important}
+ .signal-details{font-size:9px!important;line-height:1.35!important;min-height:35px!important;padding:7px 0!important}
+ .muted,.tiny-legend{font-size:8px!important}
+ .instrument-list{gap:4px!important;padding:6px 0!important}
+ .instrument-chip{padding:4px 6px!important;font-size:8px!important;border-radius:5px!important}
+ table{font-size:8px!important}th,td{padding:6px 5px!important}
+ footer{font-size:8px!important;padding:5px 0 9px!important}
+}
+@media(max-width:390px){
+ .main-chart{height:315px!important;min-height:315px!important}
+ #rsiChart{height:92px!important;min-height:92px!important}
+ .toolbar{gap:4px!important}
+ .timeframes button{padding:4px 5px!important;font-size:9px!important}
+ .summary-grid article{min-height:45px!important}
+}
