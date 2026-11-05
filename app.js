@@ -330,8 +330,11 @@ function drawOverlays(trades,c,host,obZones=[],setups=[]){
       if(x==null||x<0||x>width||y1==null||y2==null){el.style.display='none';return;}
       const boxWidth=Math.min(window.innerWidth<=600?126:150,Math.max(0,width-x-8));
       if(boxWidth<24){el.style.display='none';return;}
+      // El OB queda anclado a su vela de origen y a sus dos precios exactos.
+      // Al mover o escalar el gráfico, sus coordenadas se recalculan desde la escala del precio.
+      const top=Math.min(y1,y2),height=Math.max(2,Math.abs(y2-y1));
       el.style.display='flex';el.style.left=x+'px';el.style.width=boxWidth+'px';
-      el.style.top=((y1+y2)/2-15)+'px';el.style.height='30px';
+      el.style.top=top+'px';el.style.height=height+'px';
     });
     entryEls.forEach(v=>{
       const y=candleSeries.priceToCoordinate(v.p),x=scale.timeToCoordinate(v.time);
@@ -354,7 +357,10 @@ function drawOverlays(trades,c,host,obZones=[],setups=[]){
   if(!state.overlayRangeHandler){state.overlayRangeHandler=()=>{
     if(state.overlayFrame)return;
     state.overlayFrame=requestAnimationFrame(()=>{state.overlayFrame=0;if(state.overlayUpdate)state.overlayUpdate();});
-  };state.main.timeScale().subscribeVisibleLogicalRangeChange(state.overlayRangeHandler);}
+  };state.main.timeScale().subscribeVisibleLogicalRangeChange(state.overlayRangeHandler);
+    // También refrescar durante el gesto táctil/arrastre, no solo al terminar el zoom.
+    if(typeof state.main.subscribeCrosshairMove==='function')state.main.subscribeCrosshairMove(state.overlayRangeHandler);
+  }
   if(window.ResizeObserver){state.overlayResizeObserver=new ResizeObserver(update);state.overlayResizeObserver.observe(host);}
   requestAnimationFrame(update);
 }
