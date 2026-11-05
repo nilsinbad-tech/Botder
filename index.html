@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#080d16"><title>BOTDER · Deriv Structural Lab</title>
-<link rel="stylesheet" href="styles.css?v=76">
+<link rel="stylesheet" href="styles.css?v=75">
 <script src="https://unpkg.com/lightweight-charts@5.0.8/dist/lightweight-charts.standalone.production.js" onerror="this.onerror=null;this.src='https://cdn.jsdelivr.net/npm/lightweight-charts@5.0.8/dist/lightweight-charts.standalone.production.js'"></script>
 </head>
 <body>
@@ -28,16 +28,6 @@
     <article><small>RSI (14)</small><b id="rsiValue">—</b><em id="rsiConfirm">Sin confirmación</em></article>
   </section>
 
-  <section class="money-estimate panel">
-    <div class="panel-title"><b>RESULTADO ESTIMADO EN USD</b><span id="moneyLot">—</span></div>
-    <div class="money-grid">
-      <div><small>PÉRDIDA EN SL</small><b id="moneySL">—</b></div>
-      <div><small>GANANCIA TP1</small><b id="moneyTP1">—</b></div>
-      <div><small>GANANCIA TP2</small><b id="moneyTP2">—</b></div>
-    </div>
-    <small id="moneySpecStatus" class="money-note">Se mostrará cuando haya una señal y especificación verificada.</small>
-  </section>
-
   <details class="settings-drawer">
     <summary>⚙ CONFIGURACIÓN</summary>
     <section class="pivot-settings ob-settings compact-settings" aria-label="Order Blocks">
@@ -53,7 +43,7 @@
 
   <section class="chart-card">
     <div class="chart-head"><div><b id="chartTitle">Gráfico Deriv</b><small id="chartSubtitle">Velas reales · histórico de 24 horas</small></div><small class="chart-mode">Gráfico visual independiente · señales M2</small></div>
-    <div class="chart-points-summary"><span>GANADOS <b id="chartWonPoints">+0.00 pts</b></span><span>PERDIDOS <b id="chartLostPoints">-0.00 pts</b></span><span>GANANCIA $ <b id="chartWonMoney">+$0.00</b></span><span>PÉRDIDA $ <b id="chartLostMoney">−$0.00</b></span><small>Acumulado de operaciones cerradas del instrumento seleccionado</small></div>
+    <div class="chart-points-summary"><span>GANADOS <b id="chartWonPoints">+0.00 pts</b></span><span>PERDIDOS <b id="chartLostPoints">-0.00 pts</b></span><small>Acumulado de operaciones cerradas del instrumento seleccionado</small></div>
     <div id="mainChart" class="main-chart"><div class="chart-placeholder">Esperando velas de Deriv…</div></div>
     <div class="rsi-head"><b>RSI (14)</b><span id="rsiLegend">—</span></div>
     <div id="rsiChart" class="rsi-chart"></div>
@@ -75,7 +65,7 @@
 
   <section class="panel history-panel">
     <div class="panel-title"><b>Historial de operaciones</b><span id="historyCount">0 operaciones</span></div>
-    <div class="history-scroll"><table><thead><tr><th>Hora</th><th>Instrumento</th><th>Dirección</th><th>Entrada</th><th>RSI entrada</th><th>SL</th><th>TP1</th><th>TP2</th><th>Resultado</th><th>Movimiento</th><th>Lote ref.</th><th>SL $</th><th>TP1 $</th><th>TP2 $</th><th>Resultado $</th></tr></thead><tbody id="historyBody"><tr><td colspan="15" class="empty-cell">Esperando backtesting…</td></tr></tbody></table></div>
+    <div class="history-scroll"><table><thead><tr><th>Hora</th><th>Instrumento</th><th>Dirección</th><th>Entrada</th><th>RSI entrada</th><th>SL</th><th>TP1</th><th>TP2</th><th>Resultado</th><th>Movimiento</th></tr></thead><tbody id="historyBody"><tr><td colspan="10" class="empty-cell">Esperando backtesting…</td></tr></tbody></table></div>
   </section>
 
   <section class="panel instruments-panel">
@@ -84,5 +74,5 @@
   </section>
   <footer>BOTDER · Solo análisis y simulación. No envía órdenes ni garantiza resultados futuros.</footer>
 </main>
-<script src="app.js?v=93"></script>
+<script src="app.js?v=89"></script>
 </body></html>
