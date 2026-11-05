@@ -132,15 +132,11 @@ function draw(c,calc,trades){
  if(preserveRange){state.main.timeScale().setVisibleLogicalRange(priorRange);state.rsi.timeScale().setVisibleLogicalRange(priorRange);}else{const visibleFrom=Math.max(0,c.length-120);const visibleRange={from:visibleFrom,to:c.length+3};state.main.timeScale().setVisibleLogicalRange(visibleRange);state.rsi.timeScale().setVisibleLogicalRange(visibleRange);}let syncingRange=false;state.main.timeScale().subscribeVisibleLogicalRangeChange(range=>{if(!range||syncingRange)return;syncingRange=true;state.rsi.timeScale().setVisibleLogicalRange(range);syncingRange=false;});state.rsi.timeScale().subscribeVisibleLogicalRangeChange(range=>{if(!range||syncingRange)return;syncingRange=true;state.main.timeScale().setVisibleLogicalRange(range);syncingRange=false;});state.forceFitNext=false;
 }
 function drawPivotLines(pv){
+ // Los pivotes y resistencias siguen calculándose para la estrategia,
+ // pero no se dibujan como etiquetas en el eje derecho del gráfico.
  if(!state.series.candle)return;
  for(const line of state.pivotLines){try{state.series.candle.removePriceLine(line);}catch{}}
  state.pivotLines=[];
- const add=(items,title,color)=>items.slice(-5).forEach(p=>{
-  const line=state.series.candle.createPriceLine({price:p.price,color,lineWidth:1,lineStyle:2,axisLabelVisible:false,title:''});
-  state.pivotLines.push(line);
- });
- add(pv.highs,'R','#ff6876');
- add(pv.lows,'P','#e8c34c');
 }
 function drawOverlays(t,c,host){
  if(state.overlayResizeObserver){state.overlayResizeObserver.disconnect();state.overlayResizeObserver=null;}
