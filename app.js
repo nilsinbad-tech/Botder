@@ -1,7 +1,7 @@
 /* BOTDER · motor de análisis y backtesting. Sin ejecución de órdenes. */
 (() => {
 'use strict';
-const HISTORY_CANDLES = 4320;
+const HISTORY_CANDLES = 5000;
 const REQUEST_TIMEOUT_MS = 45000;
 const API_URL = 'wss://api.derivws.com/trading/v1/options/ws/public';
 const $ = id => document.getElementById(id);
@@ -130,6 +130,23 @@ function buildSetups(c,liquidityCandles=c,pivotCandles=liquidityCandles,obStruct
  detectCrossOBs(m1Bars,m1E9,m1E50,1);
  detectCrossOBs(m2Bars,m2E9,m2E50,2);
 
+ // Los OB visibles se detectan por confluencia EMA20/EMA50 + estructura,
+ // sin exigir que EMA9/EMA50 haya cruzado: el cruce solo confirma la entrada.
+ const obCloses=primaryCandles.map(v=>v.close),obE20=ema(obCloses,20),obE50=ema(obCloses,50);
+ for(let i=50;i<primaryCandles.length;i++){
+  const bar=primaryCandles[i],closeTime=bar.time+primaryTf*60;
+  const side=m30SideAt(closeTime,targetRawCandles,m30Context);
+  if(!side||!ema20NearAt(obE20,obE50,primaryCandles,i))continue;
+  for(let j=i-1;j>=Math.max(0,i-9);j--){
+   const candidate=primaryCandles[j],opposite=side==='BUY'?candidate.close<candidate.open:candidate.close>candidate.open;
+   if(!opposite)continue;
+   const ob={time:candidate.time,high:candidate.high,low:candidate.low,entry:(candidate.high+candidate.low)/2};
+   const structure=findPivotStructure(ob,side,structurePv,structureCandles,closeTime);
+   if(structure)addZone({ob,structure},side,primaryTf);
+   break;
+  }
+ }
+
  for(let i=50;i<c.length;i++){
   const x=c[i],prior=e9[i-1]-e50[i-1],current=e9[i]-e50[i];
   const side=prior<=0&&current>0?'BUY':prior>=0&&current<0?'SELL':null;
@@ -177,17 +194,18 @@ function findValidOBAtTime(c,time,side,tf,pv,structureCandles,raw){
  return null;
 }
 function findPivotStructure(ob,side,pv,candles,time){
- // Exige dos pivotes confirmados de la temporalidad elegida: resistencia para venta y soporte para compra.
- // El OB se ancla al más reciente de esos dos extremos, no a cualquier pivote antiguo.
- const levels=(side==='BUY'?pv.lows:pv.highs)
-  .filter(p=>p.confirmedTime<=time)
-  .sort((a,b)=>a.time-b.time);
- if(levels.length<2)return null;
- const lastTwo=levels.slice(-2),p=lastTwo[1];
- const bar=candles[p.index];if(!bar)return null;
- const tolerance=Math.max((bar.high-bar.low)*.45,(ob.high-ob.low)*1.5);
- if(p.price<ob.low-tolerance||p.price>ob.high+tolerance)return null;
- return{...p,tolerance,previousPrice:lastTwo[0].price,previousTime:lastTwo[0].time};
+ // Basta un pivote confirmado cercano: soporte para compra o resistencia para venta.
+ // Se usa una tolerancia amplia y proporcional al rango reciente para no borrar los OB válidos.
+ const levels=(side==='BUY'?pv.lows:pv.highs).filter(p=>p.confirmedTime<=time);
+ if(!levels.length)return null;
+ const recent=candles.slice(-30),avgRange=recent.length?recent.reduce((sum,v)=>sum+(v.high-v.low),0)/recent.length:0;
+ const tolerance=Math.max(avgRange*1.25,(ob.high-ob.low)*2.5);
+ const candidates=levels.map(p=>({...p,distance:Math.max(0,ob.low-p.price,p.price-ob.high)}))
+  .filter(p=>p.distance<=tolerance)
+  .sort((a,b)=>a.distance-b.distance||b.confirmedTime-a.confirmedTime);
+ if(!candidates.length)return null;
+ const p=candidates[0];
+ return{...p,tolerance};
 }
 function isOBInvalidated(ob,side,structure,raw,time){
  let lo=0,hi=raw.length;
@@ -232,11 +250,11 @@ function draw(c,calc,trades,obZones=[],setups=[]){
   state.series.ema20.setData(emaLineData(calc.e20));state.series.ema50.setData(emaLineData(calc.e50));
   drawPivotLines();if(state.markerPlugin)state.markerPlugin.setMarkers([]);
   const latest=trades.slice(-1)[0];drawOverlays(trades,c,$('mainChart'),obZones,setups);
-  if(state.forceFitNext){const visibleFrom=Math.max(0,c.length-550);const visibleRange={from:visibleFrom,to:c.length+3};state.main.timeScale().setVisibleLogicalRange(visibleRange);state.rsi.timeScale().setVisibleLogicalRange(visibleRange);}else if(priorRange){state.main.timeScale().setVisibleLogicalRange(priorRange);state.rsi.timeScale().setVisibleLogicalRange(priorRange);}state.forceFitNext=false;return;
+  if(state.forceFitNext){const visibleFrom=Math.max(0,c.length-550);const visibleRange={from:visibleFrom,to:c.length+3};state.main.timeScale().setVisibleLogicalRange(visibleRange);state.rsi.timeScale().setVisibleLogicalRange(visibleRange);}else if(priorRange){const safeRange={from:Math.max(0,priorRange.from),to:Math.min(c.length+3,Math.max(priorRange.to,Math.max(0,priorRange.from)+2))};state.main.timeScale().setVisibleLogicalRange(safeRange);state.rsi.timeScale().setVisibleLogicalRange(safeRange);}state.forceFitNext=false;return;
  }
  if(state.main){state.main.remove();if(state.rsi)state.rsi.remove();}state.overlayUpdate=null;state.overlayRangeHandler=null;
  const L=LightweightCharts,main=$('mainChart');main.innerHTML='';
- state.chartKey=chartKey;state.main=L.createChart(main,{autoSize:true,layout:{background:{type:'solid',color:'#0b121e'},textColor:'#9aaac0',fontSize:6},grid:{vertLines:{color:'#172235'},horzLines:{color:'#172235'}},rightPriceScale:{borderColor:'#28364a'},timeScale:{borderColor:'#28364a',timeVisible:true,secondsVisible:false},handleScroll:{mouseWheel:true,pressedMouseMove:true,horzTouchDrag:true,vertTouchDrag:true},handleScale:{mouseWheel:true,pinch:true,axisPressedMouseMove:true}});
+ state.chartKey=chartKey;state.main=L.createChart(main,{autoSize:true,layout:{background:{type:'solid',color:'#0b121e'},textColor:'#9aaac0',fontSize:6},grid:{vertLines:{color:'#172235'},horzLines:{color:'#172235'}},rightPriceScale:{borderColor:'#28364a'},timeScale:{borderColor:'#28364a',timeVisible:true,secondsVisible:false,fixLeftEdge:true,fixRightEdge:false,lockVisibleTimeRangeOnResize:true},handleScroll:{mouseWheel:true,pressedMouseMove:true,horzTouchDrag:true,vertTouchDrag:true},handleScale:{mouseWheel:true,pinch:true,axisPressedMouseMove:true}});
  const candle=state.main.addSeries(L.CandlestickSeries,{upColor:'#19c99a',downColor:'#ff5968',borderVisible:false,wickUpColor:'#19c99a',wickDownColor:'#ff5968',autoscaleInfoProvider:original=>{const info=original();const levels=state.overlayPriceLevels.filter(Number.isFinite);if(!info||!info.priceRange||!levels.length)return info;return{...info,priceRange:{minValue:Math.min(info.priceRange.minValue,...levels),maxValue:Math.max(info.priceRange.maxValue,...levels)}};}});state.series.candle=candle;
  candle.setData(c);
  state.series.ema20=state.main.addSeries(L.LineSeries,{color:'#f4c542',lineWidth:2,priceLineVisible:false,lastValueVisible:true,title:'EMA 20'});
@@ -251,7 +269,7 @@ function draw(c,calc,trades,obZones=[],setups=[]){
  state.rsi=L.createChart(rsiEl,{autoSize:true,layout:{background:{type:'solid',color:'#0b121e'},textColor:'#8b9bb0',fontSize:10},grid:{vertLines:{color:'#172235'},horzLines:{color:'#172235'}},rightPriceScale:{borderColor:'#28364a'},timeScale:{visible:false},handleScroll:{mouseWheel:true,pressedMouseMove:true,horzTouchDrag:true},handleScale:{mouseWheel:true,pinch:true}});
  const rs=state.rsi.addSeries(L.LineSeries,{color:'#b58aff',lineWidth:2,priceLineVisible:false,lastValueVisible:true,priceFormat:{type:'price',precision:1,minMove:.1},autoscaleInfoProvider:()=>({priceRange:{minValue:0,maxValue:100}})});state.series.rsi=rs;rs.setData(calc.rv.map((v,i)=>v==null?null:{time:c[i].time,value:v}).filter(Boolean));
  [30,50,70].forEach(v=>rs.createPriceLine({price:v,color:'#45536b',lineStyle:L.LineStyle.Dashed,lineWidth:1,axisLabelVisible:true,title:''}));
- if(preserveRange){state.main.timeScale().setVisibleLogicalRange(priorRange);state.rsi.timeScale().setVisibleLogicalRange(priorRange);}else{const visibleFrom=Math.max(0,c.length-550);const visibleRange={from:visibleFrom,to:c.length+3};state.main.timeScale().setVisibleLogicalRange(visibleRange);state.rsi.timeScale().setVisibleLogicalRange(visibleRange);}let syncingRange=false;state.main.timeScale().subscribeVisibleLogicalRangeChange(range=>{if(!range||syncingRange)return;syncingRange=true;state.rsi.timeScale().setVisibleLogicalRange(range);syncingRange=false;});state.rsi.timeScale().subscribeVisibleLogicalRangeChange(range=>{if(!range||syncingRange)return;syncingRange=true;state.main.timeScale().setVisibleLogicalRange(range);syncingRange=false;});state.forceFitNext=false;
+ if(preserveRange){const safeRange={from:Math.max(0,priorRange.from),to:Math.min(c.length+3,Math.max(priorRange.to,Math.max(0,priorRange.from)+2))};state.main.timeScale().setVisibleLogicalRange(safeRange);state.rsi.timeScale().setVisibleLogicalRange(safeRange);}else{const visibleFrom=Math.max(0,c.length-550);const visibleRange={from:visibleFrom,to:c.length+3};state.main.timeScale().setVisibleLogicalRange(visibleRange);state.rsi.timeScale().setVisibleLogicalRange(visibleRange);}let syncingRange=false;state.main.timeScale().subscribeVisibleLogicalRangeChange(range=>{if(!range||syncingRange)return;syncingRange=true;state.rsi.timeScale().setVisibleLogicalRange(range);syncingRange=false;});state.rsi.timeScale().subscribeVisibleLogicalRangeChange(range=>{if(!range||syncingRange)return;syncingRange=true;state.main.timeScale().setVisibleLogicalRange(range);syncingRange=false;});state.forceFitNext=false;
 }
 function drawPivotLines(){
  if(!state.series.candle||!state.rawCandles.length)return;
