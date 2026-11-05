@@ -42,3 +42,9 @@
 
 /* Las medias móviles son solo cálculo interno; nunca se muestran sobre el precio. */
 .legend,.ema9,.ema13,.ema20,.ema21,.ema3,.ema50{display:none!important}
+
+
+/* BOTDER v41: OB discretos, visibles y vinculados a las zonas M2 recalculadas. */
+.ob-zone{min-height:12px!important;min-width:34px!important;padding:2px 4px!important;font-size:8px!important;font-weight:800!important;letter-spacing:.15px!important;opacity:.82!important;border-width:1px!important;border-radius:2px!important;overflow:hidden!important;white-space:nowrap!important}
+.bull-zone{background:rgba(8,124,101,.22)!important;border-color:#20d69a!important;color:#7debd0!important}
+.bear-zone{background:rgba(163,45,59,.22)!important;border-color:#ff5968!important;color:#ffabb2!important}
