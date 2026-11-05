@@ -69,33 +69,32 @@ function ema(values,period){const out=Array(values.length).fill(null),k=2/(perio
 function rsi(values,period=14){const out=Array(values.length).fill(null);let gain=0,loss=0;for(let i=1;i<values.length;i++){const d=values[i]-values[i-1];const g=Math.max(d,0),l=Math.max(-d,0);if(i<=period){gain+=g;loss+=l;if(i===period){gain/=period;loss/=period;out[i]=loss===0?100:100-100/(1+gain/loss);}}else{gain=(gain*(period-1)+g)/period;loss=(loss*(period-1)+l)/period;out[i]=loss===0?100:100-100/(1+gain/loss);}}return out;}
 function pivots(c,span=3,candleSeconds=600){const highs=[],lows=[];for(let i=span;i<c.length-span;i++){let hi=true,lo=true;for(let j=1;j<=span;j++){if(c[i].high<=c[i-j].high||c[i].high<=c[i+j].high)hi=false;if(c[i].low>=c[i-j].low||c[i].low>=c[i+j].low)lo=false;}if(hi)highs.push({index:i,time:c[i].time,confirmedTime:c[i+span].time+candleSeconds,price:c[i].high});if(lo)lows.push({index:i,time:c[i].time,confirmedTime:c[i+span].time+candleSeconds,price:c[i].low});}const sample=c.slice(-30),avgRange=sample.length?sample.reduce((sum,v)=>sum+(v.high-v.low),0)/sample.length:0,tolerance=avgRange*.45;const merge=items=>{const kept=[];for(const p of items){const near=kept.findIndex(q=>Math.abs(q.price-p.price)<=tolerance);if(near<0)kept.push(p);else if(p.confirmedTime>kept[near].confirmedTime)kept[near]=p;}return kept.sort((a,b)=>a.time-b.time);};return{highs:merge(highs),lows:merge(lows)};}
 function buildSetups(c,liquidityCandles=c,pivotCandles=liquidityCandles){
- const close=c.map(x=>x.close),e9=ema(close,9),e21=ema(close,21),e50=ema(close,50),rv=rsi(close),pv=pivots(pivotCandles,3,600);
+ const close=c.map(x=>x.close),e3=ema(close,3),e9=ema(close,9),e13=ema(close,13),e50=ema(close,50),rv=rsi(close),pv=pivots(pivotCandles,3,600);
  const setups=[],usedOBs=new Set();
  for(let i=55;i<c.length-1;i++){
-  const x=c[i],prev=c[i-1],body=Math.abs(x.close-x.open),avg=c.slice(i-8,i).reduce((s,v)=>s+Math.abs(v.close-v.open),0)/8;
-  const bull=e9[i-1]<=e21[i-1]&&e9[i]>e21[i]&&e21[i]>e50[i],bear=e9[i-1]>=e21[i-1]&&e9[i]<e21[i]&&e21[i]<e50[i];
-  const buyRsi=rv[i]>=50&&rv[i]<=60&&rv[i]>rv[i-1],sellRsi=rv[i]<=55&&rv[i]>=40&&rv[i]<rv[i-1];
-  const strongBull=x.close>x.open&&body>avg*1.25, strongBear=x.close<x.open&&body>avg*1.25;
-  if(bull&&buyRsi&&strongBull){
-   const ob=findOBAtTime(liquidityCandles,x.time,'buy');if(!ob)continue;
-   const targets=pv.highs.filter(p=>p.confirmedTime<=x.time&&p.price>ob.entry).sort((a,b)=>a.price-b.price);
-   if(!targets.length)continue;
-   const sl=ob.low-(ob.high-ob.low)*.12;
-   const obKey='BUY:'+ob.time;if(usedOBs.has(obKey))continue;usedOBs.add(obKey);
-   setups.push({side:'BUY',index:i,time:x.time,entry:ob.entry,sl,tp1:targets[0].price,tp2:(targets[1]||targets[0]).price,ob, rsi:rv[i],state:'PREPARADA'});
+  const x=c[i],bodies=c.slice(Math.max(0,i-10),i).map(v=>Math.abs(v.close-v.open));
+  const avgBody=bodies.length?bodies.reduce((a,b)=>a+b,0)/bodies.length:0;
+  const separated=avgBody>0&&Math.abs(e9[i]-e50[i])>=avgBody*1.5;
+  const slopeUp=e50[i]>e50[i-3],slopeDown=e50[i]<e50[i-3];
+  const bullCross=e3[i-1]<=e13[i-1]&&e3[i-1]<=e50[i-1]&&e3[i]>e13[i]&&e3[i]>e50[i];
+  const bearCross=e3[i-1]>=e13[i-1]&&e3[i-1]>=e50[i-1]&&e3[i]<e13[i]&&e3[i]<e50[i];
+  const bullFvg=i>=2&&x.low>c[i-2].high,bearFvg=i>=2&&x.high<c[i-2].low;
+  if(bullCross&&slopeUp&&separated&&bullFvg){
+   const ob=findOBAtTime(liquidityCandles,x.time,'BUY');if(!ob)continue;
+   const targets=pv.highs.filter(p=>p.confirmedTime<=x.time&&p.price>ob.entry).sort((a,b)=>a.price-b.price);if(!targets.length)continue;
+   const sl=ob.low-(ob.high-ob.low)*.12,obKey='BUY:'+ob.time;if(usedOBs.has(obKey))continue;usedOBs.add(obKey);
+   setups.push({side:'BUY',index:i,time:x.time,entry:ob.entry,sl,tp1:targets[0].price,tp2:(targets[1]||targets[0]).price,ob,rsi:rv[i],fvg:{low:c[i-2].high,high:x.low},state:'PREPARADA'});
   }
-  if(bear&&sellRsi&&strongBear){
-   const ob=findOBAtTime(liquidityCandles,x.time,'sell');if(!ob)continue;
-   const targets=pv.lows.filter(p=>p.confirmedTime<=x.time&&p.price<ob.entry).sort((a,b)=>b.price-a.price);
-   if(!targets.length)continue;
-   const sl=ob.high+(ob.high-ob.low)*.12;
-   const obKey='SELL:'+ob.time;if(usedOBs.has(obKey))continue;usedOBs.add(obKey);
-   setups.push({side:'SELL',index:i,time:x.time,entry:ob.entry,sl,tp1:targets[0].price,tp2:(targets[1]||targets[0]).price,ob,rsi:rv[i],state:'PREPARADA'});
+  if(bearCross&&slopeDown&&separated&&bearFvg){
+   const ob=findOBAtTime(liquidityCandles,x.time,'SELL');if(!ob)continue;
+   const targets=pv.lows.filter(p=>p.confirmedTime<=x.time&&p.price<ob.entry).sort((a,b)=>b.price-a.price);if(!targets.length)continue;
+   const sl=ob.high+(ob.high-ob.low)*.12,obKey='SELL:'+ob.time;if(usedOBs.has(obKey))continue;usedOBs.add(obKey);
+   setups.push({side:'SELL',index:i,time:x.time,entry:ob.entry,sl,tp1:targets[0].price,tp2:(targets[1]||targets[0]).price,ob,rsi:rv[i],fvg:{low:x.high,high:c[i-2].low},state:'PREPARADA'});
   }
  }
- return{setups,e9,e21,e50,rv,pv};
+ return{setups,e3,e9,e13,e50,rv,pv};
 }
-function findOBAtTime(c,time,side){const completed=c.filter(bar=>bar.time+300<=time);return findOB(completed,completed.length,side);}
+function findOBAtTime(c,time,side){const completed=c.filter(bar=>bar.time+120<=time);return findOB(completed,completed.length,side);}
 function findOB(c,i,side){for(let j=i-1;j>=Math.max(0,i-9);j--){const q=c[j],opposite=side==='BUY'?q.close<q.open:q.close>q.open;if(opposite){const entry=(q.high+q.low)/2;return{time:q.time,high:q.high,low:q.low,entry};}}return null;}
 function simulate(c,setups){
  const trades=[];for(const s of setups){let entered=false,result='PENDIENTE',entryIndex=-1,exitTime=null;for(let j=s.index+1;j<c.length;j++){const k=c[j];if(!entered){const entryHit=k.low<=s.entry&&k.high>=s.entry;if(!entryHit){if((s.side==='BUY'&&k.low<s.sl)||(s.side==='SELL'&&k.high>s.sl)){result='CANCELADA';exitTime=k.time;break;}if(j-s.index>=5){result='CANCELADA';exitTime=k.time;break;}continue;}entered=true;entryIndex=j;}const slHit=s.side==='BUY'?k.low<=s.sl:k.high>=s.sl;const tp1Hit=s.side==='BUY'?k.high>=s.tp1:k.low<=s.tp1;const tp2Hit=s.side==='BUY'?k.high>=s.tp2:k.low<=s.tp2;if(slHit){result='PERDIDA';exitTime=k.time;break;}if(tp1Hit||tp2Hit){result='GANADA';exitTime=k.time;break;}}trades.push({...s,result,entryIndex,exitTime});}return trades;}
@@ -105,7 +104,7 @@ function draw(c,calc,trades){
  if(state.overlayResizeObserver){state.overlayResizeObserver.disconnect();state.overlayResizeObserver=null;}
  if(state.main&&state.rsi&&state.chartKey===chartKey){
   const lineData=values=>values.map((v,i)=>v==null?null:{time:c[i].time,value:v}).filter(Boolean);
-  state.series.candle.setData(c);state.series.ema9.setData(lineData(calc.e9));state.series.ema21.setData(lineData(calc.e21));state.series.ema50.setData(lineData(calc.e50));state.series.rsi.setData(lineData(calc.rv));
+  state.series.candle.setData(c);state.series.rsi.setData(lineData(calc.rv));
   drawPivotLines();const markers=[];trades.forEach(t=>{markers.push({time:t.time,position:t.side==='BUY'?'belowBar':'aboveBar',color:t.side==='BUY'?'#20d69a':'#ff5968',shape:t.side==='BUY'?'arrowUp':'arrowDown',text:t.side==='BUY'?'COMPRA':'VENTA'});});if(state.markerPlugin)state.markerPlugin.setMarkers(markers.sort((a,b)=>a.time-b.time));
   const latest=trades.slice(-1)[0];drawOverlays(trades,c,$('mainChart'));
   if(state.forceFitNext){const visibleFrom=Math.max(0,c.length-120);const visibleRange={from:visibleFrom,to:c.length+3};state.main.timeScale().setVisibleLogicalRange(visibleRange);state.rsi.timeScale().setVisibleLogicalRange(visibleRange);}else if(priorRange){state.main.timeScale().setVisibleLogicalRange(priorRange);state.rsi.timeScale().setVisibleLogicalRange(priorRange);}state.forceFitNext=false;return;
@@ -115,8 +114,6 @@ function draw(c,calc,trades){
  state.chartKey=chartKey;state.main=L.createChart(main,{autoSize:true,layout:{background:{type:'solid',color:'#0b121e'},textColor:'#9aaac0',fontSize:6},grid:{vertLines:{color:'#172235'},horzLines:{color:'#172235'}},rightPriceScale:{borderColor:'#28364a'},timeScale:{borderColor:'#28364a',timeVisible:true,secondsVisible:false},handleScroll:{mouseWheel:true,pressedMouseMove:true,horzTouchDrag:true,vertTouchDrag:true},handleScale:{mouseWheel:true,pinch:true,axisPressedMouseMove:true}});
  const candle=state.main.addSeries(L.CandlestickSeries,{upColor:'#19c99a',downColor:'#ff5968',borderVisible:false,wickUpColor:'#19c99a',wickDownColor:'#ff5968'});state.series.candle=candle;
  candle.setData(c);
- const addLine=(values,color)=>{const s=state.main.addSeries(L.LineSeries,{color,lineWidth:2,priceLineVisible:false,lastValueVisible:false});s.setData(values.map((v,i)=>v==null?null:{time:c[i].time,value:v}).filter(Boolean));return s;};
- state.series.ema9=addLine(calc.e9,'#36b9f6');state.series.ema21=addLine(calc.e21,'#f5a33b');state.series.ema50=addLine(calc.e50,'#a36aff');
  drawPivotLines();const markers=[];
  trades.forEach(t=>{
   
@@ -171,7 +168,7 @@ function drawOverlays(trades,c,host){
  if(state.overlayResizeObserver){state.overlayResizeObserver.disconnect();state.overlayResizeObserver=null;}
  const old=host.querySelector('.chart-overlay');if(old)old.remove();state.overlayUpdate=null;
  const overlay=document.createElement('div');overlay.className='chart-overlay';host.appendChild(overlay);
- const m5=aggregate(state.rawCandles,5);
+ const m5=aggregate(state.rawCandles,2);
  const latestOB=(side)=>{
   for(let i=m5.length-1;i>=0;i--){
    const bar=m5[i],opposite=side==='BUY'?bar.close<bar.open:bar.close>bar.open;
@@ -224,7 +221,7 @@ function drawOverlays(trades,c,host){
 function fmt(n){return Number.isFinite(n)?Number(n).toFixed(2):'—';}
 function showLatest(calc,trades,c){
  const last=c[c.length-1],t=trades.filter(x=>x.result==='PENDIENTE').slice(-1)[0],rv=calc.rv[calc.rv.length-1];
- const trend=calc.e9.at(-1)>calc.e21.at(-1)&&calc.e21.at(-1)>calc.e50.at(-1)?'ALCISTA':calc.e9.at(-1)<calc.e21.at(-1)&&calc.e21.at(-1)<calc.e50.at(-1)?'BAJISTA':'LATERAL';
+ const trend=calc.e50.at(-1)>calc.e50.at(-4)?'ALCISTA':calc.e50.at(-1)<calc.e50.at(-4)?'BAJISTA':'LATERAL';
  $('trendValue').textContent=trend;$('trendValue').style.color=trend==='BAJISTA'?'#ff6876':trend==='ALCISTA'?'#20d69a':'#d5b35b';
  $('signalValue').textContent=t?(t.side==='BUY'?'COMPRA':'VENTA'):'ESPERANDO';$('signalValue').style.color=t?(t.side==='BUY'?'#20d69a':'#ff6876'):'#aab8ca';
  $('entryValue').textContent=t?fmt(t.entry):'—';$('slValue').textContent=t?fmt(t.sl):'—';$('tp1Value').textContent=t?fmt(t.tp1):'—';$('tp2Value').textContent=t?fmt(t.tp2):'—';$('rsiValue').textContent=fmt(rv);
@@ -242,7 +239,7 @@ async function runUniverseBacktest(refresh=false){
  });
  await Promise.all(workers);
  const allTrades=[],shortHistory=[];
- for(const item of state.symbols){const source=state.rawBySymbol.get(item.symbol)||[];if(!source.length)continue;const cutoff=Math.floor(Date.now()/1000)-86400;const raw=source.filter(v=>v.time>=cutoff);if(raw.length<HISTORY_CANDLES)shortHistory.push(item.name+' ('+raw.length+' velas/24h)');const candles=aggregate(raw,state.tf);if(candles.length<70)continue;const calc=buildSetups(candles,aggregate(raw,5),aggregate(raw,10)),trades=simulate(candles,calc.setups);allTrades.push(...trades.map(t=>({...t,symbol:item.symbol})));}
+ for(const item of state.symbols){const source=state.rawBySymbol.get(item.symbol)||[];if(!source.length)continue;const cutoff=Math.floor(Date.now()/1000)-86400;const raw=source.filter(v=>v.time>=cutoff);if(raw.length<HISTORY_CANDLES)shortHistory.push(item.name+' ('+raw.length+' velas/24h)');const candles=aggregate(raw,2);if(candles.length<70)continue;const calc=buildSetups(candles,candles,aggregate(raw,10)),trades=simulate(candles,calc.setups);allTrades.push(...trades.map(t=>({...t,symbol:item.symbol})));}
  state.marketBacktests=allTrades;
  const closed=allTrades.filter(t=>t.result==='GANADA'||t.result==='PERDIDA');
  $('wins').textContent=closed.filter(t=>t.result==='GANADA').length;$('losses').textContent=closed.filter(t=>t.result==='PERDIDA').length;
@@ -252,8 +249,8 @@ async function runUniverseBacktest(refresh=false){
 async function analyze(){
  if(state.busy){state.analyzeQueued=true;return;}state.busy=true;$('dataStatus').textContent='Cargando gráfico…';
  try{const raw=state.rawBySymbol.get(state.selected)||await getCandles(state.selected,1440);if(!raw.length)throw new Error('No llegaron velas para '+state.selected);state.rawBySymbol.set(state.selected,raw);
- state.rawCandles=raw;state.lastRecalcBucket=Math.floor(raw.at(-1).time/(state.tf*60));const c=aggregate(raw,state.tf);state.candles=c;const calc=buildSetups(c,aggregate(raw,5),aggregate(raw,10));state.trades=simulate(c,calc.setups);
- draw(c,calc,state.trades);showLatest(calc,state.trades,c);renderHistory(state.trades);
+ state.rawCandles=raw;state.lastRecalcBucket=Math.floor(raw.at(-1).time/120);const c=aggregate(raw,state.tf);state.candles=c;const signalCandles=aggregate(raw,2);const signalCalc=buildSetups(signalCandles,signalCandles,aggregate(raw,10));const chartCalc=buildSetups(c,c,aggregate(raw,10));state.trades=simulate(signalCandles,signalCalc.setups);
+ draw(c,chartCalc,state.trades);showLatest(signalCalc,state.trades,signalCandles);renderHistory(state.trades);
  $('chartTitle').textContent=(state.symbols.find(s=>s.symbol===state.selected)?.name||state.selected)+' · M'+state.tf;
  $('chartSubtitle').textContent='Velas '+c.length+' · últimas 24 horas · señales proyectadas';
  $('chartRange').textContent='Últimas 24 horas · '+new Date(c[0].time*1000).toLocaleTimeString('es-PA')+' — '+new Date(c.at(-1).time*1000).toLocaleTimeString('es-PA');
@@ -288,7 +285,7 @@ function onLiveTick(tick){
    let high=p.high,low=p.low;for(const bar of group){if(bar.high>high)high=bar.high;if(bar.low<low)low=bar.low;}
    state.series.candle.update({time:bucket,open:group[group.length-1].open,high,low,close:p.quote});
   }
-  const recalcBucket=Math.floor(p.epoch/tfSeconds);
+  const recalcBucket=Math.floor(p.epoch/120);
   if(state.lastRecalcBucket!==null&&recalcBucket>state.lastRecalcBucket){
    state.lastRecalcBucket=recalcBucket;state.rawBySymbol.set(state.selected,state.rawCandles);analyze();
   }
