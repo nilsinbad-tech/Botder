@@ -75,3 +75,11 @@
 .chart-overlay .level-copy b{font-size:8px!important;line-height:10px!important}
 .chart-overlay .level-copy small{font-size:7px!important;line-height:9px!important;color:#c5d6e9!important}
 .chart-overlay .level-tag strong{font-size:9px!important}
+
+
+/* BOTDER v51: recuperar recuadros OB resaltados, con borde amarillo y brillo. */
+.chart-overlay .ob-zone{z-index:10!important;display:flex!important;align-items:center!important;justify-content:flex-start!important;min-width:112px!important;min-height:30px!important;height:30px!important;padding:5px 9px!important;border:2px solid #ffd34e!important;border-radius:4px!important;opacity:1!important;overflow:visible!important;font-size:10px!important;font-weight:950!important;letter-spacing:.35px!important;text-shadow:0 1px 3px #000!important;box-shadow:0 0 0 1px #ffd34e66,0 0 13px #ffd34e99,inset 0 0 8px #ffd34e22!important}
+.chart-overlay .ob-zone b{position:static!important;display:block!important;padding:0!important;background:transparent!important;color:#fff!important;font-size:10px!important;line-height:14px!important;font-weight:950!important;white-space:nowrap!important;text-shadow:0 1px 3px #000!important}
+.chart-overlay .bull-zone{background:rgba(0,190,145,.52)!important;border-color:#ffd34e!important;color:#fff!important;box-shadow:0 0 0 1px #ffd34e77,0 0 14px #20e6aeaa,0 0 13px #ffd34e88,inset 0 0 8px #20e6ae55!important}
+.chart-overlay .bear-zone{background:rgba(225,55,75,.58)!important;border-color:#ffd34e!important;color:#fff!important;box-shadow:0 0 0 1px #ffd34e88,0 0 16px #ff5968bb,0 0 13px #ffd34e99,inset 0 0 8px #ff596855!important}
+@media(max-width:600px){.chart-overlay .ob-zone{min-width:104px!important;min-height:28px!important;height:28px!important;padding:4px 7px!important}.chart-overlay .ob-zone b{font-size:9px!important}}
