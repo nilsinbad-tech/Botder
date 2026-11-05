@@ -158,16 +158,24 @@ function zigZagLineData(raw){
  const clean=data=>{const map=new Map();for(const p of data)map.set(p.time,p);return [...map.values()].sort((a,b)=>a.time-b.time);};
  return{up:clean(up),down:clean(down),pivots};
 }
+function completedCandles(raw,seconds=60,now=Math.floor(Date.now()/1000)){
+ const boundary=Math.floor(now/seconds)*seconds;
+ return (raw||[]).filter(bar=>Number.isFinite(bar.time)&&bar.time+seconds<=boundary);
+}
 function zigZagConfirmations(raw){
- const pivots=calculateZigZagM1(raw),signals=[];
+ // Solo se consideran velas M1 completamente cerradas. Nunca se confirma con la vela viva.
+ const closed=completedCandles(raw,60),pivots=calculateZigZagM1(closed),signals=[];
  for(let i=1;i<pivots.length;i++){
   const prior=pivots[i-1],pivot=pivots[i];
   const side=pivot.type==='LOW'&&prior.type==='HIGH'?'BUY':pivot.type==='HIGH'&&prior.type==='LOW'?'SELL':null;
   if(!side)continue;
-  const next=raw.find(bar=>bar.time>=pivot.confirmedTime);
-  if(!next||next.time+60>(raw.at(-1)?.time||0)+60)continue;
+  // La vela de confirmación empieza cuando el pivote ya quedó confirmado.
+  const next=closed.find(bar=>bar.time>=pivot.confirmedTime);
+  if(!next)continue;
   const bullish=next.close>next.open,bearish=next.close<next.open;
-  if((side==='BUY'&&bullish)||(side==='SELL'&&bearish))signals.push({side,time:next.time+60,price:next.close,pivotTime:pivot.time,pivotConfirmedTime:pivot.confirmedTime});
+  if((side==='BUY'&&bullish)||(side==='SELL'&&bearish)){
+   signals.push({side,time:next.time+60,price:next.close,pivotTime:pivot.time,pivotConfirmedTime:pivot.confirmedTime,confirmationCandleTime:next.time});
+  }
  }
  return signals.sort((a,b)=>a.time-b.time);
 }
@@ -289,7 +297,8 @@ function simulate(c,setups,rsiM5Values=[],m1Candles=state.rawCandles){
     const rsiOpposite=Number.isFinite(prevRsi)&&Number.isFinite(currentRsi)&&(s.side==='BUY'?(prevRsi>=mid&&currentRsi<mid):(prevRsi<=mid&&currentRsi>mid));
     if(rsiOpposite){result='CANCELADA';exitTime=k.time;cancelReason='RSI_M5_CRUCE_50_CONTRARIO';break;}
 
-    const zigTrigger=zigSignals.find(signal=>signal.side===s.side&&signal.time> s.time&&signal.time<=k.time+120);
+    // La confirmación M1 debe haber cerrado antes de comenzar esta vela M2.
+    const zigTrigger=zigSignals.find(signal=>signal.side===s.side&&signal.time>s.time&&signal.time<=k.time);
     if(!zigTrigger){
      if((s.side==='BUY'&&k.low<s.sl)||(s.side==='SELL'&&k.high>s.sl)){result='CANCELADA';exitTime=k.time;cancelReason='SL_ANTES_DE_CONFIRMACION_ZIGZAG';break;}
      if(j-s.index>=5){result='CANCELADA';exitTime=k.time;cancelReason='EXPIRADA_SIN_ZIGZAG';break;}
@@ -299,7 +308,8 @@ function simulate(c,setups,rsiM5Values=[],m1Candles=state.rawCandles){
     entryPrice=zigTrigger.price;
     slLevel=entryPrice+(s.sl-s.entry);tp1Level=entryPrice+(s.tp1-s.entry);tp2Level=entryPrice+(s.tp2-s.entry);
    }
-   if(k.time+120<=entryTime)continue;
+   // No evaluar TP/SL en una vela que comenzó antes de la entrada confirmada.
+   if(k.time<entryTime)continue;
    const slHit=s.side==='BUY'?k.low<=slLevel:k.high>=slLevel;
    const tp1Hit=s.side==='BUY'?k.high>=tp1Level:k.low<=tp1Level;
    const tp2Hit=s.side==='BUY'?k.high>=tp2Level:k.low<=tp2Level;
@@ -587,7 +597,7 @@ async function runUniverseBacktest(refresh=false){
  });
  await Promise.all(workers);
  const allTrades=[],shortHistory=[];
- for(const item of state.symbols){const source=state.rawBySymbol.get(item.symbol)||[];if(!source.length)continue;const raw=source;if(raw.length<HISTORY_CANDLES)shortHistory.push(item.name+' ('+raw.length+' de '+HISTORY_CANDLES+' velas)');const candles=aggregate(raw,2);if(candles.length<70)continue;const hourly=getHourlyBias(raw),obCandles=raw,pivotCandles=aggregate(raw,state.pivotTf),calc=buildSetups(candles,obCandles,pivotCandles,pivotCandles,hourly.side,raw),setups=hourly.side?calc.setups.filter(x=>x.side===hourly.side):[],trades=simulate(candles,setups,rsiForCandles(candles,raw),raw);allTrades.push(...trades.map(t=>({...t,symbol:item.symbol})));}
+ for(const item of state.symbols){const source=state.rawBySymbol.get(item.symbol)||[];if(!source.length)continue;const raw=source;if(raw.length<HISTORY_CANDLES)shortHistory.push(item.name+' ('+raw.length+' de '+HISTORY_CANDLES+' velas)');const candles=completedCandles(aggregate(raw,2),120);if(candles.length<70)continue;const hourly=getHourlyBias(raw),obCandles=raw,pivotCandles=aggregate(raw,state.pivotTf),calc=buildSetups(candles,obCandles,pivotCandles,pivotCandles,hourly.side,raw),setups=hourly.side?calc.setups.filter(x=>x.side===hourly.side):[],trades=simulate(candles,setups,rsiForCandles(candles,raw),raw);allTrades.push(...trades.map(t=>({...t,symbol:item.symbol})));}
  state.marketBacktests=mergeTrades(state.marketBacktests,allTrades,2000);
  state.savedChartTrades=mergeTrades(state.savedChartTrades,allTrades,2000);
  state.trades=state.savedChartTrades.filter(t=>t.symbol===state.selected);
@@ -602,7 +612,6 @@ async function runUniverseBacktest(refresh=false){
  }
  if(state.markerPlugin)state.markerPlugin.setMarkers([]);
  savePersistentState();
- renderHistory(state.marketBacktests);
  // Los contadores se pintan desde el mismo historial filtrado de 24 horas.
  renderHistory(state.marketBacktests);
  const failed=state.downloadErrors.length;$('backtestInfo').textContent='Universo: '+state.symbols.length+' instrumentos · señales M2 · gráfico M'+state.tf+' · período: últimas 24 horas · '+allTrades.length+' señales simuladas · '+failed+' descargas fallidas · '+shortHistory.length+' con historial parcial'+(failed?'. Errores: '+state.downloadErrors.slice(0,2).join(' | '):'')+(shortHistory.length?'. Parciales: '+shortHistory.slice(0,3).join(', '):'.');
@@ -610,7 +619,7 @@ async function runUniverseBacktest(refresh=false){
 async function analyze(){
  if(state.busy){state.analyzeQueued=true;return;}state.busy=true;$('dataStatus').textContent='Cargando gráfico…';
  try{const raw=state.rawBySymbol.get(state.selected)||await getCandles(state.selected,HISTORY_CANDLES);if(!raw.length)throw new Error('No llegaron velas para '+state.selected);state.rawBySymbol.set(state.selected,raw);
- state.rawCandles=raw;state.lastRecalcBucket=Math.floor(raw.at(-1).time/120);const c=aggregate(raw,state.tf);state.candles=c;const signalCandles=aggregate(raw,2);const obCandles=raw;const pivotCandles=aggregate(raw,state.pivotTf);
+ state.rawCandles=raw;state.lastRecalcBucket=Math.floor(raw.at(-1).time/60);const c=aggregate(raw,state.tf);state.candles=c;const signalCandles=completedCandles(aggregate(raw,2),120);const obCandles=raw;const pivotCandles=aggregate(raw,state.pivotTf);
  const hourly=getHourlyBias(raw),activeSide=hourly.side;const signalCalc=buildSetups(signalCandles,obCandles,pivotCandles,pivotCandles,activeSide,raw);const chartCalc=buildSetups(c,obCandles,pivotCandles,pivotCandles,activeSide,raw);
  // Una sola dirección gobierna las señales y los OB visibles: la tendencia H1.
  const alignedSetups=activeSide?signalCalc.setups.filter(setup=>setup.side===activeSide):[];
@@ -655,7 +664,7 @@ function onLiveTick(tick){
    state.series.candle.update({time:bucket,open:group[group.length-1].open,high,low,close:p.quote});
   }
   const liveChartCandles=aggregate(state.rawCandles,state.tf);const liveRsi=rsi(liveChartCandles.map(x=>x.close));const liveRsiValue=liveRsi.at(-1);if(state.series.rsi)state.series.rsi.setData(liveRsi.map((v,i)=>v==null?null:{time:liveChartCandles[i].time,value:v}).filter(Boolean));if(Number.isFinite(liveRsiValue)){if($('rsiValue'))$('rsiValue').textContent=fmt(liveRsiValue);if($('rsiLegend'))$('rsiLegend').textContent='Valor actual en formación: '+fmt(liveRsiValue);}
-  const recalcBucket=Math.floor(p.epoch/120);
+  const recalcBucket=Math.floor(p.epoch/60);
   if(state.lastRecalcBucket!==null&&recalcBucket>state.lastRecalcBucket){
    state.lastRecalcBucket=recalcBucket;state.rawBySymbol.set(state.selected,state.rawCandles);analyze();
   }
