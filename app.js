@@ -26,15 +26,20 @@ function connect(){
 function request(payload){return new Promise((resolve,reject)=>{if(!state.ws||state.ws.readyState!==1){reject(new Error('WebSocket no está conectado'));return;}const id=++state.req;const timer=setTimeout(()=>{if(state.pending.has(id)){state.pending.delete(id);reject(new Error('Deriv no respondió a tiempo: '+(payload.ticks_history||payload.active_symbols||'solicitud')));}},REQUEST_TIMEOUT_MS);state.pending.set(id,{resolve:m=>{clearTimeout(timer);resolve(m);},reject:e=>{clearTimeout(timer);reject(e);}});try{state.ws.send(JSON.stringify({...payload,req_id:id}));}catch(e){clearTimeout(timer);state.pending.delete(id);reject(e);}});}
 async function loadSymbols(){
  await connect();const r=await request({active_symbols:'brief'});
- const all=r.active_symbols||[];const byCode=new Map(all.map(s=>[s.symbol,s]));
- const chosen=CANDIDATES.map(([code,label])=>{const s=byCode.get(code);return s?{symbol:s.symbol,name:s.display_name||label,market:s.market,submarket:s.submarket}:null;}).filter(Boolean);
- // Completa el universo con otros sintéticos activos si algún símbolo preferido no está disponible.
- const extras=all.filter(s=>/volatility|crash|boom|step index|jump/i.test(s.display_name||''))
-   .filter(s=>!chosen.some(x=>x.symbol===s.symbol))
+ const all=r.active_symbols||[];
+ // La API nueva de Deriv renombró symbol/display_name a underlying_symbol/underlying_symbol_name.
+ const codeOf=s=>s.underlying_symbol||s.symbol||'';
+ const nameOf=s=>s.underlying_symbol_name||s.display_name||'';
+ const byCode=new Map(all.map(s=>[codeOf(s),s]));
+ const chosen=CANDIDATES.map(([code,label])=>{const s=byCode.get(code);return s?{symbol:codeOf(s),name:nameOf(s)||label,market:s.market,submarket:s.submarket}:null;}).filter(Boolean);
+ // Completa con los sintéticos activos reconocidos por su nombre en la API nueva o antigua.
+ const extras=all.filter(s=>/volatility|crash|boom|step index|jump/i.test(nameOf(s)))
+   .filter(s=>!chosen.some(x=>x.symbol===codeOf(s)))
    .sort((a,b)=>{
+     const an=nameOf(a),bn=nameOf(b);
      const rank=n=>/step index/i.test(n)?0:/crash 300|boom 300/i.test(n)?1:/volatility/i.test(n)?2:/crash|boom/i.test(n)?3:4;
-     const num=n=>parseInt((n.match(/\d+/)||['9999'])[0],10);return rank(a.display_name)-rank(b.display_name)||num(a.display_name)-num(b.display_name)||a.display_name.localeCompare(b.display_name);
-   }).map(s=>({symbol:s.symbol,name:s.display_name,market:s.market,submarket:s.submarket}));
+     const num=n=>parseInt((n.match(/\d+/)||['9999'])[0],10);return rank(an)-rank(bn)||num(an)-num(bn)||an.localeCompare(bn);
+   }).map(s=>({symbol:codeOf(s),name:nameOf(s)||codeOf(s),market:s.market,submarket:s.submarket}));
  // Prioriza Step Index y los Crash/Boom con el número más bajo disponible.
  const ordered=[...chosen].sort((a,b)=>{
    const rank=n=>/step index/i.test(n)?0:/crash 300|boom 300/i.test(n)?1:/volatility/i.test(n)?2:/crash|boom/i.test(n)?3:4;
@@ -42,7 +47,7 @@ async function loadSymbols(){
  });
  state.symbols=[...ordered,...extras].slice(0,25);
  if(!state.symbols.length){
-  const sample=all.slice(0,12).map(x=>(x.display_name||x.symbol||'sin nombre')+' ['+(x.symbol||'?')+']').join(', ');
+  const sample=all.slice(0,12).map(x=>(nameOf(x)||'sin nombre')+' ['+(codeOf(x)||'?')+']').join(', ');
   throw new Error('Deriv respondió '+all.length+' símbolos, pero ninguno coincidió con los filtros. Muestra: '+(sample||'catálogo vacío'));
  }
  $('instrumentCount').textContent=state.symbols.length+' / 25 instrumentos activos';
