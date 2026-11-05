@@ -55,7 +55,7 @@ function connectDeriv() {
     if([13,14,15,16,17,18,19,20].includes(data.req_id)&&selectedSymbol&&responseSymbol(data)===selectedSymbol&&(data.msg_type==="history"||data.msg_type==="candles")){const seconds=({13:3600,14:14400,15:86400,16:1800,17:600,18:300,19:900,20:120})[data.req_id],rows=data.candles||data.history?.candles||[],parsed=rows.map(c=>({time:Number(c.epoch??c.open_time),open:Number(c.open),high:Number(c.high),low:Number(c.low),close:Number(c.close)})).filter(c=>[c.time,c.open,c.high,c.low,c.close].every(Number.isFinite));if(parsed.length){higherTfBuffers[seconds]=parsed.sort((a,b)=>a.time-b.time);if(selectedGranularity===seconds&&typeof updateCandles==="function")updateCandles(getDisplayCandles(seconds));if(typeof analyzeCandles==="function"&&candleBuffer.length>=100)analyzeCandles(selectedSymbol,selectedMarketName(),candleBuffer);showApiDiagnostic("Historial HTF cargado · "+(seconds===120?"M2":seconds===300?"M5":seconds===600?"M10":seconds===900?"M15":seconds===1800?"M30":seconds===3600?"H1":seconds===14400?"H4":"D1")+" · "+parsed.length+" velas.");}}
     if (data.req_id === 12 && selectedSymbol && responseSymbol(data)===selectedSymbol && (data.msg_type === "history" || data.msg_type === "candles")) {
       const requestStyle=data.echo_req?.style;
-      if((selectedGranularity===30&&requestStyle!=="ticks")||(selectedGranularity!==30&&requestStyle==="ticks"))return;
+      if(requestStyle&&((selectedGranularity===30&&requestStyle!=="ticks")||(selectedGranularity!==30&&requestStyle==="ticks")))return;
       const history=data.history||{};
       let historical=[];
       const rows=Array.isArray(data.candles)?data.candles:(Array.isArray(history.candles)?history.candles:null);
@@ -66,7 +66,7 @@ function connectDeriv() {
         const ordered=state.times.map((time,i)=>({time,price:state.prices[i]})).filter(x=>Number.isFinite(x.time)&&Number.isFinite(x.price)).sort((a,b)=>a.time-b.time);
         const allCandles=aggregateTicks(ordered.map(x=>x.time),ordered.map(x=>x.price),30);
         const pageFull=history.times.length>=5000;
-        if(allCandles.length<5000&&pageFull&&state.pages<100&&ordered.length){
+        if(allCandles.length<5000&&pageFull&&state.pages<200&&ordered.length){
           const previousEnd=ordered[0].time-1;
           sendDeriv({ticks_history:selectedSymbol,count:5000,end:previousEnd,style:"ticks",req_id:12});
           showChartMessage("Historial S30: "+allCandles.length+" / 5.000 velas · descargando bloque "+(state.pages+1)+"...");
