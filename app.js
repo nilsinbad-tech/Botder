@@ -1,7 +1,7 @@
 /* BOTDER · motor de análisis y backtesting. Sin ejecución de órdenes. */
 (() => {
 'use strict';
-const HISTORY_CANDLES = 1440;
+const HISTORY_CANDLES = 4320;
 const REQUEST_TIMEOUT_MS = 45000;
 const API_URL = 'wss://api.derivws.com/trading/v1/options/ws/public';
 const $ = id => document.getElementById(id);
@@ -117,6 +117,7 @@ function buildSetups(c,liquidityCandles=c,pivotCandles=liquidityCandles,obStruct
    if(!(x.low<=ob.high&&x.high>=ob.low))continue;
    if(isOBInvalidated(ob,ob.side,{price:ob.structurePrice,confirmedTime:ob.structureConfirmedTime},targetRawCandles,x.time))continue;
    const side=ob.side;
+   if(trendSide&&side!==trendSide)continue;
    if(emaBias!==side)continue;
    const emaAligned=side==='BUY'?e9[i]>e20[i]:e9[i]<e20[i];
    if(!emaAligned||!Number.isFinite(previousRsi)||!Number.isFinite(currentRsi))continue;
@@ -349,14 +350,16 @@ function drawOverlays(trades,c,host,obZones=[],setups=[]){
 function fmt(n){return Number.isFinite(n)?Number(n).toFixed(2):'—';}
 function getHourlyBias(raw){
  const h1=aggregate(raw,60);
- if(h1.length<4)return{trend:'SIN DATOS',side:null,ob:null};
- const close=h1.map(x=>x.close),fast=ema(close,3),slow=ema(close,13);
- const up=fast.at(-1)>slow.at(-1)&&slow.at(-1)>slow.at(-3);
- const down=fast.at(-1)<slow.at(-1)&&slow.at(-1)<slow.at(-3);
- const trend=up?'ALCISTA':down?'BAJISTA':'LATERAL';
- const side=up?'BUY':down?'SELL':null;
+ if(h1.length<50)return{trend:'SIN DATOS H1',side:null,ob:null,h1,possibleChange:null};
+ const close=h1.map(x=>x.close),fast=ema(close,20),slow=ema(close,50);
+ const prevFast=fast.at(-2),prevSlow=slow.at(-2),nowFast=fast.at(-1),nowSlow=slow.at(-1);
+ const crossUp=prevFast<=prevSlow&&nowFast>nowSlow;
+ const crossDown=prevFast>=prevSlow&&nowFast<nowSlow;
+ const side=nowFast>nowSlow?'BUY':nowFast<nowSlow?'SELL':null;
+ const possibleChange=crossUp?'ALCISTA':crossDown?'BAJISTA':null;
+ const trend=possibleChange?'POSIBLE CAMBIO '+possibleChange:(side==='BUY'?'ALCISTA':side==='SELL'?'BAJISTA':'LATERAL');
  const ob=side?findOB(h1,h1.length,side):null;
- return{trend,side,ob,h1};
+ return{trend,side,ob,h1,possibleChange,ema20:nowFast,ema50:nowSlow};
 }
 function showLatest(calc,trades,c,raw=state.rawCandles){
  const t=trades.filter(x=>x.result==='PENDIENTE').slice(-1)[0]||trades.slice(-1)[0],rv=calc.rv[calc.rv.length-1];
@@ -397,8 +400,8 @@ async function runUniverseBacktest(refresh=false){
  const currentRaw=state.rawBySymbol.get(state.selected)||state.rawCandles;
  if(currentRaw.length&&state.main){
   state.rawCandles=currentRaw;const chartCandles=aggregate(currentRaw,state.tf),signalCandles=aggregate(currentRaw,2),pivotCandles=aggregate(currentRaw,state.pivotTf),hourly=getHourlyBias(currentRaw);
-  const chartCalc=buildSetups(chartCandles,currentRaw,pivotCandles,pivotCandles,null,currentRaw);
-  const signalCalc=buildSetups(signalCandles,currentRaw,pivotCandles,pivotCandles,null,currentRaw);
+  const chartCalc=buildSetups(chartCandles,currentRaw,pivotCandles,pivotCandles,hourly.side,currentRaw);
+  const signalCalc=buildSetups(signalCandles,currentRaw,pivotCandles,pivotCandles,hourly.side,currentRaw);
   const aligned=signalCalc.setups;
   state.candles=chartCandles;draw(chartCandles,chartCalc,state.trades,chartCalc.obZones,aligned);showLatest(signalCalc,state.trades,signalCandles);
  }
@@ -414,7 +417,7 @@ async function analyze(){
  if(state.busy){state.analyzeQueued=true;return;}state.busy=true;$('dataStatus').textContent='Cargando gráfico…';
  try{const raw=state.rawBySymbol.get(state.selected)||await getCandles(state.selected,1440);if(!raw.length)throw new Error('No llegaron velas para '+state.selected);state.rawBySymbol.set(state.selected,raw);
  state.rawCandles=raw;state.lastRecalcBucket=Math.floor(raw.at(-1).time/120);const c=aggregate(raw,state.tf);state.candles=c;const signalCandles=aggregate(raw,2);const obCandles=raw;const pivotCandles=aggregate(raw,state.pivotTf);
- const hourly=getHourlyBias(raw);const signalCalc=buildSetups(signalCandles,obCandles,pivotCandles,pivotCandles,null,raw);const chartCalc=buildSetups(c,obCandles,pivotCandles,pivotCandles,hourly.side,raw);
+ const hourly=getHourlyBias(raw);const signalCalc=buildSetups(signalCandles,obCandles,pivotCandles,pivotCandles,hourly.side,raw);const chartCalc=buildSetups(c,obCandles,pivotCandles,pivotCandles,hourly.side,raw);
  // Una sola dirección gobierna las señales y los OB visibles: la tendencia H1.
  const alignedSetups=signalCalc.setups;
  const alignedZones=chartCalc.obZones;
