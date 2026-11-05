@@ -275,7 +275,7 @@ function drawOverlays(trades,c,host,obZones=[],setups=[]){
   const zones=[...(obZones||[]),...(lockedTrade&&lockedTrade.ob?[{...lockedTrade.ob,side:lockedTrade.side,timeframe:state.obPrimaryTf,structureTime:lockedTrade.structureTime}]:[])].filter((ob,i,all)=>ob&&Number.isFinite(ob.time)&&all.findIndex(q=>q.time===ob.time&&q.side===ob.side)===i).sort((x,y)=>x.time-y.time);
   const zoneEls=zones.map(ob=>{
     const el=document.createElement('div');el.className='ob-zone '+(ob.fvg?'fvg-zone ':'')+(ob.side==='BUY'?'bull-zone':'bear-zone');
-    el.innerHTML='';overlay.appendChild(el);return{el,ob};
+    el.textContent=ob.side==='BUY'?'OB ALCISTA':'OB BAJISTA';overlay.appendChild(el);return{el,ob};
   });
   const t=[...trades].reverse().find(x=>['ESPERANDO DOJI','ESPERANDO CAMBIO','PENDIENTE'].includes(x.result))||[...setups].reverse()[0]||trades[trades.length-1];
   const overrideKey=t?String(state.selected||'')+':'+String(t.time)+':'+t.side:null;
@@ -452,7 +452,7 @@ function onLiveTick(tick){
    let high=p.high,low=p.low;for(const bar of group){if(bar.high>high)high=bar.high;if(bar.low<low)low=bar.low;}
    state.series.candle.update({time:bucket,open:group[group.length-1].open,high,low,close:p.quote});
   }
-  const liveChartCandles=aggregate(state.rawCandles,state.tf);const liveRsi=rsi(liveChartCandles.map(x=>x.close));const liveRsiValue=liveRsi.at(-1);if(state.series.rsi)state.series.rsi.setData(liveRsi.map((v,i)=>v==null?null:{time:liveChartCandles[i].time,value:v}).filter(Boolean));if(Number.isFinite(liveRsiValue)){if($('rsiValue'))$('rsiValue').textContent=fmt(liveRsiValue);if($('rsiLegend'))$('rsiLegend').textContent='Valor actual en formación: '+fmt(liveRsiValue);}
+  const liveChartCandles=aggregate(state.rawCandles,state.tf);const liveClose=liveChartCandles.map(x=>x.close),liveRsi=rsi(liveClose),liveE20=ema(liveClose,20),liveE50=ema(liveClose,50);const liveRsiValue=liveRsi.at(-1);if(state.series.rsi)state.series.rsi.setData(liveRsi.map((v,i)=>v==null?null:{time:liveChartCandles[i].time,value:v}).filter(Boolean));if(state.series.ema20)state.series.ema20.setData(liveE20.map((v,i)=>({time:liveChartCandles[i].time,value:v})));if(state.series.ema50)state.series.ema50.setData(liveE50.map((v,i)=>({time:liveChartCandles[i].time,value:v})));if(Number.isFinite(liveRsiValue)){if($('rsiValue'))$('rsiValue').textContent=fmt(liveRsiValue);if($('rsiLegend'))$('rsiLegend').textContent='Valor actual en formación: '+fmt(liveRsiValue);}
   // Los ticks actualizan la vela y el RSI; no recalculan OB, señales ni backtesting automáticamente.
  });
 }
