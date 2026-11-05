@@ -53,3 +53,9 @@
 .ob-zone{min-height:34px!important;min-width:90px!important;padding:6px 10px!important;font-size:11px!important;font-weight:900!important;letter-spacing:.4px!important;opacity:1!important;border-width:2px!important;border-radius:4px!important;white-space:nowrap!important;overflow:visible!important;text-shadow:0 1px 3px #000!important;z-index:5!important}
 .bull-zone{background:rgba(8,124,101,.48)!important;border-color:#20e6ae!important;color:#a5ffe6!important;box-shadow:0 0 10px rgba(32,230,174,.38),inset 0 0 0 1px rgba(32,230,174,.3)!important}
 .bear-zone{background:rgba(163,45,59,.5)!important;border-color:#ff5968!important;color:#ffd0d4!important;box-shadow:0 0 10px rgba(255,89,104,.38),inset 0 0 0 1px rgba(255,89,104,.3)!important}
+
+/* BOTDER v45: zonas OB siempre visibles y diferenciadas */
+.chart-overlay{position:absolute!important;inset:0!important;z-index:8!important;pointer-events:none!important;overflow:hidden!important}
+.chart-overlay .ob-zone{position:absolute!important;display:flex!important;align-items:center!important;min-height:24px!important;min-width:92px!important;padding:4px 8px!important;font-size:10px!important;font-weight:900!important;opacity:1!important;border:2px solid!important;border-radius:4px!important;white-space:nowrap!important;overflow:visible!important;z-index:10!important}
+.chart-overlay .bull-zone{background:rgba(0,190,145,.32)!important;border-color:#20e6ae!important;color:#b7ffeb!important;box-shadow:0 0 12px rgba(32,230,174,.5)!important}
+.chart-overlay .bear-zone{background:rgba(225,55,75,.34)!important;border-color:#ff5968!important;color:#ffd2d7!important;box-shadow:0 0 12px rgba(255,89,104,.5)!important}
