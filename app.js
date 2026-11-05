@@ -138,17 +138,17 @@ function drawPivotLines(){
  const raw=state.rawCandles,last=raw[raw.length-1].time,cutoff=last-3600;
  const m10=pivots(aggregate(raw,10),3,600),h1=pivots(aggregate(raw,60),2,3600);
  // Los pivotes M10 recientes se muestran primero; H1 conserva el contexto anterior.
- let recent=[
-  ...m10.highs.slice(-4).map(p=>({...p,kind:'recent-resistance'})),
-  ...m10.lows.slice(-4).map(p=>({...p,kind:'recent-support'}))
- ];
- // Si el mercado no ha confirmado un pivote M10 en el tramo final,
- // se conserva el último nivel M10 válido para no dejar el gráfico vacío.
- const old=[
-  ...h1.highs.filter(p=>p.time<cutoff).slice(-3).map(p=>({...p,kind:'hour-resistance'})),
+ // Conservar únicamente las cuatro resistencias más recientes entre M10 y H1.
+ const resistances=[
+  ...m10.highs.map(p=>({...p,kind:'recent-resistance'})),
+  ...h1.highs.filter(p=>p.time<cutoff).map(p=>({...p,kind:'hour-resistance'}))
+ ].sort((a,b)=>a.time-b.time).slice(-4);
+ // Los soportes/pivotes se mantienen separados; el límite de cuatro aplica a resistencias.
+ const supports=[
+  ...m10.lows.slice(-4).map(p=>({...p,kind:'recent-support'})),
   ...h1.lows.filter(p=>p.time<cutoff).slice(-3).map(p=>({...p,kind:'hour-support'}))
  ];
- const levels=[...recent,...old];
+ const levels=[...resistances,...supports];
  const L=window.LightweightCharts;
  for(const p of levels){
   const isRecent=p.kind.startsWith('recent'),isResistance=p.kind.endsWith('resistance');
