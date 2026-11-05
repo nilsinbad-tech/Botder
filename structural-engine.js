@@ -134,7 +134,7 @@ function setBacktestTrades(trades){
 function buildStructuralPlan(baseCandles,displayTf){
  const tf=Number(displayTf)||60,source=tf===30?botderAggregate(baseCandles,150):baseCandles.slice(),label=tf===30?"S30 · MOTOR 150s":botderLabel(tf),i=source.length-2;
  if(i<60)return{items:[],lines:[],projection:null,signal:null,status:"CARGANDO HISTORIAL",activeSource:source,bias4:null,recommendation:"ESPERANDO"};
- const items=botderAnnotations(source,i,tf),signal=botderTradeAt(source,i,tf);
+ const items=botderAnnotations(source,i,tf),signal=botderTradeAt(source,i,tf);\n const closes=source.slice(0,i+1).map(c=>c.close),emaSets=[{name:"EMA 9",color:"#ffd166",values:botderEma(closes,9)},{name:"EMA 20",color:"#61b7ff",values:botderEma(closes,20)},{name:"EMA 50",color:"#bd8cff",values:botderEma(closes,50)}],ema=emaSets.map(set=>({name:set.name,color:set.color,points:set.values.map((price,k)=>price==null?null:{time:source[k].time,price}).filter(Boolean).slice(-180)}));
  let projection=null;
  if(signal){
   projection={direction:signal.direction,entry:signal.entry,sl:signal.sl,tp1:signal.tp1,tp2:signal.tp2,zoneLow:signal.pool.low,zoneHigh:signal.pool.high,low:signal.pool.low,high:signal.pool.high,stage:"OPORTUNIDAD "+signal.confidence+"%",timeframe:label,confidence:signal.confidence,reason:signal.mode};
@@ -150,8 +150,10 @@ function runStructuralBacktest(symbol,market,candles,displayTf){
  const trades=botderBacktest(d,tf===30?150:tf,symbol,market).map(t=>({...t,timeframe:botderLabel(tf),timeframeSeconds:tf,sourceSeconds:tf===30?150:tf}));
  const complete=()=>{if(runId!==structuralBacktestRunId)return;if(typeof selectedSymbol!=="undefined"&&selectedSymbol&&selectedSymbol!==symbol){structuralBacktestRunningKey="";return;}if(Number(document.getElementById("timeframe")?.value||tf)!==tf){structuralBacktestRunningKey="";return;}
   if(typeof backtestTrades!=="undefined")backtestTrades.splice(0,backtestTrades.length,...trades);
-  setBacktestTrades(trades);if(typeof setStructureOverlay==="function")const cv=d.map(c=>c.close),ema=[{name:"EMA 9",color:"#ffd166",values:botderEma(cv,9)},{name:"EMA 20",color:"#61b7ff",values:botderEma(cv,20)},{name:"EMA 50",color:"#bd8cff",values:botderEma(cv,50)}].map(x=>({name:x.name,color:x.color,points:x.values.map((price,k)=>price==null?null:{time:d[k].time,price}).filter(Boolean).slice(-180)}));
-  const livePlan=buildStructuralPlan(raw,tf);\n  setStructureOverlay({items:livePlan.items,lines:[],ema:livePlan.ema||ema,projection:livePlan.projection,activeTf:tf});
+  setBacktestTrades(trades);
+  const cv=d.map(c=>c.close),ema=[{name:"EMA 9",color:"#ffd166",values:botderEma(cv,9)},{name:"EMA 20",color:"#61b7ff",values:botderEma(cv,20)},{name:"EMA 50",color:"#bd8cff",values:botderEma(cv,50)}].map(x=>({name:x.name,color:x.color,points:x.values.map((price,k)=>price==null?null:{time:d[k].time,price}).filter(Boolean).slice(-180)}));
+  const livePlan=buildStructuralPlan(raw,tf);
+  if(typeof setStructureOverlay==="function")setStructureOverlay({items:livePlan.items,lines:[],ema:livePlan.ema||ema,projection:livePlan.projection,activeTf:tf});
   structuralBacktestValidatedKey=key;structuralBacktestRunningKey="";backtestSymbol=symbol;backtestReady=true;
   setText("chart-message","BACKTEST "+botderLabel(tf)+" · "+d.length+" velas · "+trades.length+" operaciones evaluadas.");
   if(typeof renderStrategyJournal==="function")renderStrategyJournal();
