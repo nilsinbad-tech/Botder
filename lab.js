@@ -11,7 +11,7 @@ const strategies=[
 {id:7,name:"FVG + Reacción",group:"Desequilibrio",rules:"Regreso a FVG M2 + rechazo confirmado en M1"},
 {id:8,name:"Doble techo / suelo",group:"Price Action",rules:"Segundo test M2 + ruptura de neckline en M1"}
 ];
-let socket=null,busy=false,req=1,reqState=null,symbols=[],results=[],hist={},idx=0,active=null,queue=[],timer=null,connectTimer=null,symbolTimer=null,overallTimer=null,validInstruments=0,failedInstruments=0;
+let socket=null,busy=false,req=1,reqState=null,historyRequests=new Map(),symbols=[],results=[],hist={},idx=0,active=null,queue=[],timer=null,connectTimer=null,symbolTimer=null,overallTimer=null,validInstruments=0,failedInstruments=0;
 const $=id=>document.getElementById(id),esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const fmt=(v,n=5)=>Number.isFinite(v)?v.toFixed(n):"—";
 function status(s){$("status").textContent=s;$("live-status").textContent=busy?"TESTING · "+s:s}
@@ -154,15 +154,23 @@ function drawChart(){
  $("trade-audit-list").innerHTML=r.entries.slice(-30).reverse().map(t=>'<article class="audit-trade"><b class="'+(t.result==="GANADA"?"rate":"loss")+'">'+t.result+' · '+t.direction+'</b><span>Entrada '+fmt(t.entry)+' · '+new Date(t.entryTime*1000).toLocaleString("es-PA")+'</span><span>TP1 '+fmt(t.tp)+' · TP2 '+fmt(t.tp2)+' · SL '+fmt(t.sl)+'</span><span>Salida '+fmt(t.exitPrice)+' · '+(t.exitTime?new Date(t.exitTime*1000).toLocaleString("es-PA"):"sin salida")+'</span></article>').join("");
 }
 function progress(){const total=symbols.length;$("progress-count").textContent=idx+" / "+total+" instrumentos · 8 estrategias por instrumento";$("progress-bar").style.width=(total?idx/total*100:0)+"%";$("progress-title").textContent=busy?"Analizando "+(active?.name||"Deriv"):"Análisis finalizado"}
-function finish(msg){busy=false;clearTimeout(timer);clearTimeout(connectTimer);clearTimeout(symbolTimer);clearTimeout(overallTimer);if(socket){try{socket.close()}catch(e){}socket=null}status(msg);$("live-detail").textContent=msg;$("start").disabled=false;progress();render();$("updated").textContent="Actualizado: "+new Date().toLocaleString("es-PA")}
+function finish(msg){busy=false;historyRequests.forEach(x=>clearTimeout(x.timer));historyRequests.clear();clearTimeout(timer);clearTimeout(connectTimer);clearTimeout(symbolTimer);clearTimeout(overallTimer);if(socket){try{socket.close()}catch(e){}socket=null}status(msg);$("live-detail").textContent=msg;$("start").disabled=false;progress();render();$("updated").textContent="Actualizado: "+new Date().toLocaleString("es-PA")}
 function requestPage(){
  if(!busy||!reqState)return;
  req++;reqState.req=req;
- $("live-detail").textContent="Descargando velas M1 de "+(active?.name||reqState.symbol)+" · historial de 2 días…";
- try{socket.send(JSON.stringify({ticks_history:reqState.symbol,start:reqState.start,end:String(reqState.targetEnd),count:3000,style:"candles",granularity:60,req_id:req}));}
+ $("live-detail").textContent="Descargando velas M1 de "+(active?.name||reqState.symbol)+" · 2 días…";
+ try{socket.send(JSON.stringify({ticks_history:reqState.symbol,start:reqState.start,end:String(reqState.targetEnd),style:"candles",granularity:60,adjust_start_time:1,req_id:req}));}
  catch(e){const st=reqState;reqState=null;st.done([], "No se pudo solicitar el gráfico M1: "+(e.message||e));return}
  clearTimeout(timer);
- timer=setTimeout(()=>{if(busy&&reqState){const st=reqState;reqState=null;st.done([], "Deriv no respondió al historial de velas M1 en 30 segundos.")}},30000);
+ timer=setTimeout(()=>{if(busy&&reqState){const st=reqState;reqState=null;st.done([], "Deriv no respondió al historial M1 en 30 segundos.")}},30000);
+}
+function requestCandles(symbol,start,end,done){
+ const id=++req;
+ const item={symbol,start,end,done,timer:null};
+ item.timer=setTimeout(()=>{if(!historyRequests.has(id))return;historyRequests.delete(id);done([], "Tiempo agotado descargando velas M1 de "+symbol)},30000);
+ historyRequests.set(id,item);
+ try{socket.send(JSON.stringify({ticks_history:symbol,start,end:String(end),style:"candles",granularity:60,adjust_start_time:1,req_id:id}))}
+ catch(e){clearTimeout(item.timer);historyRequests.delete(id);done([],"No se pudo solicitar historial: "+(e.message||e))}
 }
 function parseCandles(m){
  return (m.candles||[]).map(c=>({time:Number(c.epoch),open:Number(c.open),high:Number(c.high),low:Number(c.low),close:Number(c.close)}))
@@ -177,53 +185,66 @@ function buildM2FromM1(m1){
 }
 function loadTwoDayCandles(symbol,done){
  const end=Math.floor(Date.now()/60000)*60,start=end-TEST_DAYS*DAY;
- reqState={symbol,done,pages:0,start,targetEnd:end,req:0};requestPage();
-}
-function handleHistory(m){
- if(!reqState||m.req_id!==reqState.req)return;
- clearTimeout(timer);
- const st=reqState,m1raw=parseCandles(m);
- if(!m1raw.length){reqState=null;st.done([], "Deriv no devolvió velas M1. Comprueba la respuesta histórica de Deriv.");return}
- const m1=m1raw.filter(c=>c.time>=st.start&&c.time+60<=st.targetEnd);
- const m2=buildM2FromM1(m1);
- const coverage=m1.length?(m1[m1.length-1].time+60-m1[0].time)/DAY:0;
- reqState=null;
- st.done({m1,m2,candleCount:m1.length,pages:1,coverage,start:st.start,end:st.targetEnd});
-}
-function runInstrument(){
- if(!busy)return;
- if(idx>=symbols.length){finish("ANÁLISIS COMPLETADO · 2 DÍAS · M2 + M1");return}
- active=symbols[idx];
- $("live-detail").textContent="Descargando gráfico M1 para construir contexto M2 y entradas M1: "+active.name;
- status("DESCARGANDO · "+active.name);progress();
- loadTwoDayCandles(active.symbol,(series,error)=>{
-  if(!busy)return;
-  if(error){
-   failedInstruments++;$("live-detail").textContent=active.name+": ERROR DE HISTORIAL · "+error;
-  }else{
-   const {m1,m2,candleCount,pages,coverage}=series;
-   if(coverage<1.98||m1.length<2800||m2.length<1400){
-    failedInstruments++;$("live-detail").textContent=active.name+": datos insuficientes. Cobertura "+coverage.toFixed(2)+" días; M2 contexto "+m2.length+" velas; M1 entrada "+m1.length+" velas. No se publican resultados parciales.";
-   }else{
-    hist[active.symbol]={m1,m2};validInstruments++;
-    for(const s of strategies){
-     $("live-detail").textContent="TESTING · "+active.name+" · estrategia "+s.id+" de "+strategies.length+": "+s.name;
-     $("progress-title").textContent="TESTING · "+active.name;
-     let r;
-     try{r=buildTrades(m2,m1,s)}
-     catch(err){r={strategy:s,wins:0,losses:0,total:0,rate:null,entries:[],trades:[],error:"Error en motor: "+(err?.message||String(err))};failedInstruments++}
-     results.push({symbol:active.symbol,market:active.name,strategy:s,...r});
-     updateTotals();
-     $("live-count").textContent=results.length+" / "+(symbols.length*strategies.length)+" pruebas completadas";
-    }
-    $("live-detail").textContent=active.name+": 2 días completos · "+m2.length+" velas M2 de contexto · "+m1.length+" velas M1 de entrada · "+candleCount.toLocaleString("es-PA")+" velas M1 recibidas en una solicitud · 8 estrategias probadas.";
-   }
-  }
-  idx++;progress();render();runInstrument();
+ requestCandles(symbol,start,end,(m1raw,error)=>{
+  if(error){done([],error);return}
+  if(!m1raw.length){done([],"Deriv no devolvió velas M1.");return}
+  const m1=m1raw.filter(c=>c.time>=start&&c.time+60<=end);
+  const m2=buildM2FromM1(m1),coverage=m1.length?(m1[m1.length-1].time+60-m1[0].time)/DAY:0;
+  done({m1,m2,candleCount:m1.length,coverage,start,end});
  });
 }
+function handleHistory(m){
+ const item=historyRequests.get(m.req_id);if(!item)return;
+ clearTimeout(item.timer);historyRequests.delete(m.req_id);
+ if(m.error){item.done([],m.error.message||"Deriv devolvió un error");return}
+ item.done(parseCandles(m));
+}
+function processInstrument(m,series,error){
+ if(!busy)return;
+ active=m;idx++;
+ if(error){
+  failedInstruments++;$("live-detail").textContent=m.name+": ERROR · "+error;
+ }else{
+  const {m1,m2,candleCount,coverage}=series;
+  if(coverage<1.98||m1.length<2800||m2.length<1400){
+   failedInstruments++;$("live-detail").textContent=m.name+": datos insuficientes · "+coverage.toFixed(2)+" días · "+m1.length+" velas M1 · "+m2.length+" velas M2.";
+  }else{
+   hist[m.symbol]={m1,m2,candleCount,coverage,start:series.start,end:series.end};
+   validInstruments++;
+   for(const s of strategies){
+    $("live-detail").textContent="TESTING · "+m.name+" · estrategia "+s.id+" de "+strategies.length+": "+s.name;
+    $("progress-title").textContent="TESTING · "+m.name;
+    let r;
+    try{r=buildTrades(m2,m1,s)}
+    catch(err){r={strategy:s,wins:0,losses:0,total:0,rate:null,entries:[],trades:[],error:"Error en motor: "+(err?.message||String(err))};failedInstruments++}
+    results.push({symbol:m.symbol,market:m.name,strategy:s,...r});
+    updateTotals();$("live-count").textContent=results.length+" / "+(symbols.length*strategies.length)+" pruebas completadas";
+   }
+   $("live-detail").textContent=m.name+": "+m1.length+" velas M1 · "+m2.length+" velas M2 · 8 estrategias probadas.";
+  }
+ }
+ progress();render();
+ if(idx>=symbols.length){
+  finish("ANÁLISIS COMPLETADO · 2 DÍAS · M2 + M1 · "+results.length+" PRUEBAS");
+ }
+}
+function runAllInstruments(){
+ const end=Math.floor(Date.now()/60000)*60,start=end-TEST_DAYS*DAY;
+ idx=0;const cached=[],pending=[];
+ for(const m of symbols){
+  const c=hist[m.symbol];
+  if(c&&c.end===end&&c.m1?.length>=2800)cached.push({m,c});
+  else pending.push(m);
+ }
+ const work=[...cached.map(x=>({m:x.m,c:x.c})),...pending.map(m=>({m}))];
+ idx=0;
+ for(const item of work){
+  if(item.c){processInstrument(item.m,item.c,null);if(!busy)return}
+  else loadTwoDayCandles(item.m.symbol,(series,error)=>processInstrument(item.m,series,error));
+ }
+}
 function start(){
- if(busy)return;busy=true;idx=0;symbols=[];results=[];hist={};validInstruments=0;failedInstruments=0;$("start").disabled=true;$("live-detail").textContent="Conectando con Deriv para descargar datos reales…";$("updated").textContent="Conectando…";$("strategy-list").innerHTML="";$("best-list").innerHTML="";$("worst-list").innerHTML="";$("market-list").innerHTML="";connection("CONECTANDO…",false);status("CONECTANDO CON DERIV");progress();
+ if(busy)return;busy=true;idx=0;symbols=[];results=[];validInstruments=0;failedInstruments=0;historyRequests.forEach(x=>clearTimeout(x.timer));historyRequests.clear();$("start").disabled=true;$("live-detail").textContent="Conectando con Deriv para descargar datos reales…";$("updated").textContent="Conectando…";$("strategy-list").innerHTML="";$("best-list").innerHTML="";$("worst-list").innerHTML="";$("market-list").innerHTML="";connection("CONECTANDO…",false);status("CONECTANDO CON DERIV");progress();
  try{socket=new WebSocket(WS)}catch(e){finish("NO SE PUDO ABRIR LA CONEXIÓN");return}
  connectTimer=setTimeout(()=>{if(busy&&socket?.readyState!==WebSocket.OPEN)finish("NO SE PUDO CONECTAR A DERIV EN 15 SEGUNDOS")},15000);
  overallTimer=setTimeout(()=>{if(busy)finish("TIEMPO MÁXIMO · "+validInstruments+" instrumentos analizados · "+failedInstruments+" con error")},2700000);
@@ -232,8 +253,8 @@ function start(){
  socket.onclose=e=>{if(busy)finish("DERIV DESCONECTÓ · CÓDIGO "+e.code)};
  socket.onmessage=e=>{let m;try{m=JSON.parse(e.data)}catch(err){return}
   if(m.error){const msg=m.error.message||"Error de API";if(m.req_id===1){finish("ERROR DE DERIV: "+msg);return}if(reqState&&m.req_id===reqState.req){const st=reqState;reqState=null;clearTimeout(timer);st.done([],"Deriv rechazó la descarga de velas: "+msg)}return}
-  if(m.msg_type==="active_symbols"||Array.isArray(m.active_symbols)){clearTimeout(symbolTimer);connection("DERIV API CONFIRMADA",true);const list=m.active_symbols||[];const found=list.map(s=>({symbol:s.underlying_symbol||s.symbol||"",name:s.underlying_symbol_name||s.display_name||s.symbol||""})).filter(s=>s.symbol&&/volatility/i.test(s.name)&&/1s/i.test(s.name));symbols=[...new Map(found.map(s=>[s.symbol,s])).values()].sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true})).slice(0,INSTRUMENT_LIMIT);$("updated").textContent="Deriv devolvió "+list.length+" símbolos · "+symbols.length+" índices 1s";if(!symbols.length){finish("DERIV NO DEVOLVIÓ ÍNDICES VOLATILITY 1s");return}$("live-detail").textContent="Índices encontrados: "+symbols.length+". Se analizarán "+strategies.length+" estrategias por instrumento.";runInstrument();return}
-  if(reqState&&m.req_id===reqState.req){handleHistory(m);return}
+  if(m.msg_type==="active_symbols"||Array.isArray(m.active_symbols)){clearTimeout(symbolTimer);connection("DERIV API CONFIRMADA",true);const list=m.active_symbols||[];const found=list.map(s=>({symbol:s.underlying_symbol||s.symbol||"",name:s.underlying_symbol_name||s.display_name||s.symbol||""})).filter(s=>s.symbol&&/volatility/i.test(s.name)&&/1s/i.test(s.name));symbols=[...new Map(found.map(s=>[s.symbol,s])).values()].sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true})).slice(0,INSTRUMENT_LIMIT);$("updated").textContent="Deriv devolvió "+list.length+" símbolos · "+symbols.length+" índices 1s";if(!symbols.length){finish("DERIV NO DEVOLVIÓ ÍNDICES VOLATILITY 1s");return}$("live-detail").textContent="Índices encontrados: "+symbols.length+". Se analizarán "+strategies.length+" estrategias por instrumento.";runAllInstruments();return}
+  if(historyRequests.has(m.req_id)){handleHistory(m);return}
  };
 }
 document.addEventListener("DOMContentLoaded",()=>{
