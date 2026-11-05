@@ -264,14 +264,19 @@ function drawOverlays(trades,c,host,obZones=[],setups=[]){
  const lineEls=[];
  const overrideKey=t?String(state.selected||'')+':'+String(t.time)+':'+t.side:null;
  if(t&&overrideKey&&state.levelOverrides[overrideKey])Object.assign(t,state.levelOverrides[overrideKey]);
+ // Conserva las entradas históricas del backtest en su vela y precio originales.
+ const entryRecords=(trades||[]).filter(x=>Number.isFinite(x.entry)&&Number.isFinite(x.entryTime)&&x.entryIndex>=0&&x.result!=='CANCELADA');
+ const currentPending=t&&t.entryIndex<0&&!Number.isFinite(t.entryTime)?[t]:[];
+ const visibleEntries=[...entryRecords,...currentPending].slice(-100);
  state.overlayPriceLevels=t?[t.entry].filter(Number.isFinite):[];
- if(t){
+ visibleEntries.forEach((trade,index)=>{
   const label='ENTRADA';
   const el=document.createElement('div');el.className='price-label entry-line';
-  el.setAttribute('aria-label','Punto de entrada '+fmt(t.entry));
-  el.innerHTML='<b>'+label+'</b><strong>'+fmt(t.entry)+'</strong>';
-  overlay.appendChild(el);lineEls.push({key:'entry',p:t.entry,label,cls:'entry-line',el,time:Number.isFinite(t.entryTime)?t.entryTime:(t.doji?.time||t.time),side:t.side});
- }
+  el.setAttribute('aria-label','Punto de entrada '+fmt(trade.entry));
+  el.innerHTML='<b>'+label+'</b><strong>'+fmt(trade.entry)+'</strong>';
+  overlay.appendChild(el);
+  lineEls.push({key:'entry-'+index,p:trade.entry,label,cls:'entry-line',el,time:Number.isFinite(trade.entryTime)?trade.entryTime:trade.time,side:trade.side});
+ });
  const update=()=>{
   const width=host.clientWidth,scale=state.main.timeScale(),candleSeries=state.series.candle;
   const range=scale.getVisibleLogicalRange(),first=range?Math.max(0,Math.floor(range.from)):0,last=range?Math.min(c.length-1,Math.ceil(range.to)):c.length-1;
@@ -288,12 +293,12 @@ function drawOverlays(trades,c,host,obZones=[],setups=[]){
   });
   lineEls.forEach(v=>{
    const y=candleSeries.priceToCoordinate(v.p);
-   const current=c.length?scale.timeToCoordinate(c[c.length-1].time):null;
-   if(y==null||current==null){v.el.style.display='none';return;}
+   const anchor=scale.timeToCoordinate(v.time);
+   if(y==null||anchor==null||anchor<0||anchor>width){v.el.style.display='none';return;}
    v.el.style.display='flex';v.el.style.right='auto';v.el.style.width='max-content';
-   const labelWidth=v.el.offsetWidth||145;
-   const targetX=current+8;
-   v.el.style.left=Math.max(2,Math.min(Math.max(2,width-labelWidth-2),targetX))+'px';
+   const labelWidth=v.el.offsetWidth||100;
+   // Centrada sobre la vela exacta de entrada; al desplazar el gráfico acompaña esa vela.
+   v.el.style.left=Math.max(0,Math.min(width-labelWidth,anchor-labelWidth/2))+'px';
    v.el.style.top=(y-(v.el.offsetHeight/2))+'px';
   });
  };
