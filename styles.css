@@ -351,3 +351,6 @@ html,body{width:100%;max-width:100%;min-width:0;overflow-x:clip}
 .chart-overlay .historical-result-label.history-win{color:#20d69a!important;background:#06251fee!important;border-style:solid!important}
 .chart-overlay .historical-result-label.history-loss{color:#ff5968!important;background:#2a1016ee!important;border-style:solid!important}
 .chart-overlay .historical-result-label.history-cancel{color:#f1c45b!important;background:#211a0dee!important;border-style:dashed!important}
+
+/* OB históricos: el rectángulo respeta el rango de precio y la duración de su vela origen. */
+.chart-overlay .ob-zone{min-height:14px!important;min-width:0!important;padding:2px 4px!important;}
