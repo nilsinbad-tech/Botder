@@ -165,6 +165,3 @@
 .chart-points-summary{flex-wrap:wrap}
 .chart-points-summary span{white-space:nowrap}
 @media(max-width:480px){.money-grid{gap:5px}.money-grid>div{padding:8px 6px}.money-grid b{font-size:14px}.money-grid small{font-size:9px}}
-
-/* Configuración editable de niveles RSI */
-
