@@ -19,3 +19,25 @@
 
 .tf-heading{margin:20px 0 10px;font-size:14px;color:var(--text)}.inspect-result{margin-top:8px;padding:8px 11px;border:1px solid var(--line);border-radius:7px;background:var(--panel2);color:var(--text);font-size:10px;font-weight:700}.inspect-result:active{transform:scale(.98)}
 .strategy-card{cursor:pointer;transition:border-color .15s,background .15s}.strategy-card:focus-visible{outline:2px solid var(--green);outline-offset:2px}.strategy-card.selected{border-color:var(--green);background:#102a2a}.stats article:last-child small{display:block;font-size:16px;font-weight:800;margin-top:6px;color:var(--green)}.stats article:nth-child(3) b{font-size:16px;line-height:1.3}
+
+/* Resumen principal: mejor/peor por instrumento y catálogo completo */
+.overview-controls{display:flex;gap:9px;align-items:end}
+.overview-controls label{display:grid;gap:5px;color:var(--muted);font-size:9px;font-weight:800}
+.overview-controls select{max-width:none}
+.instrument-ranking{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.instrument-rank-card{min-width:0;padding:13px;background:var(--panel);border:1px solid var(--line);border-radius:12px}
+.instrument-rank-title{display:flex;justify-content:space-between;gap:8px;align-items:center;margin-bottom:10px}
+.instrument-rank-title strong{font-size:12px}
+.instrument-rank-title small{font-size:9px;color:var(--muted)}
+.instrument-rank-pair{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.instrument-rank{min-width:0;padding:10px;border-radius:8px;background:var(--panel2);display:grid;gap:5px}
+.instrument-rank .rank-label{font-size:8px;font-weight:900;letter-spacing:.6px;color:var(--muted)}
+.instrument-rank.best .rank-label,.instrument-rank.best strong{color:var(--green)}
+.instrument-rank.worst .rank-label,.instrument-rank.worst strong{color:var(--red)}
+.instrument-rank strong{font-size:12px;overflow-wrap:anywhere}
+.instrument-rank>strong{font-size:17px}
+.instrument-rank small{font-size:9px;color:var(--muted);line-height:1.4}
+.instrument-rank .inspect-result{justify-self:start}
+.all-strategies-head{margin-top:28px;padding-top:20px;border-top:1px solid var(--line)}
+@media(max-width:650px){.overview-controls{width:100%;display:grid;grid-template-columns:1fr 1fr}.overview-controls label{min-width:0}.overview-controls select{width:100%}.instrument-ranking{grid-template-columns:1fr}.instrument-rank-pair{grid-template-columns:1fr 1fr}.instrument-rank{padding:8px}.instrument-rank strong{font-size:11px}.instrument-rank>strong{font-size:15px}}
+@media(max-width:390px){.instrument-rank-pair{grid-template-columns:1fr}.overview-controls{grid-template-columns:1fr}}
