@@ -263,6 +263,13 @@ function drawPivotLines(){
  }
 }
 function drawOverlays(trades,c,host,obZones=[],setups=[]){
+  // Las entradas se generan en M2, pero deben anclarse a la vela visible más cercana en cualquier temporalidad del gráfico.
+  const chartAnchorTime=time=>{
+    if(!c.length||!Number.isFinite(Number(time)))return null;
+    const target=Number(time);let lo=0,hi=c.length-1,best=-1;
+    while(lo<=hi){const mid=(lo+hi)>>1;if(c[mid].time<=target){best=mid;lo=mid+1;}else hi=mid-1;}
+    return c[best>=0?best:0].time;
+  };
   for(const line of state.tradePriceLines){try{state.series.candle.removePriceLine(line);}catch{}}
   state.tradePriceLines=[];
   if(state.overlayResizeObserver){state.overlayResizeObserver.disconnect();state.overlayResizeObserver=null;}
@@ -294,7 +301,7 @@ function drawOverlays(trades,c,host,obZones=[],setups=[]){
     const entry=document.createElement('div');entry.className='price-label entry-line';
     entry.setAttribute('aria-label','Entrada '+label+' '+fmt(trade.entry));
     entry.innerHTML='<b>'+label+'</b><strong>'+fmt(trade.entry)+'</strong><small>RSI '+fmt(Number.isFinite(trade.entryRsi)?trade.entryRsi:trade.rsi)+'</small>';
-    overlay.appendChild(entry);entryEls.push({p:trade.entry,time,el:entry});
+    overlay.appendChild(entry);entryEls.push({p:trade.entry,time:chartAnchorTime(time),el:entry});
     const closed=trade.result==='GANADA'||trade.result==='PERDIDA';
     let levels=[];
     if(closed&&Number.isFinite(trade.exitPrice)&&Number.isFinite(trade.exitTime)){
@@ -310,7 +317,7 @@ function drawOverlays(trades,c,host,obZones=[],setups=[]){
       const tag=document.createElement('div');tag.className='price-label '+cls;
       tag.setAttribute('aria-label',name+' '+fmt(Number(price)));
       tag.innerHTML='<b>'+name+'</b><strong>'+fmt(Number(price))+'</strong>';
-      overlay.appendChild(tag);levelEls.push({p:Number(price),time:anchorTime,tag});
+      overlay.appendChild(tag);levelEls.push({p:Number(price),time:chartAnchorTime(anchorTime),tag});
     });
   });
   const update=()=>{
