@@ -289,10 +289,6 @@ function simulate(c,setups,rsiM5Values=[],m1Candles=state.rawCandles){
     const rsiOpposite=Number.isFinite(prevRsi)&&Number.isFinite(currentRsi)&&(s.side==='BUY'?(prevRsi>=mid&&currentRsi<mid):(prevRsi<=mid&&currentRsi>mid));
     if(rsiOpposite){result='CANCELADA';exitTime=k.time;cancelReason='RSI_M5_CRUCE_50_CONTRARIO';break;}
 
-    // Antes de entrar, dos velas consecutivas contra la dirección invalidan la señal.
-    const opposite=s.side==='BUY'?k.close<k.open:k.close>k.open;
-    oppositeCandles=opposite?oppositeCandles+1:0;
-    if(oppositeCandles>=2){result='CANCELADA';exitTime=k.time;cancelReason='DOS_VELAS_CONTRARIAS';break;}
     const zigTrigger=zigSignals.find(signal=>signal.side===s.side&&signal.time> s.time&&signal.time<=k.time+120);
     if(!zigTrigger){
      if((s.side==='BUY'&&k.low<s.sl)||(s.side==='SELL'&&k.high>s.sl)){result='CANCELADA';exitTime=k.time;cancelReason='SL_ANTES_DE_CONFIRMACION_ZIGZAG';break;}
@@ -312,8 +308,8 @@ function simulate(c,setups,rsiM5Values=[],m1Candles=state.rawCandles){
    if(tp2Hit){result='GANADA';exitPrice=tp2Level;exitTime=k.time;break;}
    if(tp1Hit){result='GANADA';exitPrice=tp1Level;exitTime=k.time;break;}
   }
-  const points=exitPrice==null?null:(s.side==='BUY'?exitPrice-s.entry:s.entry-exitPrice);
-  trades.push({...s,entry:entryPrice,sl:slLevel,tp1:tp1Level,tp2:tp2Level,zigzagConfirmed:true,result,entryIndex,entryTime,entryRsi:entryIndex>=0?entryRsiValues[entryIndex]:null,exitTime,exitPrice,points,cancelReason});
+  const points=exitPrice==null?null:(s.side==='BUY'?exitPrice-entryPrice:entryPrice-exitPrice);
+  trades.push({...s,entry:entryPrice,sl:slLevel,tp1:tp1Level,tp2:tp2Level,zigzagConfirmed:entered,result,entryIndex,entryTime,entryRsi:entryIndex>=0?entryRsiValues[entryIndex]:null,exitTime,exitPrice,points,cancelReason});
  }
  return trades;
 }
