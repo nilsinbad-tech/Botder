@@ -347,7 +347,7 @@ function draw(c,calc,trades,obZones=[],setups=[]){
   const zz=zigZagLineData(state.rawCandles);if(state.series.zigzagUp)state.series.zigzagUp.setData(zz.up);if(state.series.zigzagDown)state.series.zigzagDown.setData(zz.down);
   drawPivotLines();if(state.markerPlugin)state.markerPlugin.setMarkers([]);
   const latest=trades.slice(-1)[0];drawOverlays(trades,c,$('mainChart'),obZones,setups);
-  if(state.forceFitNext){const visibleFrom=Math.max(0,c.length-120);const visibleRange={from:visibleFrom,to:c.length+3};state.main.timeScale().setVisibleLogicalRange(visibleRange);state.rsi.timeScale().setVisibleLogicalRange(visibleRange);}else if(priorRange){state.main.timeScale().setVisibleLogicalRange(priorRange);state.rsi.timeScale().setVisibleLogicalRange(priorRange);}state.forceFitNext=false;return;
+  if(state.forceFitNext){const visibleRange={from:0,to:c.length+3};state.main.timeScale().setVisibleLogicalRange(visibleRange);state.rsi.timeScale().setVisibleLogicalRange(visibleRange);}else if(priorRange){state.main.timeScale().setVisibleLogicalRange(priorRange);state.rsi.timeScale().setVisibleLogicalRange(priorRange);}state.forceFitNext=false;return;
  }
  if(state.main){state.main.remove();if(state.rsi)state.rsi.remove();}state.overlayUpdate=null;state.overlayRangeHandler=null;
  const L=LightweightCharts,main=$('mainChart');main.innerHTML='';
@@ -366,7 +366,7 @@ function draw(c,calc,trades,obZones=[],setups=[]){
  state.rsi=L.createChart(rsiEl,{autoSize:true,layout:{background:{type:'solid',color:'#0b121e'},textColor:'#8b9bb0',fontSize:10},grid:{vertLines:{color:'#172235'},horzLines:{color:'#172235'}},rightPriceScale:{borderColor:'#28364a'},timeScale:{visible:false},handleScroll:{mouseWheel:true,pressedMouseMove:true,horzTouchDrag:true},handleScale:{mouseWheel:true,pinch:true}});
  const rs=state.rsi.addSeries(L.LineSeries,{color:'#b58aff',lineWidth:2,priceLineVisible:false,lastValueVisible:true,priceFormat:{type:'price',precision:1,minMove:.1},autoscaleInfoProvider:()=>({priceRange:{minValue:0,maxValue:100}})});state.series.rsi=rs;rs.setData(calc.rv.map((v,i)=>v==null?null:{time:c[i].time,value:v}).filter(Boolean));
  [30,50,70].forEach(v=>rs.createPriceLine({price:v,color:'#45536b',lineStyle:L.LineStyle.Dashed,lineWidth:1,axisLabelVisible:true,title:''}));
- if(preserveRange){state.main.timeScale().setVisibleLogicalRange(priorRange);state.rsi.timeScale().setVisibleLogicalRange(priorRange);}else{const visibleFrom=Math.max(0,c.length-120);const visibleRange={from:visibleFrom,to:c.length+3};state.main.timeScale().setVisibleLogicalRange(visibleRange);state.rsi.timeScale().setVisibleLogicalRange(visibleRange);}let syncingRange=false;state.main.timeScale().subscribeVisibleLogicalRangeChange(range=>{if(!range||syncingRange)return;syncingRange=true;state.rsi.timeScale().setVisibleLogicalRange(range);syncingRange=false;});state.rsi.timeScale().subscribeVisibleLogicalRangeChange(range=>{if(!range||syncingRange)return;syncingRange=true;state.main.timeScale().setVisibleLogicalRange(range);syncingRange=false;});state.forceFitNext=false;
+ if(preserveRange){state.main.timeScale().setVisibleLogicalRange(priorRange);state.rsi.timeScale().setVisibleLogicalRange(priorRange);}else{const visibleRange={from:0,to:c.length+3};state.main.timeScale().setVisibleLogicalRange(visibleRange);state.rsi.timeScale().setVisibleLogicalRange(visibleRange);}let syncingRange=false;state.main.timeScale().subscribeVisibleLogicalRangeChange(range=>{if(!range||syncingRange)return;syncingRange=true;state.rsi.timeScale().setVisibleLogicalRange(range);syncingRange=false;});state.rsi.timeScale().subscribeVisibleLogicalRangeChange(range=>{if(!range||syncingRange)return;syncingRange=true;state.main.timeScale().setVisibleLogicalRange(range);syncingRange=false;});state.forceFitNext=false;
 }
 function drawPivotLines(){
  if(!state.series.candle||!state.rawCandles.length)return;
@@ -439,7 +439,7 @@ function drawOverlays(trades,c,host,obZones=[],setups=[]){
  // Las anteriores quedan dibujadas en su vela con su resultado definitivo.
  const visibleEntries=t?[t]:[];
  const historicalEls=[];
- (trades||[]).filter(x=>x.result!=='PENDIENTE').forEach((trade,index)=>{
+ (trades||[]).filter(x=>x.result==='GANADA'||x.result==='PERDIDA').forEach((trade,index)=>{
   const confirmed=trade.entryIndex>=0&&Number.isFinite(trade.entryTime);
   const entryTime=confirmed?trade.entryTime:(trade.exitTime||trade.time);
   const entryPrice=Number.isFinite(trade.entry)?trade.entry:Number.isFinite(trade.exitPrice)?trade.exitPrice:null;
@@ -447,7 +447,7 @@ function drawOverlays(trades,c,host,obZones=[],setups=[]){
   if(entryPrice!=null){
    const entry=document.createElement('div');
    entry.className='price-label historical-trade-label historical-entry-label '+(trade.side==='BUY'?'history-buy':'history-sell');
-   entry.innerHTML='<b>'+side+'</b><strong>'+(confirmed?'ENTRADA':'CANCELADA')+'</strong>';
+   entry.innerHTML='<b>ENTRADA</b><strong>'+side+'</strong>';
    overlay.appendChild(entry);historicalEls.push({el:entry,time:entryTime,price:entryPrice,offset:(index%4)*12-18});
   }
   if(confirmed&&Number.isFinite(trade.exitTime)&&Number.isFinite(trade.exitPrice)){
