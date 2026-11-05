@@ -72,17 +72,13 @@ function buildSetups(c,liquidityCandles=c,pivotCandles=liquidityCandles,obStruct
  const setups=[],latestZones=[],zoneKeys=new Set(),usedOBs=new Set(),usedZones=new Set();
  const primaryTf=state.obPrimaryTf,previousTf=state.obPreviousTf;
  const primaryCandles=aggregate(targetRawCandles,primaryTf),previousCandles=aggregate(targetRawCandles,previousTf);
- // Los OB se detectan de forma independiente de las entradas/RSI.
- // M30 define la dirección con EMA20/EMA50; M2 confirma con el cruce EMA9/EMA50.
- const m30Bars=aggregate(targetRawCandles,30),m30Close=m30Bars.map(v=>v.close);
- const m30E20=ema(m30Close,20),m30E50=ema(m30Close,50);
- const m30SideAt=time=>{
-  let lo=0,hi=m30Bars.length;
-  while(lo<hi){const mid=(lo+hi)>>1;if(m30Bars[mid].time+1800<=time)lo=mid+1;else hi=mid;}
-  const k=lo-1;
-  if(k<49)return null;
-  return m30E20[k]>m30E50[k]?'BUY':m30E20[k]<m30E50[k]?'SELL':null;
- };
+ // M30 define la dirección con EMA20/EMA50.
+ // Los cruces EMA9/EMA50 se buscan por separado en M1 y M2.
+ // El OB se ancla a la última vela contraria ANTERIOR al cruce,
+ // dentro de la misma temporalidad donde ocurrió.
+ const m1Bars=aggregate(targetRawCandles,1);
+ const m1Close=m1Bars.map(v=>v.close);
+ const m1E9=ema(m1Close,9),m1E50=ema(m1Close,50);
  const m2Bars=aggregate(targetRawCandles,2),m2Close=m2Bars.map(v=>v.close);
  const m2E9=ema(m2Close,9),m2E50=ema(m2Close,50);
  const addZone=(found,side,tf)=>{
@@ -90,36 +86,27 @@ function buildSetups(c,liquidityCandles=c,pivotCandles=liquidityCandles,obStruct
   const ob=found.ob||found;
   const key=side+':'+tf+':'+ob.time;
   if(zoneKeys.has(key))return;
-  latestZones.push({...ob,side,timeframe:tf,structureTime:ob.time,structureType:side==='BUY'?'SOPORTE':'RESISTENCIA'});
+  latestZones.push({...ob,side,timeframe:tf,structureTime:ob.time,structureType:side==='BUY'?'SOPORTE':'RESISTENCIA',crossTime:found.crossTime||null});
   zoneKeys.add(key);
  };
- // Detecta OB históricos por desplazamiento/ruptura estructural, sin exigir un cruce EMA.
- // Así las zonas se dibujan aunque todavía no haya una entrada M2.
- for(let i=3;i<primaryCandles.length;i++){
-  const impulse=primaryCandles[i];
-  const prior=primaryCandles.slice(Math.max(0,i-3),i);
-  const bullishBreak=prior.length===3&&impulse.close>Math.max(...prior.map(v=>v.high));
-  const bearishBreak=prior.length===3&&impulse.close<Math.min(...prior.map(v=>v.low));
-  if(!bullishBreak&&!bearishBreak)continue;
-  const side=bullishBreak?'BUY':'SELL';
-  for(let j=i-1;j>=Math.max(0,i-9);j--){
-   const q=primaryCandles[j],opposite=side==='BUY'?q.close<q.open:q.close>q.open;
-   if(!opposite)continue;
-   addZone({time:q.time,high:q.high,low:q.low,entry:(q.high+q.low)/2},side,primaryTf);
-   break;
+ const detectCrossOBs=(bars,fast,slow,tf)=>{
+  for(let i=50;i<bars.length;i++){
+   const previous=fast[i-1]-slow[i-1],current=fast[i]-slow[i];
+   const side=previous<=0&&current>0?'BUY':previous>=0&&current<0?'SELL':null;
+   if(!side)continue;
+   const crossCloseTime=bars[i].time+tf*60;
+   if(m30SideAt(crossCloseTime)!==side)continue;
+   // Buscar la vela contraria más cercana antes del cierre del cruce.
+   for(let j=i-1;j>=Math.max(0,i-9);j--){
+    const candle=bars[j],opposite=side==='BUY'?candle.close<candle.open:candle.close>candle.open;
+    if(!opposite)continue;
+    addZone({time:candle.time,high:candle.high,low:candle.low,entry:(candle.high+candle.low)/2,crossTime:bars[i].time},side,tf);
+    break;
+   }
   }
- }
- for(let i=50;i<m2Bars.length;i++){
-  const bar=m2Bars[i],prior=m2E9[i-1]-m2E50[i-1],current=m2E9[i]-m2E50[i];
-  const side=prior<=0&&current>0?'BUY':prior>=0&&current<0?'SELL':null;
-  if(!side||m30SideAt(bar.time+120)!==side)continue;
-  const primary=findOBAtTime(primaryCandles,bar.time+120,side,primaryTf);
-  addZone(primary,side,primaryTf);
-  if(state.obPreviousEnabled){
-   const previous=findOBAtTime(previousCandles,bar.time+120,side,previousTf);
-   addZone(previous,side,previousTf);
-  }
- }
+ };
+ detectCrossOBs(m1Bars,m1E9,m1E50,1);
+ detectCrossOBs(m2Bars,m2E9,m2E50,2);
 
  for(let i=50;i<c.length;i++){
   const x=c[i],prior=e9[i-1]-e50[i-1],current=e9[i]-e50[i];
