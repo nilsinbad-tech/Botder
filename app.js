@@ -106,7 +106,7 @@ function draw(c,calc,trades){
  if(state.main&&state.rsi&&state.chartKey===chartKey){
   const lineData=values=>values.map((v,i)=>v==null?null:{time:c[i].time,value:v}).filter(Boolean);
   state.series.candle.setData(c);state.series.ema9.setData(lineData(calc.e9));state.series.ema21.setData(lineData(calc.e21));state.series.ema50.setData(lineData(calc.e50));state.series.rsi.setData(lineData(calc.rv));
-  drawPivotLines(calc.pv);const markers=[];trades.forEach(t=>{markers.push({time:t.ob.time,position:t.side==='BUY'?'belowBar':'aboveBar',color:t.side==='BUY'?'#168f76':'#b43c4b',shape:'square',text:t.side==='BUY'?'OB ALC':'OB BAJ'});markers.push({time:t.time,position:t.side==='BUY'?'belowBar':'aboveBar',color:t.side==='BUY'?'#20d69a':'#ff5968',shape:t.side==='BUY'?'arrowUp':'arrowDown',text:t.side==='BUY'?'COMPRA':'VENTA'});});if(state.markerPlugin)state.markerPlugin.setMarkers(markers.sort((a,b)=>a.time-b.time));
+  drawPivotLines();const markers=[];trades.forEach(t=>{markers.push({time:t.ob.time,position:t.side==='BUY'?'belowBar':'aboveBar',color:t.side==='BUY'?'#168f76':'#b43c4b',shape:'square',text:t.side==='BUY'?'OB ALC':'OB BAJ'});markers.push({time:t.time,position:t.side==='BUY'?'belowBar':'aboveBar',color:t.side==='BUY'?'#20d69a':'#ff5968',shape:t.side==='BUY'?'arrowUp':'arrowDown',text:t.side==='BUY'?'COMPRA':'VENTA'});});if(state.markerPlugin)state.markerPlugin.setMarkers(markers.sort((a,b)=>a.time-b.time));
   const latest=trades.slice(-1)[0];drawOverlays(latest,c,$('mainChart'));
   if(state.forceFitNext){const visibleFrom=Math.max(0,c.length-120);const visibleRange={from:visibleFrom,to:c.length+3};state.main.timeScale().setVisibleLogicalRange(visibleRange);state.rsi.timeScale().setVisibleLogicalRange(visibleRange);}else if(priorRange){state.main.timeScale().setVisibleLogicalRange(priorRange);state.rsi.timeScale().setVisibleLogicalRange(priorRange);}state.forceFitNext=false;return;
  }
@@ -117,7 +117,7 @@ function draw(c,calc,trades){
  candle.setData(c);
  const addLine=(values,color)=>{const s=state.main.addSeries(L.LineSeries,{color,lineWidth:2,priceLineVisible:false,lastValueVisible:false});s.setData(values.map((v,i)=>v==null?null:{time:c[i].time,value:v}).filter(Boolean));return s;};
  state.series.ema9=addLine(calc.e9,'#36b9f6');state.series.ema21=addLine(calc.e21,'#f5a33b');state.series.ema50=addLine(calc.e50,'#a36aff');
- drawPivotLines(calc.pv);const markers=[];
+ drawPivotLines();const markers=[];
  trades.forEach(t=>{
   markers.push({time:t.ob.time,position:t.side==='BUY'?'belowBar':'aboveBar',color:t.side==='BUY'?'#168f76':'#b43c4b',shape:'square',text:t.side==='BUY'?'OB A':'OB B'});
   markers.push({time:t.time,position:t.side==='BUY'?'belowBar':'aboveBar',color:t.side==='BUY'?'#20d69a':'#ff5968',shape:t.side==='BUY'?'arrowUp':'arrowDown',text:t.side==='BUY'?'COMPRA':'VENTA'});
@@ -131,12 +131,31 @@ function draw(c,calc,trades){
  [30,50,70].forEach(v=>rs.createPriceLine({price:v,color:'#45536b',lineStyle:L.LineStyle.Dashed,lineWidth:1,axisLabelVisible:false,title:''}));
  if(preserveRange){state.main.timeScale().setVisibleLogicalRange(priorRange);state.rsi.timeScale().setVisibleLogicalRange(priorRange);}else{const visibleFrom=Math.max(0,c.length-120);const visibleRange={from:visibleFrom,to:c.length+3};state.main.timeScale().setVisibleLogicalRange(visibleRange);state.rsi.timeScale().setVisibleLogicalRange(visibleRange);}let syncingRange=false;state.main.timeScale().subscribeVisibleLogicalRangeChange(range=>{if(!range||syncingRange)return;syncingRange=true;state.rsi.timeScale().setVisibleLogicalRange(range);syncingRange=false;});state.rsi.timeScale().subscribeVisibleLogicalRangeChange(range=>{if(!range||syncingRange)return;syncingRange=true;state.main.timeScale().setVisibleLogicalRange(range);syncingRange=false;});state.forceFitNext=false;
 }
-function drawPivotLines(pv){
- // Los pivotes y resistencias siguen calculándose para la estrategia,
- // pero no se dibujan como etiquetas en el eje derecho del gráfico.
- if(!state.series.candle)return;
+function drawPivotLines(){
+ // Última hora: pivotes M10 recientes. Niveles anteriores: solo pivotes H1.
+ if(!state.series.candle||!state.rawCandles.length)return;
  for(const line of state.pivotLines){try{state.series.candle.removePriceLine(line);}catch{}}
  state.pivotLines=[];
+ const raw=state.rawCandles,last=raw[raw.length-1].time,recentFrom=last-3600;
+ const recent=pivots(aggregate(raw,10),3,600),hourly=pivots(aggregate(raw,60),3,3600);
+ const levels=[
+  ...recent.highs.filter(p=>p.time>=recentFrom&&p.confirmedTime<=last).slice(-3).map(p=>({...p,kind:'recent-high'})),
+  ...recent.lows.filter(p=>p.time>=recentFrom&&p.confirmedTime<=last).slice(-3).map(p=>({...p,kind:'recent-low'})),
+  ...hourly.highs.filter(p=>p.time<recentFrom&&p.confirmedTime<=last).slice(-4).map(p=>({...p,kind:'hour-high'})),
+  ...hourly.lows.filter(p=>p.time<recentFrom&&p.confirmedTime<=last).slice(-4).map(p=>({...p,kind:'hour-low'}))
+ ];
+ const L=window.LightweightCharts;
+ for(const p of levels){
+  const isRecent=p.kind.startsWith('recent'),isResistance=p.kind.endsWith('high');
+  const line=state.series.candle.createPriceLine({
+   price:p.price,
+   color:isRecent?(isResistance?'#f0a34a':'#39b9a0'):(isResistance?'rgba(240,163,74,.48)':'rgba(57,185,160,.48)'),
+   lineWidth:isRecent?2:1,
+   lineStyle:isRecent?L.LineStyle.Solid:L.LineStyle.Dashed,
+   axisLabelVisible:false,title:''
+  });
+  state.pivotLines.push(line);
+ }
 }
 function drawOverlays(t,c,host){
  if(state.overlayResizeObserver){state.overlayResizeObserver.disconnect();state.overlayResizeObserver=null;}
