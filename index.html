@@ -1,88 +1,21 @@
 <!doctype html>
-<html lang="es">
-<head>
+<html lang="es"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#080d16"><title>BOTDER · Deriv Structural Lab</title>
-<link rel="stylesheet" href="styles.css?v=ob-history-anchor3">
+<meta name="theme-color" content="#080d16"><title>BOTDER · Gráfico Deriv</title>
+<link rel="stylesheet" href="styles.css?v=nuevo-grafico-1">
 <script src="https://unpkg.com/lightweight-charts@5.0.8/dist/lightweight-charts.standalone.production.js" onerror="this.onerror=null;this.src='https://cdn.jsdelivr.net/npm/lightweight-charts@5.0.8/dist/lightweight-charts.standalone.production.js'"></script>
-</head>
-<body>
-<header class="topbar">
-  <div class="brand"><span class="brand-mark">B</span><div><b>BOTDER</b><small>DERIV STRUCTURAL LAB</small></div></div>
-  <div class="connection"><i id="connectionDot"></i><span id="connectionText">Conectando Deriv…</span></div>
-  <button id="refreshBtn" class="icon-btn" aria-label="Actualizar">↻</button>
-</header>
+</head><body>
+<header class="topbar"><div class="brand"><span class="brand-mark">B</span><div><b>BOTDER</b><small>GRÁFICO DERIV</small></div></div><div class="connection"><i id="connectionDot"></i><span id="connectionText">Conectando Deriv…</span></div><button id="refreshBtn" class="icon-btn">↻</button></header>
 <main class="app">
-  <section class="toolbar">
-    <label>Instrumento<select id="symbolSelect"><option>Buscando instrumentos…</option></select></label>
-    <div class="timeframes" id="timeframes">
-      <button data-tf="1" class="active">M1</button><button data-tf="2">M2</button><button data-tf="3">M3</button><button data-tf="4">M4</button><button data-tf="5">M5</button>
-    </div>
-    <span class="data-status" id="dataStatus">Preparando datos</span>
-  </section>
-
-  <section class="summary-grid">
-    <article><small>TENDENCIA</small><b id="trendValue">—</b></article>
-    <article><small>OB · TENDENCIA H1</small><b id="signalValue">ESPERANDO</b></article>
-    <article><small>ENTRADA</small><b id="entryValue">—</b></article>
-    <article><small>RSI (14)</small><b id="rsiValue">—</b><em id="rsiConfirm">Sin confirmación</em></article>
-  </section>
-
-  <details class="settings-drawer">
-    <summary>⚙ CONFIGURACIÓN</summary>
-    <section class="pivot-settings ob-settings compact-settings" aria-label="Order Blocks">
-      <strong>ORDER BLOCK</strong>
-      <small>OB PRINCIPAL</small><div id="obTfControls" class="pivot-tf-controls"><button type="button" data-ob-primary-tf="1">M1</button><button type="button" data-ob-primary-tf="2">M2</button><button type="button" data-ob-primary-tf="3">M3</button><button type="button" data-ob-primary-tf="5">M5</button><button type="button" data-ob-primary-tf="10" class="active" aria-pressed="true">M10</button><button type="button" data-ob-primary-tf="15">M15</button><button type="button" data-ob-primary-tf="30">M30</button><button type="button" data-ob-primary-tf="60">H1</button></div><div class="compact-row"><label class="ob-previous-toggle"><input id="obPreviousEnabled" type="checkbox"> Usar OB anterior (opcional)</label></div><small>OB ANTERIOR</small><div id="obPreviousTfControls" class="pivot-tf-controls"><button type="button" data-ob-previous-tf="1">M1</button><button type="button" data-ob-previous-tf="2">M2</button><button type="button" data-ob-previous-tf="3">M3</button><button type="button" data-ob-previous-tf="5">M5</button><button type="button" data-ob-previous-tf="10">M10</button><button type="button" data-ob-previous-tf="15">M15</button><button type="button" data-ob-previous-tf="30" class="active" aria-pressed="true">M30</button><button type="button" data-ob-previous-tf="60">H1</button></div>
-      <div class="compact-row"><div id="pivotStructureTfControls" class="pivot-tf-controls"><button type="button" data-pivot-structure-tf="1" aria-pressed="false">M1</button><button type="button" data-pivot-structure-tf="2" aria-pressed="false">M2</button><button type="button" data-pivot-structure-tf="3" aria-pressed="false">M3</button><button type="button" data-pivot-structure-tf="4" aria-pressed="false">M4</button><button type="button" data-pivot-structure-tf="5" aria-pressed="true" class="active">M5</button><button type="button" data-pivot-structure-tf="10" aria-pressed="false">M10</button><button type="button" data-pivot-structure-tf="30" aria-pressed="false">M30</button><button type="button" data-pivot-structure-tf="60" aria-pressed="false">H1</button></div></div>
-    </section>
-    <section class="pivot-settings compact-settings rsi-level-settings" aria-label="Configuración RSI">
-      <strong>FILTRO RSI · SOLO CANCELA PENDIENTES</strong>
-      <div class="rsi-config-grid">
-        <label>Temporalidad <select id="rsiTimeframe"><option value="1">M1</option><option value="2">M2</option><option value="3">M3</option><option value="5" selected>M5</option><option value="10">M10</option><option value="15">M15</option><option value="30">M30</option><option value="60">H1</option></select></label>
-        <label>Periodo <input id="rsiPeriod" type="number" min="2" max="200" value="14"></label>
-      </div>
-      <div class="rsi-level-group"><label>Nivel bajo <input id="rsiLow" type="number" min="1" max="98" value="40"></label><label>Cancelación <input id="rsiMid" type="number" min="2" max="99" value="50"></label><label>Nivel alto <input id="rsiHigh" type="number" min="3" max="100" value="60"></label></div>
-      <button type="button" id="applyRsiConfig" class="text-btn">Guardar y recalcular historial</button>
-      <small id="rsiSettingsStatus" class="rsi-settings-status">El RSI no abre ni cierra operaciones; cancela pendientes contrarias al cruzar el nivel medio.</small>
-    </section>
-    <section class="pivot-settings compact-settings" aria-label="Pivotes y resistencias">
-      <strong>PIVOTES / RESISTENCIAS</strong>
-      <div id="pivotTfControls" class="pivot-tf-controls"><button type="button" data-pivot-tf="1" aria-pressed="false">M1</button><button type="button" data-pivot-tf="2" aria-pressed="false">M2</button><button type="button" data-pivot-tf="3" aria-pressed="false">M3</button><button type="button" data-pivot-tf="4" aria-pressed="false">M4</button><button type="button" data-pivot-tf="5" aria-pressed="true" class="active">M5</button><button type="button" data-pivot-tf="10" aria-pressed="false">M10</button><button type="button" data-pivot-tf="30" aria-pressed="false">M30</button><button type="button" data-pivot-tf="60" aria-pressed="false">H1</button></div>
-    </section>
-  </details>
-
-  <section class="chart-card">
-    <div class="chart-head"><div><b id="chartTitle">Gráfico Deriv</b><small id="chartSubtitle">Velas reales · histórico de 24 horas</small></div><small class="chart-mode">Gráfico visual independiente · señales M2</small></div>
-    <div class="chart-points-summary"><span>GANADOS <b id="chartWonPoints">+0.00 pts</b></span><span>PERDIDOS <b id="chartLostPoints">-0.00 pts</b></span><small>Acumulado de operaciones cerradas del instrumento seleccionado</small></div>
-    <div id="mainChart" class="main-chart"><div class="chart-placeholder">Esperando velas de Deriv…</div></div>
-    <div class="rsi-head"><b>RSI (14)</b><span id="rsiLegend">—</span></div>
-    <div id="rsiChart" class="rsi-chart"></div>
-    <div class="chart-foot"><span>Arrastra para moverte · pellizca o usa dos dedos para zoom</span><span id="chartRange">Últimas 24 horas</span></div>
-  </section>
-
-  <section class="lower-grid">
-    <article class="panel">
-      <div class="panel-title"><b>Backtesting · 24 horas</b><button id="runBacktest" class="text-btn">Recalcular</button></div>
-      <div class="stats-row"><div><small>GANADAS</small><b class="win" id="wins">0</b></div><div><small>PERDIDAS</small><b class="loss" id="losses">0</b></div><div><small>PENDIENTES</small><b id="pending">0</b></div><div><small>EXPIRADAS</small><b id="expired">0</b></div></div>
-      <p class="muted" id="backtestInfo">El análisis se ejecuta con las velas descargadas de Deriv.</p>
-    </article>
-    <article class="panel">
-      <div class="panel-title"><b>Estado de la señal</b><span class="live-pill" id="signalState">ESPERANDO</span></div>
-      <div class="signal-details" id="signalDetails">El motor buscará OB, tendencia, pivotes y confirmación RSI.</div>
-      <div class="tiny-legend"><span><i class="bull"></i>OB alcista</span><span><i class="bear"></i>OB bajista</span><span><i class="pivot"></i>Pivote / soporte</span></div>
-    </article>
-  </section>
-
-  <section class="panel history-panel">
-    <div class="panel-title"><b>Historial de operaciones</b><span id="historyCount">0 operaciones</span></div>
-    <div class="history-scroll"><table><thead><tr><th>Hora</th><th>Instrumento</th><th>Dirección</th><th>Entrada</th><th>RSI entrada</th><th>SL</th><th>TP1</th><th>TP2</th><th>Resultado</th><th>Movimiento</th></tr></thead><tbody id="historyBody"><tr><td colspan="10" class="empty-cell">Esperando backtesting…</td></tr></tbody></table></div>
-  </section>
-
-  <section class="panel instruments-panel">
-    <div class="panel-title"><b>Universo Deriv</b><span id="instrumentCount">0 / 25 instrumentos</span></div>
-    <div id="instrumentList" class="instrument-list">Cargando catálogo de Deriv…</div>
-  </section>
-  <footer>BOTDER · Solo análisis y simulación. No envía órdenes ni garantiza resultados futuros.</footer>
-</main>
-<script src="app.js?v=ob-history-anchor3"></script>
-</body></html>
+<section class="toolbar"><label>Instrumento<select id="symbolSelect"><option>Buscando instrumentos…</option></select></label><div class="timeframes" id="timeframes"><button data-tf="1" class="active">M1</button><button data-tf="2">M2</button><button data-tf="3">M3</button><button data-tf="4">M4</button><button data-tf="5">M5</button></div><span id="dataStatus" class="data-status">Preparando datos…</span></section>
+<section class="summary-grid"><article><small>DIRECCIÓN EMA M5</small><b id="trendValue">—</b></article><article><small>ÚLTIMA SEÑAL</small><b id="signalValue">ESPERANDO</b></article><article><small>RSI</small><b id="rsiValue">—</b><em id="rsiConfirm">Filtro RSI</em></article><article><small>PRECIO</small><b id="priceValue">—</b></article></section>
+<details class="settings-drawer"><summary>⚙ INDICADORES Y TEMPORALIDADES</summary>
+<section class="settings"><strong>ORDER BLOCKS</strong><label>OB principal<select id="obTf"><option value="1">M1</option><option value="2">M2</option><option value="3">M3</option><option value="4">M4</option><option value="5">M5</option><option value="10" selected>M10</option><option value="15">M15</option><option value="30">M30</option><option value="60">H1</option></select></label><label class="check"><input id="obPrevious" type="checkbox"> Mostrar OB de otra temporalidad</label><label>OB secundario<select id="obTf2"><option value="1">M1</option><option value="2">M2</option><option value="3">M3</option><option value="4">M4</option><option value="5">M5</option><option value="10">M10</option><option value="15">M15</option><option value="30" selected>M30</option><option value="60">H1</option></select></label></section>
+<section class="settings"><strong>PIVOTES / SOPORTE Y RESISTENCIA</strong><div id="pivotTfs" class="tf-picks"><label class="check"><input type="checkbox" value="1" >M1</label><label class="check"><input type="checkbox" value="2" >M2</label><label class="check"><input type="checkbox" value="3" >M3</label><label class="check"><input type="checkbox" value="4" >M4</label><label class="check"><input type="checkbox" value="5" checked>M5</label><label class="check"><input type="checkbox" value="10" >M10</label><label class="check"><input type="checkbox" value="15" >M15</label><label class="check"><input type="checkbox" value="30" >M30</label><label class="check"><input type="checkbox" value="60" >H1</label></div></section>
+<section class="settings"><strong>RSI</strong><label>Temporalidad<select id="rsiTf"><option value="1">M1</option><option value="2">M2</option><option value="3">M3</option><option value="4">M4</option><option value="5" selected>M5</option><option value="10">M10</option><option value="15">M15</option><option value="30">M30</option><option value="60">H1</option></select></label><label>Periodo<input id="rsiPeriod" type="number" min="2" max="100" value="14"></label><span class="rule-note">VENTA: RSI ≤ 50 · COMPRA: RSI ≥ 55</span></section>
+<section class="settings"><strong>ZIGZAG M1</strong><span>Período 10 · Desviación 5 · Separación 3</span><strong>EMA</strong><span>EMA 20 y EMA 50 calculadas en M5. Cruce abajo = venta · cruce arriba = compra.</span></section>
+</details>
+<section class="chart-card"><div class="chart-head"><div><b id="chartTitle">Gráfico Deriv</b><small id="chartSubtitle">Velas M1 · historial disponible</small></div><small id="chartStatus">Cargando…</small></div><div id="mainChart" class="main-chart"><div class="chart-placeholder">Esperando velas de Deriv…</div></div><div class="rsi-head"><b>RSI (14)</b><span id="rsiLegend">—</span></div><div id="rsiChart" class="rsi-chart"></div><div class="chart-foot"><span>Arrastra para moverte · pellizca para ampliar</span><span id="chartRange">M1</span></div></section>
+<section class="legend"><span><i class="ema20"></i> EMA 20 M5</span><span><i class="ema50"></i> EMA 50 M5</span><span><i class="bull"></i> OB alcista</span><span><i class="bear"></i> OB bajista</span><span><i class="zig"></i> ZigZag M1</span><span><i class="pivot"></i> Pivotes</span></section>
+<footer>BOTDER · Datos y análisis de Deriv. No envía órdenes.</footer>
+</main><script src="app.js?v=nuevo-grafico-1"></script></body></html>
