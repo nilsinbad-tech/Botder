@@ -147,22 +147,18 @@ function buildSetups(c,liquidityCandles=c,pivotCandles=liquidityCandles,obStruct
  }
  const lastTime=targetRawCandles.length?targetRawCandles[targetRawCandles.length-1].time:0;
  const validZones=obZones.filter(z=>!isOBInvalidated(z,z.side,{price:z.structurePrice,confirmedTime:z.structureConfirmedTime},targetRawCandles,lastTime));
- // En M1 y M2 se limita a dos OB por zona de precio: evita cinco cajas apiladas
- // cuando varias velas consecutivas detectan el mismo bloque/área.
- const lowTfZones=validZones.filter(z=>z.timeframe===1||z.timeframe===2).sort((a,b)=>a.time-b.time);
- const keepLowTf=new Set(),clusters=[];
+ // En M1 y M2 se limita a dos OB por vela de origen, no por zona de precio.
+ const lowTfZones=validZones.filter(z=>z.timeframe===1||z.timeframe===2);
+ const candleGroups=new Map();
  for(const z of lowTfZones){
-  const width=Math.max(z.high-z.low,0.00000001);
-  let cluster=clusters.find(items=>items.some(q=>{
-   const tolerance=Math.max(width, q.high-q.low)*0.20;
-   return z.side===q.side&&z.low<=q.high+tolerance&&z.high>=q.low-tolerance;
-  }));
-  if(!cluster){cluster=[];clusters.push(cluster);}
-  cluster.push(z);
+  const key=String(z.time);
+  if(!candleGroups.has(key))candleGroups.set(key,[]);
+  candleGroups.get(key).push(z);
  }
- for(const cluster of clusters){
-  cluster.sort((a,b)=>b.time-a.time);
-  for(const z of cluster.slice(0,2))keepLowTf.add(z);
+ const keepLowTf=new Set();
+ for(const group of candleGroups.values()){
+  group.sort((a,b)=>b.time-a.time);
+  for(const z of group.slice(0,2))keepLowTf.add(z);
  }
  const limitedZones=validZones.filter(z=>(z.timeframe!==1&&z.timeframe!==2)||keepLowTf.has(z));
  return{setups,e9,e20,rv,pv:m30Pv,obZones:limitedZones};
@@ -299,28 +295,19 @@ function drawOverlays(trades,c,host,obZones=[],setups=[]){
   const el=document.createElement('div');el.className='ob-zone '+(ob.side==='BUY'?'bull-zone':'bear-zone');
   el.innerHTML='';overlay.appendChild(el);return{el,ob};
  });
- // Las etiquetas COMPRA/VENTA siguen el mismo límite visual de los OB:
- // máximo dos señales M1/M2 por zona de precio y dirección.
+ // Máximo dos etiquetas COMPRA/VENTA por vela de entrada M1.
  const validEntries=(trades||[]).filter(t=>t&&Number.isFinite(t.entryTime)&&Number.isFinite(t.entry));
- const lowTfEntries=validEntries.filter(t=>(Number(t.entryTf)===1||Number(t.confirmationTf)===2)&&t.ob&&Number.isFinite(t.ob.high)&&Number.isFinite(t.ob.low));
- const clusters=[];
- for(const t of lowTfEntries){
-  const width=Math.max(t.ob.high-t.ob.low,0.00000001);
-  let cluster=clusters.find(items=>items.some(q=>{
-   const tolerance=Math.max(width,q.ob.high-q.ob.low)*0.20;
-   return t.side===q.side&&t.ob.low<=q.ob.high+tolerance&&t.ob.high>=q.ob.low-tolerance;
-  }));
-  if(!cluster){cluster=[];clusters.push(cluster);}
-  cluster.push(t);
+ const entryGroups=new Map();
+ for(const t of validEntries){
+  const key=String(t.entryTime);
+  if(!entryGroups.has(key))entryGroups.set(key,[]);
+  entryGroups.get(key).push(t);
  }
- const keepEntries=new Set();
- for(const cluster of clusters){
-  cluster.sort((a,b)=>b.entryTime-a.entryTime);
-  for(const t of cluster.slice(0,2))keepEntries.add(t);
+ const limitedEntries=[];
+ for(const group of entryGroups.values()){
+  group.sort((a,b)=>b.entryTime-a.entryTime);
+  limitedEntries.push(...group.slice(0,2));
  }
- const limitedEntries=validEntries.filter(t=>
-  !lowTfEntries.includes(t)||keepEntries.has(t)
- );
  const entryEls=limitedEntries.map(t=>{
   const el=document.createElement('div');el.className='trade-entry-label '+(t.side==='BUY'?'trade-buy':'trade-sell');
   el.textContent=t.side==='BUY'?'COMPRA':'VENTA';overlay.appendChild(el);return{el,t};
