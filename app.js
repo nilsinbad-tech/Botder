@@ -299,7 +299,29 @@ function drawOverlays(trades,c,host,obZones=[],setups=[]){
   const el=document.createElement('div');el.className='ob-zone '+(ob.side==='BUY'?'bull-zone':'bear-zone');
   el.innerHTML='';overlay.appendChild(el);return{el,ob};
  });
- const entryEls=(trades||[]).filter(t=>t&&Number.isFinite(t.entryTime)&&Number.isFinite(t.entry)).map(t=>{
+ // Las etiquetas COMPRA/VENTA siguen el mismo límite visual de los OB:
+ // máximo dos señales M1/M2 por zona de precio y dirección.
+ const validEntries=(trades||[]).filter(t=>t&&Number.isFinite(t.entryTime)&&Number.isFinite(t.entry));
+ const lowTfEntries=validEntries.filter(t=>(Number(t.entryTf)===1||Number(t.confirmationTf)===2)&&t.ob&&Number.isFinite(t.ob.high)&&Number.isFinite(t.ob.low));
+ const clusters=[];
+ for(const t of lowTfEntries){
+  const width=Math.max(t.ob.high-t.ob.low,0.00000001);
+  let cluster=clusters.find(items=>items.some(q=>{
+   const tolerance=Math.max(width,q.ob.high-q.ob.low)*0.20;
+   return t.side===q.side&&t.ob.low<=q.ob.high+tolerance&&t.ob.high>=q.ob.low-tolerance;
+  }));
+  if(!cluster){cluster=[];clusters.push(cluster);}
+  cluster.push(t);
+ }
+ const keepEntries=new Set();
+ for(const cluster of clusters){
+  cluster.sort((a,b)=>b.entryTime-a.entryTime);
+  for(const t of cluster.slice(0,2))keepEntries.add(t);
+ }
+ const limitedEntries=validEntries.filter(t=>
+  !lowTfEntries.includes(t)||keepEntries.has(t)
+ );
+ const entryEls=limitedEntries.map(t=>{
   const el=document.createElement('div');el.className='trade-entry-label '+(t.side==='BUY'?'trade-buy':'trade-sell');
   el.textContent=t.side==='BUY'?'COMPRA':'VENTA';overlay.appendChild(el);return{el,t};
  });
