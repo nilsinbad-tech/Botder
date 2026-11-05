@@ -1,6 +1,7 @@
 const DERIV_CONFIG = { endpoint: "wss://api.derivws.com/trading/v1/options/ws/public" };
 let derivSocket = null, availableSymbols = [], selectedSymbol = null;
-let s30HistoryState=null;\nlet candleBuffer = [], higherTfBuffers={120:[],300:[],600:[],900:[],1800:[],3600:[],14400:[],86400:[]}, tickSubId = null, candleSubId = null, reconnectTimer = null, symbolsTimer = null, selectedGranularity = 60, lastTickAt = 0, lastTickResubscribeAt = 0;
+let s30HistoryState=null;
+let candleBuffer = [], higherTfBuffers={120:[],300:[],600:[],900:[],1800:[],3600:[],14400:[],86400:[]}, tickSubId = null, candleSubId = null, reconnectTimer = null, symbolsTimer = null, selectedGranularity = 60, lastTickAt = 0, lastTickResubscribeAt = 0;
 
 function getHigherTimeframeHistory(seconds){const raw=higherTfBuffers[Number(seconds)]||[];if(!raw.length||!candleBuffer.length)return raw;const live=aggregateForDisplay(candleBuffer,Number(seconds)).at(-1);if(!live)return raw;const merged=raw.filter(c=>c.time!==live.time);merged.push(live);return merged.sort((a,b)=>a.time-b.time);}
 function getDisplayCandles(seconds){if(Number(seconds)===60)return candleBuffer.slice();const direct=getHigherTimeframeHistory(Number(seconds));if(direct.length)return direct;return aggregateForDisplay(candleBuffer,Number(seconds));}
@@ -211,9 +212,13 @@ function loadMarketHistory(symbol, granularity = selectedGranularity) {
   if (typeof setChartGranularity === "function") setChartGranularity(selectedGranularity);
   if (typeof setAnalysisGranularity === "function") setAnalysisGranularity(selectedGranularity);
   if (selectedGranularity === 30) {
+    s30HistoryState={symbol,times:[],prices:[],pages:0};
+    if(typeof structuralBacktestValidatedKey!=="undefined"){structuralBacktestValidatedKey="";structuralBacktestRunningKey="";structuralBacktestRunId++;}
     sendDeriv({ ticks_history: symbol, count: 5000, end: "latest", style: "ticks", req_id: 12 });
     showChartMessage("Construyendo velas de 30 segundos desde ticks de Deriv...");
   } else {
+    s30HistoryState=null;
+    if(typeof structuralBacktestValidatedKey!=="undefined"){structuralBacktestValidatedKey="";structuralBacktestRunningKey="";structuralBacktestRunId++;}
     sendDeriv({ticks_history:symbol,count:1440,end:"latest",style:"candles",granularity:60,req_id:12});sendDeriv({ticks_history:symbol,count:1440,end:"latest",style:"candles",granularity:120,req_id:20});sendDeriv({ticks_history:symbol,count:2016,end:"latest",style:"candles",granularity:300,req_id:18});sendDeriv({ticks_history:symbol,count:5000,end:"latest",style:"candles",granularity:600,req_id:17});sendDeriv({ticks_history:symbol,count:1344,end:"latest",style:"candles",granularity:900,req_id:19});sendDeriv({ticks_history:symbol,count:1440,end:"latest",style:"candles",granularity:1800,req_id:16});sendDeriv({ticks_history:symbol,count:1440,end:"latest",style:"candles",granularity:3600,req_id:13});sendDeriv({ticks_history:symbol,count:1080,end:"latest",style:"candles",granularity:14400,req_id:14});sendDeriv({ticks_history:symbol,count:180,end:"latest",style:"candles",granularity:86400,req_id:15});
     // Cada temporalidad estructural recibe su propio histórico; M1 se limita a 24 horas.
     showChartMessage("Cargando historial · " + (selectedGranularity/60) + " min...");
