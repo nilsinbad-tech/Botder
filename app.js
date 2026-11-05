@@ -147,20 +147,26 @@ function buildSetups(c,liquidityCandles=c,pivotCandles=liquidityCandles,obStruct
  }
  const lastTime=targetRawCandles.length?targetRawCandles[targetRawCandles.length-1].time:0;
  const validZones=obZones.filter(z=>!isOBInvalidated(z,z.side,{price:z.structurePrice,confirmedTime:z.structureConfirmedTime},targetRawCandles,lastTime));
- // Una sola dirección de OB por vela: prioriza la tendencia; si es lateral, la última dirección EMA confirmada.
+ // Solo OB de la dirección dominante. El límite se aplica por zona de precio,
+ // no por vela: distintas temporalidades no pueden apilar cajas sobre el mismo rango.
  const preferredOBSide=trendSide||emaBias;
  const directionalZones=preferredOBSide?validZones.filter(z=>z.side===preferredOBSide):validZones;
- const candleGroups=new Map();
- for(const z of directionalZones){
-  const key=String(z.time);
-  if(!candleGroups.has(key))candleGroups.set(key,[]);
-  candleGroups.get(key).push(z);
+ const orderedZones=directionalZones.slice().sort((a,b)=>
+  Number(b.structureConfirmedTime||b.time)-Number(a.structureConfirmedTime||a.time)||
+  Number(b.timeframe||0)-Number(a.timeframe||0)||
+  Number(b.time)-Number(a.time)
+ );
+ const priceClusters=[];
+ for(const z of orderedZones){
+  let cluster=priceClusters.find(g=>g.some(q=>{
+   const overlap=Math.max(0,Math.min(z.high,q.high)-Math.max(z.low,q.low));
+   const smaller=Math.max(1e-9,Math.min(z.high-z.low,q.high-q.low));
+   return overlap/smaller>=0.5;
+  }));
+  if(!cluster){cluster=[];priceClusters.push(cluster);}
+  if(cluster.length<2)cluster.push(z);
  }
- const limitedZones=[];
- for(const group of candleGroups.values()){
-  group.sort((a,b)=>b.timeframe-a.timeframe||b.structureConfirmedTime-a.structureConfirmedTime);
-  limitedZones.push(...group.slice(0,2));
- }
+ const limitedZones=priceClusters.flat();
  return{setups,e9,e20,rv,pv:m30Pv,obZones:limitedZones};
 }
 function findValidOBAtTime(c,time,side,tf,pv,structureCandles,raw){
