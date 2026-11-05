@@ -138,17 +138,16 @@ function drawPivotLines(){
  const raw=state.rawCandles,last=raw[raw.length-1].time,cutoff=last-3600;
  const current=Number(raw[raw.length-1].close);
  if(!Number.isFinite(current))return;
- const m10=pivots(aggregate(raw,10),3,600),h1=pivots(aggregate(raw,60),2,3600);
- // Un solo nivel por lado: la resistencia más cercana arriba y el soporte más cercano abajo.
- // M10: niveles recientes de la última hora. H1: contexto de niveles anteriores.
- const resistanceCandidates=[
-  ...m10.highs.filter(p=>p.time>=cutoff).map(p=>({...p,kind:'resistance-m10'})),
-  ...h1.highs.filter(p=>p.time<cutoff).map(p=>({...p,kind:'resistance-h1'}))
- ].filter(p=>Number.isFinite(p.price)&&p.price>current);
- const supportCandidates=[
-  ...m10.lows.filter(p=>p.time>=cutoff).map(p=>({...p,kind:'support-m10'})),
-  ...h1.lows.filter(p=>p.time<cutoff).map(p=>({...p,kind:'support-h1'}))
- ].filter(p=>Number.isFinite(p.price)&&p.price<current);
+ // Todos los pivotes y resistencias se calculan exclusivamente con velas M10,
+ // independientemente de la temporalidad seleccionada para visualizar el gráfico.
+ // No se mezclan cálculos M1/M2/M3/M5 ni niveles H1.
+ const m10=pivots(aggregate(raw,10),3,600);
+ const resistanceCandidates=m10.highs
+  .filter(p=>p.time>=cutoff&&Number.isFinite(p.price)&&p.price>current)
+  .map(p=>({...p,kind:'resistance-m10'}));
+ const supportCandidates=m10.lows
+  .filter(p=>p.time>=cutoff&&Number.isFinite(p.price)&&p.price<current)
+  .map(p=>({...p,kind:'support-m10'}));
  const resistance=resistanceCandidates.sort((a,b)=>a.price-b.price)[0];
  const support=supportCandidates.sort((a,b)=>b.price-a.price)[0];
  const levels=[...(resistance?[resistance]:[]),...(support?[support]:[])];
