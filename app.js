@@ -4,7 +4,7 @@
 const APP_ID = '1089';
 const API_URL = 'wss://ws.derivws.com/websockets/v3?app_id=' + APP_ID;
 const $ = id => document.getElementById(id);
-const state = { ws:null, req:0, pending:new Map(), symbols:[], selected:null, tf:1, candles:[], rawCandles:[], trades:[], liveSub:null, main:null, rsi:null, series:{}, busy:false, lastRecalcBucket:null };
+const state = { ws:null, req:0, pending:new Map(), symbols:[], selected:null, tf:1, candles:[], rawCandles:[], rawBySymbol:new Map(), marketBacktests:[], trades:[], liveSub:null, main:null, rsi:null, series:{}, busy:false, lastRecalcBucket:null };
 const CANDIDATES = [
  ['1HZ10V','Volatility 10 (1s)'],['1HZ15V','Volatility 15 (1s)'],['1HZ25V','Volatility 25 (1s)'],['1HZ30V','Volatility 30 (1s)'],['1HZ50V','Volatility 50 (1s)'],['1HZ75V','Volatility 75 (1s)'],['1HZ90V','Volatility 90 (1s)'],['1HZ100V','Volatility 100 (1s)'],['1HZ150V','Volatility 150 (1s)'],['1HZ250V','Volatility 250 (1s)'],
  ['R_10','Volatility 10'],['R_25','Volatility 25'],['R_50','Volatility 50'],['R_75','Volatility 75'],['R_100','Volatility 100'],
@@ -142,15 +142,29 @@ function showLatest(calc,trades,c){
  $('rsiLegend').textContent='Valor actual: '+fmt(rv);
 }
 function renderHistory(trades){const rows=trades.slice(-150).reverse();$('historyCount').textContent=trades.length+' operaciones';$('historyBody').innerHTML=rows.length?rows.map(t=>'<tr><td>'+new Date(t.time*1000).toLocaleTimeString('es-PA',{hour:'2-digit',minute:'2-digit'})+'</td><td style="color:'+(t.side==='BUY'?'#20d69a':'#ff6876')+'">'+(t.side==='BUY'?'COMPRA':'VENTA')+'</td><td>'+fmt(t.entry)+'</td><td>'+fmt(t.sl)+'</td><td>'+fmt(t.tp1)+'</td><td>'+fmt(t.tp2)+'</td><td>'+t.result+'</td></tr>').join(''):'<tr><td colspan="7" class="empty-cell">No hay operaciones detectadas en este período.</td></tr>';const closed=trades.filter(t=>t.result==='GANADA'||t.result==='PERDIDA');$('wins').textContent=closed.filter(t=>t.result==='GANADA').length;$('losses').textContent=closed.filter(t=>t.result==='PERDIDA').length;$('pending').textContent=trades.filter(t=>t.result==='PENDIENTE').length;$('expired').textContent=trades.filter(t=>t.result==='CANCELADA').length;}
+async function runUniverseBacktest(refresh=false){
+ $('dataStatus').textContent='Backtesting '+state.symbols.length+' instrumentos…';
+ if(refresh)state.rawBySymbol.clear();
+ let cursor=0,done=0;const workers=Array.from({length:Math.min(4,state.symbols.length)},async()=>{
+  while(cursor<state.symbols.length){const item=state.symbols[cursor++];try{if(!state.rawBySymbol.has(item.symbol)){const raw=await getCandles(item.symbol);state.rawBySymbol.set(item.symbol,raw);}done++;$('dataStatus').textContent='Backtesting '+done+' / '+state.symbols.length+' instrumentos…';}catch(e){state.rawBySymbol.set(item.symbol,[]);done++;}}
+ });
+ await Promise.all(workers);
+ const allTrades=[];
+ for(const item of state.symbols){const raw=state.rawBySymbol.get(item.symbol)||[];if(!raw.length)continue;const candles=aggregate(raw,state.tf);if(candles.length<70)continue;const calc=buildSetups(candles),trades=simulate(candles,calc.setups);allTrades.push(...trades.map(t=>({...t,symbol:item.symbol})));}
+ state.marketBacktests=allTrades;
+ const closed=allTrades.filter(t=>t.result==='GANADA'||t.result==='PERDIDA');
+ $('wins').textContent=closed.filter(t=>t.result==='GANADA').length;$('losses').textContent=closed.filter(t=>t.result==='PERDIDA').length;
+ $('pending').textContent=allTrades.filter(t=>t.result==='PENDIENTE').length;$('expired').textContent=allTrades.filter(t=>t.result==='CANCELADA').length;
+ $('backtestInfo').textContent='Universo: '+state.symbols.length+' instrumentos · M'+state.tf+' · últimas 24 horas · '+allTrades.length+' señales simuladas.';
+}
 async function analyze(){
- if(state.busy)return;state.busy=true;$('dataStatus').textContent='Descargando 24h…';
- try{const raw=await getCandles(state.selected);if(!raw.length)throw new Error('No llegaron velas para '+state.selected);
+ if(state.busy)return;state.busy=true;$('dataStatus').textContent='Cargando gráfico…';
+ try{const raw=state.rawBySymbol.get(state.selected)||await getCandles(state.selected);if(!raw.length)throw new Error('No llegaron velas para '+state.selected);
  state.rawCandles=raw;state.lastRecalcBucket=Math.floor(raw.at(-1).time/(state.tf*60));const c=aggregate(raw,state.tf);state.candles=c;const calc=buildSetups(c);state.trades=simulate(c,calc.setups);
  draw(c,calc,state.trades);showLatest(calc,state.trades,c);renderHistory(state.trades);
  $('chartTitle').textContent=(state.symbols.find(s=>s.symbol===state.selected)?.name||state.selected)+' · M'+state.tf;
  $('chartSubtitle').textContent='Velas '+c.length+' · análisis de 24 horas · señales proyectadas';
  $('chartRange').textContent=new Date(c[0].time*1000).toLocaleDateString('es-PA')+' — '+new Date(c.at(-1).time*1000).toLocaleTimeString('es-PA');
- $('backtestInfo').textContent='Probadas '+state.trades.length+' configuraciones históricas en '+c.length+' velas M'+state.tf+'. Entrada por toque del nivel proyectado; SL y TP por estructura.';
  $('dataStatus').textContent='Datos actualizados';
  }catch(e){$('dataStatus').textContent='Error: '+e.message;$('signalDetails').textContent=e.message;}finally{state.busy=false;}
 }
@@ -164,14 +178,14 @@ function onLiveTick(tick){
  const group=state.rawCandles.filter(x=>Math.floor(x.time/tfSeconds)*tfSeconds===bucket);
  if(group.length&&state.series.candle){state.series.candle.update({time:bucket,open:group[0].open,high:Math.max(...group.map(x=>x.high)),low:Math.min(...group.map(x=>x.low)),close:price});}
  const recalcBucket=Math.floor(epoch/tfSeconds);
- if(state.lastRecalcBucket!==null&&recalcBucket>state.lastRecalcBucket){state.lastRecalcBucket=recalcBucket;analyze();}
+ if(state.lastRecalcBucket!==null&&recalcBucket>state.lastRecalcBucket){state.lastRecalcBucket=recalcBucket;state.rawBySymbol.set(state.selected,state.rawCandles);runUniverseBacktest(false).then(analyze);}
 }
 function subscribeLive(){if(state.liveSub){try{state.ws.send(JSON.stringify({forget:state.liveSub}));}catch{}}request({ticks:state.selected,subscribe:1}).then(r=>{state.liveSub=r.subscription?.id||null;}).catch(()=>{});}
 function bind(){
  $('symbolSelect').addEventListener('change',e=>{state.selected=e.target.value;analyze();subscribeLive();});
- $('timeframes').addEventListener('click',e=>{const b=e.target.closest('button[data-tf]');if(!b)return;state.tf=+b.dataset.tf;document.querySelectorAll('#timeframes button').forEach(x=>x.classList.toggle('active',x===b));analyze();});
- $('refreshBtn').addEventListener('click',()=>analyze());$('runBacktest').addEventListener('click',()=>analyze());
+ $('timeframes').addEventListener('click',async e=>{const b=e.target.closest('button[data-tf]');if(!b)return;state.tf=+b.dataset.tf;document.querySelectorAll('#timeframes button').forEach(x=>x.classList.toggle('active',x===b));await runUniverseBacktest(false);await analyze();});
+ $('refreshBtn').addEventListener('click',async()=>{await runUniverseBacktest(true);await analyze();});$('runBacktest').addEventListener('click',async()=>{await runUniverseBacktest(true);await analyze();});
 }
-async function start(){bind();try{await loadSymbols();await analyze();subscribeLive();}catch(e){setConnection(false,'No conectado');$('dataStatus').textContent=e.message;}}
+async function start(){bind();try{await loadSymbols();await runUniverseBacktest(false);await analyze();subscribeLive();}catch(e){setConnection(false,'No conectado');$('dataStatus').textContent=e.message;}}
 start();
 })();
