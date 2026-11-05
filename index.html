@@ -47,7 +47,21 @@
     </div>
   </details>
 
-  <main class="main-content">
+
+  <details id="strategy-lab" class="strategy-lab">
+    <summary><span>LABORATORIO · 10 ESTRATEGIAS</span><span class="lab-summary-hint">Comparar resultados por instrumento</span></summary>
+    <div class="lab-content">
+      <div class="lab-intro"><div><div class="eyebrow">BACKTEST MULTIMERCADO</div><h2>¿Qué estrategia funciona mejor en cada Volatility?</h2><p>Descarga hasta 5.000 velas M1 por instrumento. Cada estrategia se prueba por separado; el 30% final del historial se reserva como muestra de prueba.</p></div></div>
+      <div class="lab-actions"><button id="lab-start" type="button">ANALIZAR TODOS LOS INSTRUMENTOS</button><button id="lab-export" type="button" class="lab-export">DESCARGAR RESULTADOS CSV</button></div>
+      <div class="lab-status-row"><strong id="lab-status">Laboratorio listo · sin análisis ejecutado</strong><span id="lab-progress">0 / 0 instrumentos</span></div>
+      <div id="lab-summary" class="lab-summary">10 estrategias reconocidas · análisis individual por instrumento</div>
+      <h3>Mejor estrategia por instrumento</h3>
+      <div class="lab-table-wrap"><table class="lab-table"><thead><tr><th>INSTRUMENTO</th><th>ESTRATEGIA</th><th>TP1/TP2 %</th><th>PRUEBAS</th><th>EXPECTATIVA</th><th>PF</th></tr></thead><tbody id="lab-results"><tr><td colspan="6">Pulsa «ANALIZAR TODOS» para comenzar.</td></tr></tbody></table></div>
+      <p class="lab-note">La clasificación prioriza el porcentaje de objetivos alcanzados en el 30% reservado. Se marca como muestra insuficiente si tiene menos de 20 operaciones de prueba. El CSV incluye resumen y cada operación con entrada, SL, TP1, TP2 y resultado.</p>
+      <h3>Top de estrategias e instrumentos</h3><div id="lab-ranking" class="lab-ranking">Esperando resultados.</div>
+    </div>
+  </details>
+\n  <main class="main-content">
     <section class="chart-card">
       <div class="chart-heading">
         <div><div class="eyebrow">ANÁLISIS ESTRUCTURAL</div><h1 id="chart-title">Selecciona un mercado</h1></div>
@@ -113,5 +127,5 @@
 <script src="app.js?v=botder-backtest-5000-20261106e"></script>
 <script src="deriv.js?v=botder-backtest-5000-20261106e"></script>
 <script src="structural-engine.js?v=botder-backtest-5000-20261106e"></script>
-</body>
+<script src="strategy-lab.js?v=lab-10-20261104a"></script>\n</body>
 </html>
