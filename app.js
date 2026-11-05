@@ -87,10 +87,10 @@ function buildSetups(c,liquidityCandles=c){
   if(bear&&sellRsi&&strongBear){
    const ob=findOBAtTime(liquidityCandles,x.time,'sell');if(!ob)continue;
    const targets=pv.lows.filter(p=>p.confirmedTime<=x.time&&p.price<ob.entry).sort((a,b)=>b.price-a.price);
-   if(targets.length<2)continue;
+   if(!targets.length)continue;
    const sl=ob.high+(ob.high-ob.low)*.12;
    const obKey='SELL:'+ob.time;if(usedOBs.has(obKey))continue;usedOBs.add(obKey);
-   setups.push({side:'SELL',index:i,time:x.time,entry:ob.entry,sl,tp1:targets[0].price,tp2:targets[1].price,ob,rsi:rv[i],state:'PREPARADA'});
+   setups.push({side:'SELL',index:i,time:x.time,entry:ob.entry,sl,tp1:targets[0].price,tp2:(targets[1]||targets[0]).price,ob,rsi:rv[i],state:'PREPARADA'});
   }
  }
  return{setups,e9,e21,e50,rv,pv};
