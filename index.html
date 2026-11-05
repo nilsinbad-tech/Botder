@@ -42,17 +42,17 @@
   </details>
 
   <section class="chart-card">
-    <div class="chart-head"><div><b id="chartTitle">Gráfico Deriv</b><small id="chartSubtitle">Velas reales · histórico de 24 horas</small></div><small class="chart-mode">Gráfico visual independiente · señales M2</small></div>
+    <div class="chart-head"><div><b id="chartTitle">Gráfico Deriv</b><small id="chartSubtitle">Velas reales · histórico de 72 horas</small></div><small class="chart-mode">Gráfico visual independiente · señales M2</small></div>
     <div class="chart-points-summary"><span>GANADOS <b id="chartWonPoints">+0.00 pts</b></span><span>PERDIDOS <b id="chartLostPoints">-0.00 pts</b></span><small>Acumulado de operaciones cerradas del instrumento seleccionado</small></div>
     <div id="mainChart" class="main-chart"><div class="chart-placeholder">Esperando velas de Deriv…</div></div>
     <div class="rsi-head"><b>RSI (14)</b><span id="rsiLegend">—</span></div>
     <div id="rsiChart" class="rsi-chart"></div>
-    <div class="chart-foot"><span>Arrastra para moverte · pellizca o usa dos dedos para zoom</span><span id="chartRange">Últimas 24 horas</span></div>
+    <div class="chart-foot"><span>Arrastra para moverte · pellizca o usa dos dedos para zoom</span><span id="chartRange">Últimas 72 horas</span></div>
   </section>
 
   <section class="lower-grid">
     <article class="panel">
-      <div class="panel-title"><b>Backtesting · 24 horas</b><button id="runBacktest" class="text-btn">Recalcular</button></div>
+      <div class="panel-title"><b>Backtesting · 72 horas</b><button id="runBacktest" class="text-btn">Recalcular</button></div>
       <div class="stats-row"><div><small>GANADAS</small><b class="win" id="wins">0</b></div><div><small>PERDIDAS</small><b class="loss" id="losses">0</b></div><div><small>PENDIENTES</small><b id="pending">0</b></div><div><small>EXPIRADAS</small><b id="expired">0</b></div></div>
       <p class="muted" id="backtestInfo">El análisis se ejecuta con las velas descargadas de Deriv.</p>
     </article>
@@ -65,7 +65,7 @@
 
   <section class="panel history-panel">
     <div class="panel-title"><b>Historial de operaciones</b><span id="historyCount">0 operaciones</span></div>
-    <div class="history-scroll"><table><thead><tr><th>Hora</th><th>Instrumento</th><th>Dirección</th><th>Entrada</th><th>RSI entrada</th><th>SL</th><th>TP M30</th><th>Resultado</th><th>Movimiento</th></tr></thead><tbody id="historyBody"><tr><td colspan="10" class="empty-cell">Esperando backtesting…</td></tr></tbody></table></div>
+    <div class="history-scroll"><table><thead><tr><th>Hora</th><th>Instrumento</th><th>Dirección</th><th>Entrada</th><th>RSI entrada</th><th>SL</th><th>TP1</th><th>TP2</th><th>Resultado</th><th>Movimiento</th></tr></thead><tbody id="historyBody"><tr><td colspan="10" class="empty-cell">Esperando backtesting…</td></tr></tbody></table></div>
   </section>
 
   <section class="panel instruments-panel">
@@ -74,5 +74,5 @@
   </section>
   <footer>BOTDER · Solo análisis y simulación. No envía órdenes ni garantiza resultados futuros.</footer>
 </main>
-<script src="app.js?v=105-h1-zone-retest"></script>
+<script src="app.js?v=93-h1-m2-ob-history"></script>
 </body></html>
