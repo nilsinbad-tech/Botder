@@ -66,7 +66,7 @@ function rsi(values,period=14){const out=Array(values.length).fill(null);let gai
 function pivots(c,span=3,candleSeconds=600){const highs=[],lows=[];for(let i=span;i<c.length-span;i++){let hi=true,lo=true;for(let j=1;j<=span;j++){if(c[i].high<=c[i-j].high||c[i].high<=c[i+j].high)hi=false;if(c[i].low>=c[i-j].low||c[i].low>=c[i+j].low)lo=false;}if(hi)highs.push({index:i,time:c[i].time,confirmedTime:c[i+span].time+candleSeconds,price:c[i].high});if(lo)lows.push({index:i,time:c[i].time,confirmedTime:c[i+span].time+candleSeconds,price:c[i].low});}const sample=c.slice(-30),avgRange=sample.length?sample.reduce((sum,v)=>sum+(v.high-v.low),0)/sample.length:0,tolerance=avgRange*.45;const merge=items=>{const kept=[];for(const p of items){const near=kept.findIndex(q=>Math.abs(q.price-p.price)<=tolerance);if(near<0)kept.push(p);else if(p.confirmedTime>kept[near].confirmedTime)kept[near]=p;}return kept.sort((a,b)=>a.time-b.time);};return{highs:merge(highs),lows:merge(lows)};}
 function buildSetups(c,liquidityCandles=c,pivotCandles=liquidityCandles,obStructureCandles=pivotCandles,trendSide=null,targetRawCandles=pivotCandles){
  const close=c.map(x=>x.close),e9=ema(close,9),e20=ema(close,20),rv=rsi(close);
- const structureCandles=aggregate(targetRawCandles,state.pivotTf),structurePv=pivots(structureCandles,3,state.pivotTf*60);
+ const structureTf=state.tf,structureCandles=aggregate(targetRawCandles,structureTf),structurePv=pivots(structureCandles,3,structureTf*60);
  const m20Candles=aggregate(targetRawCandles,20),m20Pv=pivots(m20Candles,3,1200);
  const stopPivots=state.slTfs.map(mins=>({mins,pv:pivots(aggregate(targetRawCandles,mins),3,mins*60)}));
  const setups=[],obZones=[],zoneKeys=new Set(),usedOBs=new Set();
@@ -93,6 +93,7 @@ function buildSetups(c,liquidityCandles=c,pivotCandles=liquidityCandles,obStruct
    const key=ob.side+':'+ob.timeframe+':'+ob.time;
    if(usedOBs.has(key)||x.time<=ob.time+ob.timeframe*60)continue;
    if(!(x.low<=ob.high&&x.high>=ob.low))continue;
+   if(isOBInvalidated(ob,ob.side,{price:ob.structurePrice,confirmedTime:ob.structureConfirmedTime},targetRawCandles,x.time))continue;
    const side=ob.side;
    const levels=(side==='BUY'?m20Pv.highs:m20Pv.lows)
     .filter(p=>p.confirmedTime<=x.time&&(side==='BUY'?p.price>ob.entry:p.price<ob.entry))
@@ -111,7 +112,9 @@ function buildSetups(c,liquidityCandles=c,pivotCandles=liquidityCandles,obStruct
    usedOBs.add(key);
   }
  }
- return{setups,e9,e20,rv,pv:m20Pv,obZones};
+ const lastTime=targetRawCandles.length?targetRawCandles[targetRawCandles.length-1].time:0;
+ const validZones=obZones.filter(z=>!isOBInvalidated(z,z.side,{price:z.structurePrice,confirmedTime:z.structureConfirmedTime},targetRawCandles,lastTime));
+ return{setups,e9,e20,rv,pv:m20Pv,obZones:validZones};
 }
 function findValidOBAtTime(c,time,side,tf,pv,structureCandles,raw){
  let lo=0,hi=c.length;
@@ -327,13 +330,14 @@ function showLatest(calc,trades,c,raw=state.rawCandles){
  const t=trades.filter(x=>x.result==='PENDIENTE').slice(-1)[0]||trades.slice(-1)[0],rv=calc.rv[calc.rv.length-1];
  const hourly=getHourlyBias(raw),trend=hourly.trend;
  $('trendValue').textContent=trend;$('trendValue').style.color=trend==='BAJISTA'?'#ff6876':trend==='ALCISTA'?'#20d69a':'#d5b35b';
- const obLabel=hourly.side?(hourly.side==='BUY'?'OB ALCISTA':'OB BAJISTA'):'SIN OB · H1 LATERAL';
+ const latestOb=calc.obZones&&calc.obZones.length?calc.obZones[calc.obZones.length-1]:null;
+ const obLabel=latestOb?(latestOb.side==='BUY'?'OB ALCISTA':'OB BAJISTA'):'SIN OB VÁLIDO';
  $('signalValue').textContent=obLabel;
- $('signalValue').style.color=hourly.side?(hourly.side==='BUY'?'#20d69a':'#ff6876'):'#aab8ca';
+ $('signalValue').style.color=latestOb?(latestOb.side==='BUY'?'#20d69a':'#ff6876'):'#aab8ca';
  $('entryValue').textContent=t?fmt(t.entry):'—';if($('slValue'))$('slValue').textContent=t?fmt(t.sl):'—';if($('tp1Value'))$('tp1Value').textContent=t?fmt(t.tp1):'—';if($('tp2Value'))$('tp2Value').textContent=t?fmt(t.tp2):'—';$('rsiValue').textContent=fmt(rv);
  $('rsiConfirm').textContent=t?'PRECIO RETESTEÓ EL OB':'Esperando toque de OB';$('rsiConfirm').style.color=t?'#20d69a':'#8b9bb0';
  $('signalState').textContent=t?(t.entryIndex>=0?'ACTIVA':'PREPARADA'):'ESPERANDO';
- $('signalDetails').textContent=(hourly.side?'Sesgo de 1 hora: '+trend+'. Mostrando únicamente el '+obLabel+' de H1'+(hourly.ob?' entre '+fmt(hourly.ob.low)+' y '+fmt(hourly.ob.high):' (zona no localizada en las últimas 9 velas H1)')+'. ':'La tendencia H1 está lateral; no se selecciona OB direccional. ')+(t?(t.entryIndex>=0?'Operación ACTIVA. ':'')+(t.side==='BUY'?'OB ALCISTA':'OB BAJISTA')+' con retesteo confirmado. Entrada en el OB; TP1 es el primer pivote de liquidez disponible. Entrada proyectada '+fmt(t.entry)+', SL '+fmt(t.sl)+', TP1 '+fmt(t.tp1)+' y TP2 '+fmt(t.tp2)+'.':'No hay una señal completa en la última vela M2.');
+ $('signalDetails').textContent=(latestOb?'Zona OB válida anclada a pivote de M'+state.tf+'. ':'No hay OB válido en la zona visible. ')+(t?(t.entryIndex>=0?'Operación ACTIVA. ':'')+(t.side==='BUY'?'COMPRA por OB ALCISTA':'VENTA por OB BAJISTA')+' tras retesteo. Entrada en el OB; TP1 es el primer pivote de liquidez disponible. Entrada '+fmt(t.entry)+', SL '+fmt(t.sl)+', TP1 '+fmt(t.tp1)+' y TP2 '+fmt(t.tp2)+'.':'Esperando que el precio regrese a un OB válido.');
  $('rsiLegend').textContent='Valor actual: '+fmt(rv);
 }
 function renderHistory(trades){
