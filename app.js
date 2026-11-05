@@ -199,13 +199,10 @@ function drawOverlays(trades,c,host,obZones=[]){
  if(state.overlayResizeObserver){state.overlayResizeObserver.disconnect();state.overlayResizeObserver=null;}
  const old=host.querySelector('.chart-overlay');if(old)old.remove();state.overlayUpdate=null;
  const overlay=document.createElement('div');overlay.className='chart-overlay';host.appendChild(overlay);
- // Dibuja los OB candidatos calculados en M2; son las mismas zonas que alimentan las señales.
- const unique=new Map();
- (obZones||[]).forEach(ob=>{if(ob&&Number.isFinite(ob.time)&&Number.isFinite(ob.high)&&Number.isFinite(ob.low))unique.set(ob.side+':'+ob.time,ob);});
- const zones=[...unique.values()].slice(-12).map(ob=>({...ob,fvg:false}));
- // Los FVG se toman de las mismas señales simuladas, nunca de una vela arbitraria.
- const fvgs=[...trades].filter(t=>t.fvg).slice(-4).map(t=>({time:t.time-240,high:t.fvg.high,low:t.fvg.low,side:t.side,fvg:true}));
- zones.push(...fvgs);
+ // Un solo OB visible: el de la dirección de la tendencia H1.
+ // Así nunca aparecen OB alcista y bajista simultáneamente.
+ const hourly=getHourlyBias(state.rawCandles);
+ const zones=hourly.side&&hourly.ob?[{...hourly.ob,side:hourly.side,fvg:false}]:[];
  const zoneEls=zones.map(ob=>{
   const el=document.createElement('div');el.className='ob-zone '+(ob.fvg?'fvg-zone ':'')+(ob.side==='BUY'?'bull-zone':'bear-zone');
   el.innerHTML='<b>'+(ob.fvg?(ob.side==='BUY'?'FVG ALCISTA':'FVG BAJISTA'):(ob.side==='BUY'?'OB ALCISTA':'OB BAJISTA'))+'</b>';
