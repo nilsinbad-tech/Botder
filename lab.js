@@ -24,7 +24,7 @@ function crossDn(a,b,i){return a[i]!=null&&b[i]!=null&&a[i-1]!=null&&b[i-1]!=nul
 function pivots(d,left=2,right=2){let highs=Array(d.length).fill(null),lows=Array(d.length).fill(null);for(let i=left+right;i<d.length;i++){let k=i-right,h=true,l=true;for(let j=k-left;j<=k+right;j++){if(j===k)continue;if(d[j].high>=d[k].high)h=false;if(d[j].low<=d[k].low)l=false}if(h)highs[i]=d[k].high;if(l)lows[i]=d[k].low}return{highs,lows}}
 function calc(d){
  const c=d.map(z=>z.close),hl2=d.map(z=>(z.high+z.low)/2),tp=d.map(z=>(z.high+z.low+z.close)/3),e5=ema(c,5),e8=ema(c,8),e9=ema(c,9),e20=ema(c,20),e21=ema(c,21),e50=ema(c,50),e55=ema(c,55),s10=sma(c,10),s30=sma(c,30),r=rsi(c,14),r2=rsi(c,2),a=atr(d,14),ad=adx(d,14),m=macd(c);
- const k=Array(c.length).fill(null),kd=k.slice(),cci=k.slice(),wpr=k.slice(),ao=k.slice(),roc=k.slice(),dem=k.slice(),rvi=k.slice(),rvSig=k.slice(),tsi=k.slice(),tsiSig=k.slice(),ppo=k.slice(),ppoSig=k.slice(),trix=k.slice(),trixSig=k.slice(),zscore=k.slice(),stochRsi=k.slice();
+ const k=Array(c.length).fill(null),kd=k.slice(),cci=k.slice(),wpr=k.slice(),ao=k.slice(),roc=k.slice(),dem=k.slice(),rvi=k.slice(),rvSig=k.slice(),tsi=k.slice(),tsiSig=k.slice(),ppo=k.slice(),ppoSig=k.slice(),trix=k.slice(),trixSig=k.slice(),zscore=k.slice(),stochRsi=k.slice();const ema12=ema(c,12),ema26=ema(c,26),ao5=sma(hl2,5),ao34=sma(hl2,34),sm13=smma(hl2,13),sm8=smma(hl2,8),sm5=smma(hl2,5),mom=c.map((v,i)=>i?v-c[i-1]:0),absMom=mom.map(Math.abs),tsiNum=ema(ema(mom,25),13),tsiDen=ema(ema(absMom,25),13),ema15=ema(c,15),ema15b=ema(ema15.map(v=>v??0),15),ema15c=ema(ema15b.map(v=>v??0),15);
  const demUp=Array(c.length).fill(0),demDn=demUp.slice();
  for(let i=0;i<c.length;i++){
   if(i>=13){let h=hi(d,i+1,14),l=lo(d,i+1,14);k[i]=100*(c[i]-l)/(h-l||1)}
@@ -32,19 +32,19 @@ function calc(d){
   if(i>=19){let z=tp.slice(i-19,i+1),av=z.reduce((u,v)=>u+v,0)/20,md=z.reduce((u,v)=>u+Math.abs(v-av),0)/20;cci[i]=(tp[i]-av)/(.015*(md||1e-10))}
   if(i>=13){let h=hi(d,i+1,14),l=lo(d,i+1,14);wpr[i]=-100*(h-c[i])/(h-l||1)}
   if(i>=9)roc[i]=100*(c[i]/c[i-9]-1);
-  if(i>=33)ao[i]=sma(hl2.slice(0,i+1),5)[i]-sma(hl2.slice(0,i+1),34)[i];
-  if(i>=13){for(let j=i-13;j<=i;j++){demUp[i]+=Math.max(d[j].high-d[j-1].high,0);demDn[i]+=Math.max(d[j-1].low-d[j].low,0)}dem[i]=demUp[i]/(demUp[i]+demDn[i]||1)}
+  if(i>=33)ao[i]=ao5[i]-ao34[i];
+  if(i>=13){for(let j=i-13;j<=i;j++){if(j===0)continue;demUp[i]+=Math.max(d[j].high-d[j-1].high,0);demDn[i]+=Math.max(d[j-1].low-d[j].low,0)}dem[i]=demUp[i]/(demUp[i]+demDn[i]||1)}
   if(i>=9){let up=0,dn=0;for(let j=i-9;j<=i;j++){let z=c[j]-c[j-1];up+=Math.max(z,0);dn+=Math.max(-z,0)}rvi[i]=(c[i]-c[i-1]+2*(c[i-1]-c[i-2])+2*(c[i-2]-c[i-3])+(c[i-3]-c[i-4]))/6}
-  if(i>=25){let diff=c[i]-c[i-1],abs=Math.abs(diff),num=0,den=0;for(let j=i-24;j<=i;j++){let v=c[j]-c[j-1];num+=v;den+=Math.abs(v)}tsi[i]=100*num/(den||1)}
-  if(i>=25){let f=ema(c,12),s=ema(c,26);ppo[i]=100*(f[i]-s[i])/(s[i]||1)}
-  if(i>=3){let a1=ema(c,15),a2=ema(a1.map(v=>v??0),15),a3=ema(a2.map(v=>v??0),15);trix[i]=100*(a3[i]-a3[i-1])/(a3[i-1]||1)}
+  if(i>=25)tsi[i]=100*tsiNum[i]/(tsiDen[i]||1)
+  if(i>=25)ppo[i]=100*(ema12[i]-ema26[i])/(ema26[i]||1)
+  if(i>=3)trix[i]=100*(ema15c[i]-ema15c[i-1])/(ema15c[i-1]||1)
   if(i>=29){let av=c.slice(i-29,i+1).reduce((u,v)=>u+v,0)/30,sd=Math.sqrt(c.slice(i-29,i+1).reduce((u,v)=>u+(v-av)**2,0)/30);zscore[i]=(c[i]-av)/(sd||1)}
   if(i>=13){let vals=r.slice(i-13,i+1).filter(Number.isFinite);if(vals.length===14){let mn=Math.min(...vals),mx=Math.max(...vals);stochRsi[i]=100*(r[i]-mn)/(mx-mn||1)}}
  }
  const rviNumerator=Array(c.length).fill(null),rviDenominator=Array(c.length).fill(null);
  for(let i=3;i<c.length;i++){let n=0,v=0;for(let j=i-3;j<=i;j++){n+=(d[j].close-d[j].open);v+=(d[j].high-d[j].low)}rviNumerator[i]=n/4;rviDenominator[i]=v/4}
  for(let i=0;i<c.length;i++)if(i>=6){let ns=rviNumerator.slice(i-3,i+1).filter(Number.isFinite),ds=rviDenominator.slice(i-3,i+1).filter(Number.isFinite);if(ns.length===4&&ds.length===4)rvi[i]=ns.reduce((u,v)=>u+v,0)/(ds.reduce((u,v)=>u+v,0)||1)}
- const hmaCalc=p=>{let half=wma(c,Math.max(1,Math.floor(p/2))),full=wma(c,p),diff=c.map((_,i)=>half[i]!=null&&full[i]!=null?2*half[i]-full[i]:null);return wma(diff.map(v=>v??0),Math.max(1,Math.floor(Math.sqrt(p))))};
+ const hmaCalc=p=>{let half=wma(c,Math.max(1,Math.floor(p/2))),full=wma(c,p),diff=c.map((_,i)=>half[i]!=null&&full[i]!=null?2*half[i]-full[i]:null);return wma(diff,Math.max(1,Math.floor(Math.sqrt(p))))};
  const hma16=hmaCalc(16),hma32=hmaCalc(32);
  const ha=Array(c.length);for(let i=0;i<c.length;i++){let close=(d[i].open+d[i].high+d[i].low+d[i].close)/4,open=i?(ha[i-1].open+ha[i-1].close)/2:(d[i].open+d[i].close)/2;ha[i]={open,close,high:Math.max(d[i].high,open,close),low:Math.min(d[i].low,open,close)}}
  const tenkan=Array(c.length).fill(null),kijun=tenkan.slice(),spanA=tenkan.slice(),spanB=tenkan.slice(),sar=tenkan.slice(),sarDir=tenkan.slice(),jaw=tenkan.slice(),teeth=tenkan.slice(),lips=tenkan.slice(),supertrend=tenkan.slice(),superDir=tenkan.slice();
@@ -53,7 +53,7 @@ function calc(d){
   if(i>=25)kijun[i]=(hi(d,i+1,26)+lo(d,i+1,26))/2;
   if(tenkan[i]!=null&&kijun[i]!=null)spanA[i]=(tenkan[i]+kijun[i])/2;
   if(i>=51)spanB[i]=(hi(d,i+1,52)+lo(d,i+1,52))/2;
-  if(i>=13){jaw[i]=smma(hl2.slice(0,i+1),13)[i];teeth[i]=smma(hl2.slice(0,i+1),8)[i];lips[i]=smma(hl2.slice(0,i+1),5)[i]}
+  if(i>=13){jaw[i]=sm13[i];teeth[i]=sm8[i];lips[i]=sm5[i]}
  }
  let af=.02,maxAf=.2,ep=d[0]?.high||0,dir=1,sv=d[0]?.low||0;
  for(let i=1;i<c.length;i++){if(i===1){dir=d[i].close>=d[i-1].close?1:-1;sv=dir>0?d[i-1].low:d[i-1].high;ep=dir>0?d[i].high:d[i].low}let next=sv+af*(ep-sv);if(dir>0){next=Math.min(next,d[i-1].low,i>1?d[i-2].low:d[i-1].low);if(d[i].low<next){dir=-1;next=ep;ep=d[i].low;af=.02}else if(d[i].high>ep){ep=d[i].high;af=Math.min(maxAf,af+.02)}}else{next=Math.max(next,d[i-1].high,i>1?d[i-2].high:d[i-1].high);if(d[i].high>next){dir=1;next=ep;ep=d[i].high;af=.02}else if(d[i].low<ep){ep=d[i].low;af=Math.min(maxAf,af+.02)}}sar[i]=next;sarDir[i]=dir}
@@ -118,7 +118,7 @@ function signal(id,i,d,x){
  case 42:{let body=Math.abs(c.close-c.open),lower=Math.min(c.open,c.close)-c.low,upper=c.high-Math.max(c.open,c.close);if(body>0&&lower>body*2.5&&upper<body&&c.close>c.low+(c.high-c.low)*.65&&c.low<=l20&&c.close>p.high)return 1;if(body>0&&upper>body*2.5&&lower<body&&c.close<c.low+(c.high-c.low)*.35&&c.high>=h20&&c.close<p.low)return -1;break}
  case 43:{let low=lo(d,i,12),high=hi(d,i,12);if(c.low<low&&c.close>low&&c.close>p.high&&up)return 1;if(c.high>high&&c.close<high&&c.close<p.low&&dn)return -1;break}
  case 44:{let found=null;for(let j=i-1;j>=Math.max(2,i-30);j--){let prev=d[j-1],ob=d[j],imp=d[j+1];if(ob.close<ob.open&&imp.close>imp.open&&imp.close>ob.high&&imp.close-ob.low>(x.a[j]||0)*1.2){found={lo:ob.low,hi:ob.open,dir:1};break}if(ob.close>ob.open&&imp.close<imp.open&&imp.close<ob.low&&ob.high-imp.close>(x.a[j]||0)*1.2){found={lo:ob.open,hi:ob.high,dir:-1};break}}if(found&&found.dir===1&&c.low<=found.hi&&c.close>=found.lo&&c.close>c.open&&c.close>p.high)return 1;if(found&&found.dir===-1&&c.high>=found.lo&&c.close<=found.hi&&c.close<c.open&&c.close<p.low)return -1;break}
- case 45: if(i>=2&&d[i-2].high<c.low&&c.close>p.high&&c.low<=d[i-2].high+a*.15&&x.e20[i]>x.e20[i-1])return 1;if(i>=2&&d[i-2].low>c.high&&c.close<p.low&&c.high>=d[i-2].low-a*.15&&x.e20[i]<x.e20[i-1])return -1;break;
+ case 45:{let gap=null;for(let j=i-1;j>=Math.max(2,i-20);j--){if(d[j-2].high<d[j].low){let zlo=d[j-2].high,zhi=d[j].low;if(c.low<=zhi&&c.low>=zlo&&c.close>p.high&&x.e20[i]>x.e20[i-1]){gap=1;break}}if(d[j-2].low>d[j].high){let zlo=d[j].high,zhi=d[j-2].low;if(c.high>=zlo&&c.high<=zhi&&c.close<p.low&&x.e20[i]<x.e20[i-1]){gap=-1;break}}}if(gap)return gap;break}
  case 46: if(lastH!=null&&c.close>lastH&&p.close<=lastH&&c.low<=lastH&&c.close>x.e20[i])return 1;if(lastL!=null&&c.close<lastL&&p.close>=lastL&&c.high>=lastL&&c.close<x.e20[i])return -1;break;
  case 47:{let highs=[],lows=[];for(let j=Math.max(0,i-80);j<i;j++){if(x.ps.highs[j]!=null)highs.push({v:x.ps.highs[j],i:j});if(x.ps.lows[j]!=null)lows.push({v:x.ps.lows[j],i:j})}if(highs.length>=3){let a1=highs[highs.length-3],head=highs[highs.length-2],a2=highs[highs.length-1];let neckL=lows.filter(z=>z.i>a1.i&&z.i<head.i).slice(-1)[0],neckR=lows.filter(z=>z.i>head.i&&z.i<a2.i).slice(-1)[0];if(neckL&&neckR&&head.v>a1.v&&head.v>a2.v&&Math.abs(a1.v-a2.v)<a*.8){let neck=(neckL.v+neckR.v)/2;if(c.close<neck&&p.close>=neck&&r<50)return -1}}if(lows.length>=3){let a1=lows[lows.length-3],head=lows[lows.length-2],a2=lows[lows.length-1];let neckL=highs.filter(z=>z.i>a1.i&&z.i<head.i).slice(-1)[0],neckR=highs.filter(z=>z.i>head.i&&z.i<a2.i).slice(-1)[0];if(neckL&&neckR&&head.v<a1.v&&head.v<a2.v&&Math.abs(a1.v-a2.v)<a*.8){let neck=(neckL.v+neckR.v)/2;if(c.close>neck&&p.close<=neck&&r>50)return 1}}break}
  case 48:{let hs=[],ls=[];for(let j=Math.max(0,i-60);j<i;j++){if(x.ps.highs[j]!=null)hs.push(x.ps.highs[j]);if(x.ps.lows[j]!=null)ls.push(x.ps.lows[j])}if(hs.length>=2){let a1=hs[hs.length-2],a2=hs[hs.length-1];if(Math.abs(a1-a2)<a*.4&&c.close<lo(d,i,15)&&r<48)return -1}if(ls.length>=2){let a1=ls[ls.length-2],a2=ls[ls.length-1];if(Math.abs(a1-a2)<a*.4&&c.close>hi(d,i,15)&&r>52)return 1}break}
