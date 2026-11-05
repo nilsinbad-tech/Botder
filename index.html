@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#080d16"><title>BOTDER · Deriv Structural Lab</title>
-<link rel="stylesheet" href="styles.css?v=51">
+<link rel="stylesheet" href="styles.css?v=52">
 <script src="https://unpkg.com/lightweight-charts@5.0.8/dist/lightweight-charts.standalone.production.js" onerror="this.onerror=null;this.src='https://cdn.jsdelivr.net/npm/lightweight-charts@5.0.8/dist/lightweight-charts.standalone.production.js'"></script>
 </head>
 <body>
@@ -31,7 +31,7 @@
     <article><small>RSI (14)</small><b id="rsiValue">—</b><em id="rsiConfirm">Sin confirmación</em></article>
   </section>
 
-  <section class="pivot-settings ob-settings" aria-label="Configuración de Order Blocks"><strong>CONFIGURACIÓN DE ORDER BLOCKS</strong><label class="ob-toggle"><input type="checkbox" checked disabled> SOLO EN ZONAS DE PIVOTE / SOPORTE / RESISTENCIA (OBLIGATORIO)</label><div class="ob-tf-row"><span>Temporalidad de pivote / resistencia:</span><div id="obStructureTfControls" class="pivot-tf-controls"><button type="button" data-ob-tf="5" aria-pressed="true" class="active">M5</button><button type="button" data-ob-tf="10" aria-pressed="false">M10</button><button type="button" data-ob-tf="15" aria-pressed="false">M15</button><button type="button" data-ob-tf="30" aria-pressed="false">M30</button><button type="button" data-ob-tf="60" aria-pressed="false">H1</button></div></div><small>Compra: OB alcista cerca de soporte / pivote bajo. Venta: OB bajista cerca de resistencia / pivote alto. Solo se dibujan los dos OB válidos más recientes: uno de cada lado.</small></section>
+  <section class="pivot-settings ob-settings" aria-label="Configuración de Order Blocks"><strong>CONFIGURACIÓN DE ORDER BLOCKS</strong><label class="ob-toggle"><input type="checkbox" checked disabled> SOLO EN ZONAS DE PIVOTE / SOPORTE / RESISTENCIA (OBLIGATORIO)</label><div class="ob-tf-row"><span>Temporalidad del OB (compra / venta):</span><div id="obTfControls" class="pivot-tf-controls"><button type="button" data-ob-tf="1" aria-pressed="false">M1</button><button type="button" data-ob-tf="2" aria-pressed="true" class="active">M2</button><button type="button" data-ob-tf="3" aria-pressed="false">M3</button><button type="button" data-ob-tf="4" aria-pressed="false">M4</button><button type="button" data-ob-tf="5" aria-pressed="false">M5</button></div></div><div class="ob-tf-row"><span>Temporalidad de pivotes / resistencias:</span><div id="pivotStructureTfControls" class="pivot-tf-controls"><button type="button" data-pivot-structure-tf="1" aria-pressed="false">M1</button><button type="button" data-pivot-structure-tf="2" aria-pressed="false">M2</button><button type="button" data-pivot-structure-tf="3" aria-pressed="false">M3</button><button type="button" data-pivot-structure-tf="4" aria-pressed="false">M4</button><button type="button" data-pivot-structure-tf="5" aria-pressed="true" class="active">M5</button></div></div><small>H1 bajista = solo OB VENTA. H1 alcista = solo OB COMPRA. Cada selector funciona independientemente. El OB debe estar junto a resistencia/pivote alto para venta o soporte/pivote bajo para compra.</small></section>
   <section class="pivot-settings" aria-label="Configuración de pivotes y resistencias"><strong>ACTIVAR / DESACTIVAR PIVOTES Y RESISTENCIAS</strong><div id="pivotTfControls" class="pivot-tf-controls"><button type="button" data-pivot-tf="1" aria-pressed="false">M1</button><button type="button" data-pivot-tf="2" aria-pressed="false">M2</button><button type="button" data-pivot-tf="3" aria-pressed="false">M3</button><button type="button" data-pivot-tf="4" aria-pressed="false">M4</button><button type="button" data-pivot-tf="5" aria-pressed="true" class="active">M5</button><button type="button" data-pivot-tf="10" aria-pressed="false">M10</button></div><small>Toca una temporalidad para mostrar u ocultar sus niveles. Verde = activada.</small></section>
 
   <section class="chart-card">
@@ -66,5 +66,5 @@
   </section>
   <footer>BOTDER · Solo análisis y simulación. No envía órdenes ni garantiza resultados futuros.</footer>
 </main>
-<script src="app.js?v=51"></script>
+<script src="app.js?v=52"></script>
 </body></html>
