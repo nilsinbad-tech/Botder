@@ -114,7 +114,7 @@ const primary=findValidOBAtTime(primaryCandles,x.time,side,primaryTf,structurePv
  }
  const latestPrimary=latestZones.filter(z=>z.timeframe===primaryTf).sort((a,b)=>b.time-a.time)[0]||null;
  const latestPrevious=state.obPreviousEnabled?latestZones.filter(z=>z.timeframe===previousTf).sort((a,b)=>b.time-a.time)[0]||null:null;
- return{setups,e3,e9,e13,e50,rv,pv,obZones:[latestPrevious,latestPrimary].filter(Boolean)};
+ return{setups,e3,e9,e13,e50,rv,pv,obZones:latestZones.sort((a,b)=>a.time-b.time).slice(-300)};
 }
 function fixedM10Pivots(c,span=3){
  const highs=[],lows=[];
@@ -273,7 +273,7 @@ function drawOverlays(trades,c,host,obZones=[],setups=[]){
  const zones=[...(obZones||[]),...(lockedTrade&&lockedTrade.ob?[{...lockedTrade.ob,side:lockedTrade.side,timeframe:state.obPrimaryTf,structureTime:lockedTrade.structureTime}]:[])].filter((ob,i,all)=>ob&&Number.isFinite(ob.time)&&all.findIndex(q=>q.time===ob.time&&q.side===ob.side)===i).sort((x,y)=>x.time-y.time);
  const zoneEls=zones.map(ob=>{
   const el=document.createElement('div');el.className='ob-zone '+(ob.fvg?'fvg-zone ':'')+(ob.side==='BUY'?'bull-zone':'bear-zone');
-  el.innerHTML='';
+  const tag=document.createElement('b');tag.textContent=(ob.side==='BUY'?'OB ALCISTA':'OB BAJISTA')+' · M'+ob.timeframe;el.appendChild(tag);
   overlay.appendChild(el);return{el,ob};
  });
  const t=[...trades].reverse().find(x=>['ESPERANDO DOJI','ESPERANDO CAMBIO','PENDIENTE'].includes(x.result))||[...setups].reverse()[0]||trades[trades.length-1];
