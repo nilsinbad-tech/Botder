@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#080d16"><title>BOTDER · Deriv Structural Lab</title>
-<link rel="stylesheet" href="styles.css?v=66">
+<link rel="stylesheet" href="styles.css?v=67">
 <script src="https://unpkg.com/lightweight-charts@5.0.8/dist/lightweight-charts.standalone.production.js" onerror="this.onerror=null;this.src='https://cdn.jsdelivr.net/npm/lightweight-charts@5.0.8/dist/lightweight-charts.standalone.production.js'"></script>
 </head>
 <body>
@@ -28,7 +28,7 @@
     <article><small>RSI (14)</small><b id="rsiValue">—</b><em id="rsiConfirm">Sin confirmación</em></article>
   </section>
 
-  <section class="pivot-settings ob-settings" aria-label="Configuración de Order Blocks"><strong>CONFIGURACIÓN DE ORDER BLOCKS</strong><label class="ob-toggle"><input type="checkbox" checked disabled> SOLO EN ZONAS DE PIVOTE / SOPORTE / RESISTENCIA (OBLIGATORIO)</label><div class="ob-tf-row"><span>Temporalidad del OB (compra / venta):</span><div id="obTfControls" class="pivot-tf-controls"><button type="button" data-ob-tf="1" aria-pressed="false">M1</button><button type="button" data-ob-tf="2" aria-pressed="true" class="active">M2</button><button type="button" data-ob-tf="3" aria-pressed="false">M3</button><button type="button" data-ob-tf="4" aria-pressed="false">M4</button><button type="button" data-ob-tf="5" aria-pressed="false">M5</button></div></div><div class="ob-tf-row"><span>Temporalidad de pivotes visibles del gráfico:</span><div id="pivotStructureTfControls" class="pivot-tf-controls"><button type="button" data-pivot-structure-tf="1" aria-pressed="false">M1</button><button type="button" data-pivot-structure-tf="2" aria-pressed="false">M2</button><button type="button" data-pivot-structure-tf="3" aria-pressed="false">M3</button><button type="button" data-pivot-structure-tf="4" aria-pressed="false">M4</button><button type="button" data-pivot-structure-tf="5" aria-pressed="true" class="active">M5</button><button type="button" data-pivot-structure-tf="10" aria-pressed="false">M10</button></div></div><small>H1 bajista = solo OB VENTA. H1 alcista = solo OB COMPRA. Cada selector funciona independientemente. La validación del OB usa siempre resistencia M10 para venta y soporte M10 para compra; este selector solo cambia los pivotes visibles del gráfico.</small></section>
+  <section class="pivot-settings ob-settings" aria-label="Configuración de Order Blocks"><strong>CONFIGURACIÓN DE ORDER BLOCKS</strong><label class="ob-toggle"><input type="checkbox" checked disabled> SOLO EN ZONAS DE PIVOTE / SOPORTE / RESISTENCIA (OBLIGATORIO)</label><div class="ob-tf-row"><span>Temporalidad de los Order Blocks:</span><div id="obTfControls" class="pivot-tf-controls"><button type="button" data-ob-tf="1" aria-pressed="true" class="active">M1</button></div><small>Fija en M1 para localizar los dos OB anteriores dentro de la estructura M10.</small></div><div class="ob-tf-row"><span>Temporalidad de pivotes visibles del gráfico:</span><div id="pivotStructureTfControls" class="pivot-tf-controls"><button type="button" data-pivot-structure-tf="1" aria-pressed="false">M1</button><button type="button" data-pivot-structure-tf="2" aria-pressed="false">M2</button><button type="button" data-pivot-structure-tf="3" aria-pressed="false">M3</button><button type="button" data-pivot-structure-tf="4" aria-pressed="false">M4</button><button type="button" data-pivot-structure-tf="5" aria-pressed="true" class="active">M5</button><button type="button" data-pivot-structure-tf="10" aria-pressed="false">M10</button></div></div><small>H1 bajista = solo OB VENTA. H1 alcista = solo OB COMPRA. Cada selector funciona independientemente. La validación del OB usa siempre resistencia M10 para venta y soporte M10 para compra; este selector solo cambia los pivotes visibles del gráfico.</small></section>
   <section class="pivot-settings ob-settings" aria-label="Configuración de stop loss"><strong>CONFIGURAR STOP LOSS (SL)</strong><div class="ob-tf-row"><span>Temporalidades para buscar pivotes de protección:</span><div id="slTfControls" class="pivot-tf-controls"><button type="button" data-sl-tf="1" aria-pressed="true" class="active">M1</button><button type="button" data-sl-tf="3" aria-pressed="true" class="active">M3</button><button type="button" data-sl-tf="5" aria-pressed="true" class="active">M5</button><button type="button" data-sl-tf="10" aria-pressed="true" class="active">M10</button><button type="button" data-sl-tf="15" aria-pressed="false">M15</button><button type="button" data-sl-tf="30" aria-pressed="false">M30</button></div></div><small>Compra usa el soporte más cercano debajo de la entrada; venta usa la resistencia más cercana por encima. El SL se coloca un pequeño margen más allá del pivote.</small></section>
 
   <section class="pivot-settings" aria-label="Configuración de pivotes y resistencias"><strong>ACTIVAR / DESACTIVAR PIVOTES Y RESISTENCIAS</strong><div id="pivotTfControls" class="pivot-tf-controls"><button type="button" data-pivot-tf="1" aria-pressed="false">M1</button><button type="button" data-pivot-tf="2" aria-pressed="false">M2</button><button type="button" data-pivot-tf="3" aria-pressed="false">M3</button><button type="button" data-pivot-tf="4" aria-pressed="false">M4</button><button type="button" data-pivot-tf="5" aria-pressed="true" class="active">M5</button><button type="button" data-pivot-tf="10" aria-pressed="false">M10</button></div><small>Toca una temporalidad para mostrar u ocultar sus niveles. Verde = activada.</small></section>
@@ -56,7 +56,7 @@
 
   <section class="panel history-panel">
     <div class="panel-title"><b>Historial de operaciones</b><span id="historyCount">0 operaciones</span></div>
-    <div class="history-scroll"><table><thead><tr><th>Hora</th><th>Dirección</th><th>Entrada</th><th>SL</th><th>TP1</th><th>TP2</th><th>Resultado</th><th>Movimiento</th></tr></thead><tbody id="historyBody"><tr><td colspan="8" class="empty-cell">Esperando backtesting…</td></tr></tbody></table></div>
+    <div class="history-scroll"><table><thead><tr><th>Hora</th><th>Instrumento</th><th>Dirección</th><th>Entrada</th><th>SL</th><th>TP1</th><th>TP2</th><th>Resultado</th><th>Movimiento</th></tr></thead><tbody id="historyBody"><tr><td colspan="9" class="empty-cell">Esperando backtesting…</td></tr></tbody></table></div>
   </section>
 
   <section class="panel instruments-panel">
@@ -65,5 +65,5 @@
   </section>
   <footer>BOTDER · Solo análisis y simulación. No envía órdenes ni garantiza resultados futuros.</footer>
 </main>
-<script src="app.js?v=66"></script>
+<script src="app.js?v=67"></script>
 </body></html>
