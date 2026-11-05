@@ -147,9 +147,13 @@ function buildSetups(c,liquidityCandles=c,pivotCandles=liquidityCandles,obStruct
   for(const candidate of candidates){
    const found=findValidOBAtTime(candidate.candles,transition.confirmedTime,transition.side,candidate.tf,structurePv,structureCandles,targetRawCandles);
    if(!found)continue;
+   // El OB no se muestra al confirmarse el cruce H1: debe esperar el primer
+   // regreso del precio a la zona del OB después del cambio de tendencia.
+   const retestTime=findFirstOBRetestTime(found.ob,targetRawCandles,transition.confirmedTime);
+   if(retestTime===null)continue;
    const key=transition.side+':'+candidate.tf+':'+found.ob.time+':'+transition.confirmedTime;
    if(zoneKeys.has(key))continue;
-   obZones.push({...found.ob,side:transition.side,timeframe:candidate.tf,availableTime:transition.confirmedTime,trendChangeTime:transition.time,structurePrice:found.structure.price,structureTime:found.structure.time,structureConfirmedTime:found.structure.confirmedTime,structureType:transition.side==='BUY'?'SOPORTE':'RESISTENCIA'});
+   obZones.push({...found.ob,side:transition.side,timeframe:candidate.tf,availableTime:retestTime,firstRetestTime:retestTime,trendChangeTime:transition.time,structurePrice:found.structure.price,structureTime:found.structure.time,structureConfirmedTime:found.structure.confirmedTime,structureType:transition.side==='BUY'?'SOPORTE':'RESISTENCIA'});
    zoneKeys.add(key);
   }
  }
@@ -218,6 +222,14 @@ function buildSetups(c,liquidityCandles=c,pivotCandles=liquidityCandles,obStruct
  }
  const limitedZones=priceClusters.flat();
  return{setups,e9,e20,rv,pv:m30Pv,obZones:limitedZones};
+}
+function findFirstOBRetestTime(ob,raw,afterTime){
+ for(let i=0;i<raw.length;i++){
+  const bar=raw[i];
+  if(bar.time<afterTime)continue;
+  if(bar.low<=ob.high&&bar.high>=ob.low)return bar.time;
+ }
+ return null;
 }
 function findValidOBAtTime(c,time,side,tf,pv,structureCandles,raw){
  let lo=0,hi=c.length;
