@@ -241,12 +241,13 @@ function drawOverlays(trades,c,host,obZones=[],setups=[]){
   el.innerHTML='<b>'+(ob.fvg?(ob.side==='BUY'?'FVG ALCISTA':'FVG BAJISTA'):(ob.side==='BUY'?'OB ALCISTA':'OB BAJISTA'))+'</b>';
   overlay.appendChild(el);return{el,ob};
  });
- const t=[...trades].reverse().find(x=>x.result==='PENDIENTE')||trades[trades.length-1];
+ const t=[...trades].reverse().find(x=>x.result==='PENDIENTE')||[...setups].reverse()[0]||trades[trades.length-1];
  const lineEls=[];
+ state.overlayPriceLevels=t?[t.entry,t.sl,t.tp1,t.tp2].filter(Number.isFinite):[];
  if(t){
   const levels=[{p:t.entry,label:'ENTRADA · OB',detail:t.side==='BUY'?'ZONA DE COMPRA':'ZONA DE VENTA',cls:'entry-line',priority:0},{p:t.sl,label:'STOP LOSS',detail:t.slPivot?(t.side==='BUY'?'PIVOTE SOPORTE':'PIVOTE RESISTENCIA'):'LÍMITE DEL OB',cls:'sl-line',priority:1},{p:t.tp1,label:'TP1 · OBJETIVO',detail:t.side==='BUY'?'RESISTENCIA M10':'PIVOTE M10',cls:'tp-line',priority:2}];
   if(Math.abs(t.tp2-t.tp1)>1e-10)levels.push({p:t.tp2,label:'TP2 · OBJETIVO',detail:t.side==='BUY'?'RESISTENCIA M10':'PIVOTE M10',cls:'tp2-line',priority:3});
-  levels.forEach(v=>{const el=document.createElement('div');el.className='level-line '+v.cls;const tag=document.createElement('span');tag.className='level-tag';tag.innerHTML='<span class="level-copy"><b>'+v.label+'</b><small>'+v.detail+'</small></span><strong>'+fmt(v.p)+'</strong>';el.appendChild(tag);overlay.appendChild(el);lineEls.push({el,tag,...v});try{const color=v.cls==='entry-line'?'#f1c45b':v.cls==='sl-line'?'#ff5968':v.cls==='tp-line'?'#20d69a':'#46b6ff';state.tradePriceLines.push(state.series.candle.createPriceLine({price:v.p,color,lineWidth:2,axisLabelVisible:true,title:v.label+' · '+v.detail}));}catch(error){console.warn('No se pudo dibujar nivel de operación',error);}});
+  state.series.candle.setData(c); // Recalcula autoescalado para incluir entrada, SL y TP.\n  levels.forEach(v=>{const el=document.createElement('div');el.className='level-line '+v.cls;const tag=document.createElement('span');tag.className='level-tag';tag.innerHTML='<span class="level-copy"><b>'+v.label+'</b><small>'+v.detail+'</small></span><strong>'+fmt(v.p)+'</strong>';el.appendChild(tag);overlay.appendChild(el);lineEls.push({el,tag,...v});try{const color=v.cls==='entry-line'?'#f1c45b':v.cls==='sl-line'?'#ff5968':v.cls==='tp-line'?'#20d69a':'#46b6ff';state.tradePriceLines.push(state.series.candle.createPriceLine({price:v.p,color,lineWidth:2,axisLabelVisible:true,title:v.label+' · '+v.detail}));}catch(error){console.warn('No se pudo dibujar nivel de operación',error);}});
  }
  const update=()=>{
   const width=host.clientWidth,scale=state.main.timeScale(),candleSeries=state.series.candle;
