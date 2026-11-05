@@ -5,7 +5,7 @@ const HISTORY_CANDLES = 1440;
 const REQUEST_TIMEOUT_MS = 45000;
 const API_URL = 'wss://api.derivws.com/trading/v1/options/ws/public';
 const $ = id => document.getElementById(id);
-const state = { ws:null, req:0, pending:new Map(), symbols:[], selected:null, tf:1, candles:[], rawCandles:[], rawBySymbol:new Map(), marketBacktests:[], savedChartTrades:[], trades:[], liveSub:null, main:null, rsi:null, markerPlugin:null, overlayResizeObserver:null, overlayUpdate:null, overlayRangeHandler:null, pivotLines:[], tradePriceLines:[], overlayPriceLevels:[],levelOverrides:{}, pivotTfEnabled:{1:false,2:false,3:false,4:false,5:true,10:false,30:false,60:false}, tpTfs:[1,3,5,10], slTfs:[1,3,5,10], obStructureOnly:true, obTf:1, obPrimaryTf:10, obPreviousTf:30, obPreviousEnabled:false, pivotTf:5, chartKey:null, series:{}, busy:false, analyzeQueued:false, forceFitNext:true, lastRecalcBucket:null, pendingLiveTick:null, liveFrame:0, overlayFrame:0 };
+const state = { ws:null, req:0, pending:new Map(), symbols:[], selected:null, tf:1, candles:[], rawCandles:[], rawBySymbol:new Map(), marketBacktests:[], savedChartTrades:[], trades:[], liveSub:null, main:null, rsi:null, markerPlugin:null, overlayResizeObserver:null, overlayUpdate:null, overlayRangeHandler:null, pivotLines:[], tradePriceLines:[], overlayPriceLevels:[],levelOverrides:{}, pivotTfEnabled:{1:false,2:false,3:false,4:false,5:true,10:false,30:false,60:false}, tpTfs:[1,3,5,10], slTfs:[1,3,5,10], obStructureOnly:true, rsiBuyLevels:[50,55,60], rsiSellLevels:[50,45,40], obTf:1, obPrimaryTf:10, obPreviousTf:30, obPreviousEnabled:false, pivotTf:5, chartKey:null, series:{}, busy:false, analyzeQueued:false, forceFitNext:true, lastRecalcBucket:null, pendingLiveTick:null, liveFrame:0, overlayFrame:0 };
 const PERSIST_KEY='botder-history-v3';
 function tradeKey(t){return Number.isFinite(Number(t.structureTime))?String(t.symbol||'')+'|'+String(t.side||'')+'|ZONA|'+String(t.structureTime):String(t.symbol||'')+'|'+String(t.time)+'|'+String(t.side||'');}
 function mergeTrades(oldItems,newItems,limit=2000){const map=new Map();for(const t of [...(oldItems||[]),...(newItems||[])]){if(!t||!Number.isFinite(Number(t.time))||!t.side)continue;map.set(tradeKey(t),t);}return [...map.values()].sort((a,b)=>a.time-b.time).slice(-limit);}
@@ -66,6 +66,7 @@ function aggregate(candles,mins){if(mins===1)return candles;const groups=new Map
 function ema(values,period){const out=Array(values.length).fill(null),k=2/(period+1);let prev=null;values.forEach((v,i)=>{prev=prev===null?v:v*k+prev*(1-k);out[i]=prev;});return out;}
 function rsi(values,period=14){const out=Array(values.length).fill(null);let gain=0,loss=0;for(let i=1;i<values.length;i++){const d=values[i]-values[i-1];const g=Math.max(d,0),l=Math.max(-d,0);if(i<=period){gain+=g;loss+=l;if(i===period){gain/=period;loss/=period;out[i]=loss===0?100:100-100/(1+gain/loss);}}else{gain=(gain*(period-1)+g)/period;loss=(loss*(period-1)+l)/period;out[i]=loss===0?100:100-100/(1+gain/loss);}}return out;}
 function pivots(c,span=3,candleSeconds=600){const highs=[],lows=[];for(let i=span;i<c.length-span;i++){let hi=true,lo=true;for(let j=1;j<=span;j++){if(c[i].high<=c[i-j].high||c[i].high<=c[i+j].high)hi=false;if(c[i].low>=c[i-j].low||c[i].low>=c[i+j].low)lo=false;}if(hi)highs.push({index:i,time:c[i].time,confirmedTime:c[i+span].time+candleSeconds,price:c[i].high});if(lo)lows.push({index:i,time:c[i].time,confirmedTime:c[i+span].time+candleSeconds,price:c[i].low});}const sample=c.slice(-30),avgRange=sample.length?sample.reduce((sum,v)=>sum+(v.high-v.low),0)/sample.length:0,tolerance=avgRange*.45;const merge=items=>{const kept=[];for(const p of items){const near=kept.findIndex(q=>Math.abs(q.price-p.price)<=tolerance);if(near<0)kept.push(p);else if(p.confirmedTime>kept[near].confirmedTime)kept[near]=p;}return kept.sort((a,b)=>a.time-b.time);};return{highs:merge(highs),lows:merge(lows)};}
+function rsiLevelCross(side,values,index){if(index<1||!Number.isFinite(values[index-1])||!Number.isFinite(values[index]))return null;const levels=side==='BUY'?state.rsiBuyLevels:state.rsiSellLevels;return levels.find(level=>side==='BUY'?(values[index-1]<level&&values[index]>=level):(values[index-1]>level&&values[index]<=level))??null;}
 function buildSetups(c,liquidityCandles=c,pivotCandles=liquidityCandles,obStructureCandles=pivotCandles,trendSide=null,targetRawCandles=pivotCandles){
  const close=c.map(x=>x.close),e3=ema(close,3),e9=ema(close,9),e13=ema(close,13),e50=ema(close,50),rv=rsi(close);
  const pv=pivots(pivotCandles,3,state.pivotTf*60);
@@ -79,8 +80,9 @@ function buildSetups(c,liquidityCandles=c,pivotCandles=liquidityCandles,obStruct
  for(let i=55;i<c.length;i++){
   const x=c[i];
   for(const side of (trendSide?[trendSide]:[])){
-   // Filtro RSI para ventas: entre 60 y 70 (incluidos) no se permiten entradas SELL.
-   if(side==='SELL'&&Number.isFinite(rv[i])&&rv[i]>=60&&rv[i]<=70)continue;
+   // La señal exige cruce del RSI en la dirección configurada: BUY hacia arriba, SELL hacia abajo.
+   const rsiTriggerLevel=rsiLevelCross(side,rv,i);
+   if(rsiTriggerLevel===null)continue;
    const primary=findValidOBAtTime(primaryCandles,x.time,side,primaryTf,structurePv,structureCandles,targetRawCandles);
    if(!primary)continue;
    const previous=state.obPreviousEnabled?findValidOBAtTime(previousCandles,x.time,side,previousTf,structurePv,structureCandles,targetRawCandles):null;
@@ -102,7 +104,7 @@ function buildSetups(c,liquidityCandles=c,pivotCandles=liquidityCandles,obStruct
    const slPivot=stopCandidates[0]||null,tp1Pivot=targets[0],tp2Pivot=targets[1]||null;
    const slBuffer=(ob.high-ob.low)*.12;
    const sl=slPivot?(side==='BUY'?slPivot.price-slBuffer:slPivot.price+slBuffer):(side==='BUY'?ob.low-slBuffer:ob.high+slBuffer);
-   setups.push({side,index:i,time:x.time,entry:ob.entry,sl,tp1:tp1Pivot.price,tp2:tp2Pivot?tp2Pivot.price:tp1Pivot.price,ob,structureTime:structure.time,structurePrice:structure.price,slPivot,tp1Pivot,tp2Pivot,rsi:rv[i],state:'PREPARADA'});
+   setups.push({side,index:i,time:x.time,entry:ob.entry,sl,tp1:tp1Pivot.price,tp2:tp2Pivot?tp2Pivot.price:tp1Pivot.price,ob,structureTime:structure.time,structurePrice:structure.price,slPivot,tp1Pivot,tp2Pivot,rsi:rv[i],rsiTriggerLevel,state:'PREPARADA'});
    usedOBs.add(key);usedZones.add(zoneKey);
   }
  }
@@ -502,8 +504,23 @@ function bindOBControls(){
  bindMulti(tpRoot,'data-tp-tf','tpTfs');bindMulti(slRoot,'data-sl-tf','slTfs');
 }
 
+function bindRsiControls(){
+ const buyInputs=[ $('rsiBuy1'),$('rsiBuy2'),$('rsiBuy3') ],sellInputs=[ $('rsiSell1'),$('rsiSell2'),$('rsiSell3') ],apply=$('applyRsiLevels');
+ try{const saved=JSON.parse(localStorage.getItem('botder-rsi-levels-v1')||'null');if(saved){if(Array.isArray(saved.buy)&&saved.buy.length===3)state.rsiBuyLevels=saved.buy.map(Number);if(Array.isArray(saved.sell)&&saved.sell.length===3)state.rsiSellLevels=saved.sell.map(Number);}}catch{}
+ const fill=()=>{buyInputs.forEach((el,i)=>{if(el)el.value=state.rsiBuyLevels[i];});sellInputs.forEach((el,i)=>{if(el)el.value=state.rsiSellLevels[i];});};fill();
+ if(apply)apply.addEventListener('click',async()=>{
+  const buy=buyInputs.map(el=>Number(el?.value)),sell=sellInputs.map(el=>Number(el?.value));
+  if([...buy,...sell].some(v=>!Number.isFinite(v)||v<1||v>99)){ $('rsiSettingsStatus').textContent='Usa niveles entre 1 y 99.';return; }
+  if(new Set(buy).size!==3||new Set(sell).size!==3){ $('rsiSettingsStatus').textContent='No repitas niveles dentro de COMPRA o VENTA.';return; }
+  const same=buy.every((v,i)=>v===state.rsiBuyLevels[i])&&sell.every((v,i)=>v===state.rsiSellLevels[i]);if(same){$('rsiSettingsStatus').textContent='Los niveles no cambiaron.';return;}
+  state.rsiBuyLevels=buy;state.rsiSellLevels=sell;
+  try{localStorage.setItem('botder-rsi-levels-v1',JSON.stringify({buy,sell}));}catch{}
+  state.marketBacktests=[];state.savedChartTrades=[];state.trades=[];savePersistentState();$('rsiSettingsStatus').textContent='Niveles guardados. Recalculando señales e historial…';
+  await analyze();try{await runUniverseBacktest(false);$('rsiSettingsStatus').textContent='Listo: historial y señales recalculados con los nuevos niveles RSI.';}catch(e){$('rsiSettingsStatus').textContent='Niveles guardados; no se completó el backtesting: '+e.message;}
+ });
+}
 function bind(){
- bindPivotControls();bindOBControls();
+ bindRsiControls();bindPivotControls();bindOBControls();
  $('instrumentList').addEventListener('click',e=>{const b=e.target.closest('button[data-symbol]');if(b)selectSymbol(b.dataset.symbol);});
  $('symbolSelect').addEventListener('change',e=>selectSymbol(e.target.value));
  $('timeframes').addEventListener('click',async e=>{const b=e.target.closest('button[data-tf]');if(!b)return;state.tf=+b.dataset.tf;state.forceFitNext=true;document.querySelectorAll('#timeframes button').forEach(x=>x.classList.toggle('active',x===b));await analyze();});
