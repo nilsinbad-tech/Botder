@@ -77,7 +77,7 @@ function buildSetups(c,liquidityCandles=c,pivotCandles=liquidityCandles,obStruct
  const setups=[],latestZones=new Map(),usedOBs=new Set();
  for(let i=55;i<c.length;i++){
   const x=c[i];
-  for(const side of ['BUY','SELL']){
+  for(const side of (trendSide?[trendSide]:[])){
    const candidate=findValidOBAtTime(liquidityCandles,x.time,side,state.obTf,m10Pv,m10Candles,targetRawCandles);
    if(!candidate)continue;
    const {ob,structure}=candidate,key=side+':'+ob.time;
@@ -127,14 +127,17 @@ function findValidOBAtTime(c,time,side,tf,pv,m10Candles,raw){
  return null;
 }
 function findM10Structure(ob,side,pv,candles,time){
- const levels=(side==='BUY'?pv.lows:pv.highs).filter(p=>p.confirmedTime<=time);
- const matches=levels.map(p=>{
-  const bar=candles[p.index];if(!bar)return null;
-  const tolerance=Math.max((bar.high-bar.low)*.45,(ob.high-ob.low)*1.5);
-  return p.price>=ob.low-tolerance&&p.price<=ob.high+tolerance?{...p,tolerance}:null;
- }).filter(Boolean);
- if(!matches.length)return null;
- return matches.sort((a,b)=>Math.abs(a.price-(ob.high+ob.low)/2)-Math.abs(b.price-(ob.high+ob.low)/2))[0];
+ // Exige que ya existan dos máximos (venta) o dos mínimos (compra) confirmados.
+ // El OB se ancla al más reciente de esos dos extremos, no a cualquier pivote antiguo.
+ const levels=(side==='BUY'?pv.lows:pv.highs)
+  .filter(p=>p.confirmedTime<=time)
+  .sort((a,b)=>a.time-b.time);
+ if(levels.length<2)return null;
+ const lastTwo=levels.slice(-2),p=lastTwo[1];
+ const bar=candles[p.index];if(!bar)return null;
+ const tolerance=Math.max((bar.high-bar.low)*.45,(ob.high-ob.low)*1.5);
+ if(p.price<ob.low-tolerance||p.price>ob.high+tolerance)return null;
+ return{...p,tolerance,previousPrice:lastTwo[0].price,previousTime:lastTwo[0].time};
 }
 function isOBInvalidated(ob,side,structure,raw,time){
  return raw.some(bar=>bar.time>=structure.confirmedTime&&bar.time<=time&&(side==='SELL'?bar.close>structure.price:bar.close<structure.price));
