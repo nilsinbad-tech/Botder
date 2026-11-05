@@ -154,8 +154,8 @@ function runStructuralBacktest(symbol,market,candles,displayTf){
  if(structuralBacktestRunningKey===key||structuralBacktestValidatedKey===key)return[];
  const runId=++structuralBacktestRunId;structuralBacktestRunningKey=key;
  const raw=candles.slice().sort((a,b)=>a.time-b.time),d=tf===30?botderAggregate(raw,150):raw;
- const trades=botderBacktest(d,tf===30?150:tf,symbol,market).map(t=>({...t,timeframe:botderLabel(tf),timeframeSeconds:tf,sourceSeconds:tf===30?150:tf}));
- const complete=()=>{
+ setText("chart-message","CALCULANDO BACKTEST "+botderLabel(tf)+" · "+raw.length+" velas recibidas...");
+ const complete=trades=>{
   if(runId!==structuralBacktestRunId)return;
   if(typeof selectedSymbol!=="undefined"&&selectedSymbol&&selectedSymbol!==symbol){structuralBacktestRunningKey="";return;}
   if(Number(document.getElementById("timeframe")?.value||tf)!==tf){structuralBacktestRunningKey="";return;}
@@ -164,11 +164,16 @@ function runStructuralBacktest(symbol,market,candles,displayTf){
   const livePlan=buildStructuralPlan(raw,tf);
   if(typeof setStructureOverlay==="function")setStructureOverlay({items:livePlan.items,lines:[],ema:livePlan.ema,projection:livePlan.projection,activeTf:tf});
   structuralBacktestValidatedKey=key;structuralBacktestRunningKey="";backtestSymbol=symbol;backtestReady=true;
-  setText("chart-message","BACKTEST "+botderLabel(tf)+" · "+raw.length+" velas visibles · "+d.length+" velas de análisis · "+trades.length+" operaciones evaluadas.");
+  setText("chart-message","BACKTEST "+botderLabel(tf)+" · "+raw.length+" velas del gráfico · "+d.length+" velas analizadas · "+trades.length+" operaciones evaluadas.");
   if(typeof renderStrategyJournal==="function")renderStrategyJournal();
  };
- if(typeof requestAnimationFrame==="function")requestAnimationFrame(()=>setTimeout(complete,0));else setTimeout(complete,0);
- return trades;
+ const execute=()=>{
+  if(runId!==structuralBacktestRunId)return;
+  const trades=botderBacktest(d,tf===30?150:tf,symbol,market).map(t=>({...t,timeframe:botderLabel(tf),timeframeSeconds:tf,sourceSeconds:tf===30?150:tf}));
+  complete(trades);
+ };
+ if(typeof requestAnimationFrame==="function")requestAnimationFrame(()=>setTimeout(execute,40));else setTimeout(execute,40);
+ return[];
 }
 function saveStrategyJournal(){try{localStorage.setItem("botder-smc-journal-v2",JSON.stringify(strategyJournal.slice(0,2000)));}catch(e){}}
 function loadStrategyJournal(){try{const saved=JSON.parse(localStorage.getItem("botder-smc-journal-v2")||"[]");if(Array.isArray(saved))strategyJournal=saved.slice(0,2000);}catch(e){strategyJournal=[];}renderStrategyJournal();}
