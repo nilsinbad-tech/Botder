@@ -20,28 +20,13 @@ const CANDIDATES = [
 function setConnection(ok,msg){$('connectionDot').parentElement.classList.toggle('connected',ok);$('connectionText').textContent=msg;}
 function connect(){
  return new Promise((resolve,reject)=>{
-  if(state.ws&&state.ws.readyState===1){resolve();return;}
-  let settled=false,opened=false;
-  const finish=(error)=>{
-   if(settled)return;settled=true;clearTimeout(timer);
-   if(error)reject(error);else resolve();
-  };
-  const ws=new WebSocket(API_URL);state.ws=ws;
-  const timer=setTimeout(()=>{
-   if(!opened){try{ws.close();}catch{}finish(new Error('Deriv tardó demasiado en abrir la conexión WebSocket (15 s)'));}
-  },15000);
-  ws.onopen=()=>{opened=true;setConnection(false,'Conectado · solicitando catálogo…');finish();};
-  ws.onerror=()=>{setConnection(false,'Error de conexión con Deriv');if(!opened)finish(new Error('Deriv rechazó o no pudo abrir la conexión WebSocket'));};
-  ws.onclose=event=>{
-   setConnection(false,'Deriv desconectada');
-   if(!opened)finish(new Error('Deriv cerró la conexión antes de abrirla (código '+event.code+(event.reason?': '+event.reason:'')+')'));
-   for(const [,p] of state.pending)p.reject(new Error('Conexión cerrada por Deriv'));state.pending.clear();
-  };
-  ws.onmessage=e=>{
-   let m;try{m=JSON.parse(e.data);}catch(err){console.error('Respuesta Deriv no válida',err);return;}
-   if(m.req_id&&state.pending.has(m.req_id)){const p=state.pending.get(m.req_id);state.pending.delete(m.req_id);m.error?p.reject(new Error(m.error.message)):p.resolve(m);}
-   if(m.msg_type==='tick'&&m.tick)onLiveTick(m.tick);
-  };
+  if(state.ws && state.ws.readyState===1){resolve();return;}
+  const ws=new WebSocket(API_URL); state.ws=ws;
+  const timer=setTimeout(()=>reject(new Error('Tiempo de conexión agotado')),12000);
+  ws.onopen=()=>{clearTimeout(timer);setConnection(false,'Validando Deriv…');resolve();};
+  ws.onerror=()=>{clearTimeout(timer);setConnection(false,'Error de conexión');reject(new Error('No se pudo conectar a Deriv'));};
+  ws.onclose=()=>{setConnection(false,'Deriv desconectada');for(const [,p] of state.pending)p.reject(new Error('Conexión cerrada'));state.pending.clear();};
+  ws.onmessage=e=>{let m;try{m=JSON.parse(e.data);}catch(err){console.error('Respuesta Deriv no válida',err);return;}if(m.req_id&&state.pending.has(m.req_id)){const p=state.pending.get(m.req_id);state.pending.delete(m.req_id);m.error?p.reject(new Error(m.error.message)):p.resolve(m);}if(m.msg_type==='tick'&&m.tick)onLiveTick(m.tick);};
  });
 }
 function request(payload){return new Promise((resolve,reject)=>{if(!state.ws||state.ws.readyState!==1){reject(new Error('WebSocket no está conectado'));return;}const id=++state.req;const timer=setTimeout(()=>{if(state.pending.has(id)){state.pending.delete(id);reject(new Error('Deriv no respondió a tiempo: '+(payload.ticks_history||payload.active_symbols||'solicitud')));}},REQUEST_TIMEOUT_MS);state.pending.set(id,{resolve:m=>{clearTimeout(timer);resolve(m);},reject:e=>{clearTimeout(timer);reject(e);}});try{state.ws.send(JSON.stringify({...payload,req_id:id}));}catch(e){clearTimeout(timer);state.pending.delete(id);reject(e);}});}
@@ -69,25 +54,11 @@ async function loadSymbols(){
 
 function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
 async function getCandles(symbol,preferredCount=HISTORY_CANDLES){
- const target=Math.min(Math.max(1,Number(preferredCount)||HISTORY_CANDLES),HISTORY_CANDLES);
- const chunks=[],seen=new Set();let end='latest',lastError=null,total=0;
- // Descarga las últimas 24 horas de velas M1.
- while(total<target){
-  const count=Math.min(1440,target-total);
-  try{
-   const r=await request({ticks_history:symbol,adjust_start_time:1,count,end,granularity:60,style:'candles'});
-   const part=(r.candles||[]).map(c=>({time:Number(c.epoch),open:+c.open,high:+c.high,low:+c.low,close:+c.close})).filter(c=>Number.isFinite(c.time)&&Number.isFinite(c.open)&&Number.isFinite(c.high)&&Number.isFinite(c.low)&&Number.isFinite(c.close)).sort((a,b)=>a.time-b.time);
-   if(!part.length)break;
-   let added=0;for(const bar of part){if(!seen.has(bar.time)){seen.add(bar.time);chunks.push(bar);added++;}}
-   total=chunks.length;
-   const oldest=part[0].time;
-   if(added===0||oldest<=0)break;
-   end=oldest-1;
-  }catch(e){lastError=e;break;}
+ let lastError=null;const counts=[...new Set([Math.min(preferredCount,1440),HISTORY_CANDLES])];
+ for(const count of counts){
+  try{const r=await request({ticks_history:symbol,adjust_start_time:1,count,end:'latest',granularity:60,style:'candles'});const candles=(r.candles||[]).map(c=>({time:Number(c.epoch),open:+c.open,high:+c.high,low:+c.low,close:+c.close})).filter(c=>Number.isFinite(c.time)&&Number.isFinite(c.open)&&Number.isFinite(c.high)&&Number.isFinite(c.low)&&Number.isFinite(c.close));if(candles.length)return candles;lastError=new Error('Deriv devolvió 0 velas para '+symbol);}catch(e){lastError=e;}
  }
- const candles=chunks.sort((a,b)=>a.time-b.time).slice(-target);
- if(candles.length)return candles;
- throw new Error('No se pudo descargar el historial de '+symbol+': '+(lastError?.message||'Deriv no devolvió velas'));
+ throw new Error('No se pudo descargar el historial de '+symbol+': '+(lastError?.message||'sin datos'));
 }
 function aggregate(candles,mins){if(mins===1)return candles;const groups=new Map();for(const candle of candles){const bucket=Math.floor(candle.time/(mins*60))*(mins*60);let g=groups.get(bucket);if(!g){g={time:bucket,open:candle.open,high:candle.high,low:candle.low,close:candle.close,count:0};groups.set(bucket,g);}g.high=Math.max(g.high,candle.high);g.low=Math.min(g.low,candle.low);g.close=candle.close;g.count++;}const lastBucket=candles.length?Math.floor(candles.at(-1).time/(mins*60))*(mins*60):null;return [...groups.values()].filter(g=>g.count===mins||g.time===lastBucket).map(({count,...bar})=>bar).sort((a,b)=>a.time-b.time);}
 function ema(values,period){const out=Array(values.length).fill(null),k=2/(period+1);let prev=null;values.forEach((v,i)=>{prev=prev===null?v:v*k+prev*(1-k);out[i]=prev;});return out;}
@@ -105,8 +76,7 @@ function buildSetups(c,liquidityCandles=c,pivotCandles=liquidityCandles,obStruct
  const primaryCandles=aggregate(targetRawCandles,primaryTf),previousCandles=aggregate(targetRawCandles,previousTf);
  for(let i=55;i<c.length;i++){
   const x=c[i];
-  const sideAtTime=typeof trendSide==='function'?trendSide(x.time):trendSide;
-  for(const side of (sideAtTime?[sideAtTime]:[])){
+  for(const side of (trendSide?[trendSide]:[])){
    // Filtro RSI para ventas: entre 60 y 70 (incluidos) no se permiten entradas SELL.
    if(side==='SELL'&&Number.isFinite(rv[i])&&rv[i]>=60&&rv[i]<=70)continue;
    const primary=findValidOBAtTime(primaryCandles,x.time,side,primaryTf,structurePv,structureCandles,targetRawCandles);
@@ -279,13 +249,6 @@ function drawPivotLines(){
  }
 }
 function drawOverlays(trades,c,host,obZones=[],setups=[]){
-  // Las entradas se generan en M2, pero deben anclarse a la vela visible más cercana en cualquier temporalidad del gráfico.
-  const chartAnchorTime=time=>{
-    if(!c.length||!Number.isFinite(Number(time)))return null;
-    const target=Number(time);let lo=0,hi=c.length-1,best=-1;
-    while(lo<=hi){const mid=(lo+hi)>>1;if(c[mid].time<=target){best=mid;lo=mid+1;}else hi=mid-1;}
-    return c[best>=0?best:0].time;
-  };
   for(const line of state.tradePriceLines){try{state.series.candle.removePriceLine(line);}catch{}}
   state.tradePriceLines=[];
   if(state.overlayResizeObserver){state.overlayResizeObserver.disconnect();state.overlayResizeObserver=null;}
@@ -317,23 +280,16 @@ function drawOverlays(trades,c,host,obZones=[],setups=[]){
     const entry=document.createElement('div');entry.className='price-label entry-line';
     entry.setAttribute('aria-label','Entrada '+label+' '+fmt(trade.entry));
     entry.innerHTML='<b>'+label+'</b><strong>'+fmt(trade.entry)+'</strong><small>RSI '+fmt(Number.isFinite(trade.entryRsi)?trade.entryRsi:trade.rsi)+'</small>';
-    overlay.appendChild(entry);entryEls.push({p:trade.entry,time:chartAnchorTime(time),el:entry});
-    const closed=trade.result==='GANADA'||trade.result==='PERDIDA';
-    let levels=[];
-    if(closed&&Number.isFinite(trade.exitPrice)&&Number.isFinite(trade.exitTime)){
-      const isTp2=trade.result==='GANADA'&&Number.isFinite(Number(trade.tp2))&&Math.abs(trade.exitPrice-Number(trade.tp2))<=Math.max(1e-10,Math.abs(Number(trade.tp2))*1e-8);
-      const resultText=trade.result==='PERDIDA'?'PÉRDIDA':(isTp2?'GANADA TP2':'GANADA TP1');
-      levels=[[resultText,trade.exitPrice,'result-line',time]];
-    }else if(!closed){
-      levels=[['SL',trade.sl,'sl-line',time],['TP1',trade.tp1,'tp-line',time]];
-      if(Number.isFinite(Number(trade.tp2))&&Math.abs(Number(trade.tp2)-Number(trade.tp1))>Math.max(1e-10,Math.abs(Number(trade.tp1))*1e-8))levels.push(['TP2',trade.tp2,'tp2-line',time]);
-    }
-    levels.forEach(([name,price,cls,anchorTime])=>{
+    overlay.appendChild(entry);entryEls.push({p:trade.entry,time,el:entry});
+    const tp2Reached=trade.result==='GANADA'&&Number.isFinite(trade.exitPrice)&&Math.abs(trade.exitPrice-trade.tp1)<=Math.max(1e-10,Math.abs(trade.tp1)*1e-8);
+    const levels=[['SL',trade.sl,'sl-line'],['TP1',trade.tp1,'tp-line']];
+    if(Number.isFinite(Number(trade.tp2))&&!tp2Reached&&Math.abs(Number(trade.tp2)-Number(trade.tp1))>Math.max(1e-10,Math.abs(Number(trade.tp1))*1e-8))levels.push(['TP2',trade.tp2,'tp2-line']);
+    levels.forEach(([name,price,cls])=>{
       if(!Number.isFinite(Number(price)))return;
       const tag=document.createElement('div');tag.className='price-label '+cls;
       tag.setAttribute('aria-label',name+' '+fmt(Number(price)));
       tag.innerHTML='<b>'+name+'</b><strong>'+fmt(Number(price))+'</strong>';
-      overlay.appendChild(tag);levelEls.push({p:Number(price),time:chartAnchorTime(anchorTime),tag});
+      overlay.appendChild(tag);levelEls.push({p:Number(price),time,tag});
     });
   });
   const update=()=>{
@@ -345,11 +301,8 @@ function drawOverlays(trades,c,host,obZones=[],setups=[]){
       if(x==null||x<0||x>width||y1==null||y2==null){el.style.display='none';return;}
       const boxWidth=Math.min(window.innerWidth<=600?126:150,Math.max(0,width-x-8));
       if(boxWidth<24){el.style.display='none';return;}
-      // El OB queda anclado a su vela de origen y a sus dos precios exactos.
-      // Al mover o escalar el gráfico, sus coordenadas se recalculan desde la escala del precio.
-      const top=Math.min(y1,y2),height=Math.max(2,Math.abs(y2-y1));
       el.style.display='flex';el.style.left=x+'px';el.style.width=boxWidth+'px';
-      el.style.top=top+'px';el.style.height=height+'px';
+      el.style.top=((y1+y2)/2-15)+'px';el.style.height='30px';
     });
     entryEls.forEach(v=>{
       const y=candleSeries.priceToCoordinate(v.p),x=scale.timeToCoordinate(v.time);
@@ -364,7 +317,7 @@ function drawOverlays(trades,c,host,obZones=[],setups=[]){
       if(y==null||x==null||x<0||x>width){v.tag.style.display='none';return;}
       v.tag.style.display='flex';v.tag.style.width='max-content';
       const w=v.tag.offsetWidth||70;
-      v.tag.style.left=Math.max(0,Math.min(width-w,x-w/2))+'px';
+      v.tag.style.left=Math.max(0,Math.min(width-w,x+7))+'px';
       v.tag.style.top=(y-(v.tag.offsetHeight/2))+'px';
     });
   };
@@ -372,10 +325,7 @@ function drawOverlays(trades,c,host,obZones=[],setups=[]){
   if(!state.overlayRangeHandler){state.overlayRangeHandler=()=>{
     if(state.overlayFrame)return;
     state.overlayFrame=requestAnimationFrame(()=>{state.overlayFrame=0;if(state.overlayUpdate)state.overlayUpdate();});
-  };state.main.timeScale().subscribeVisibleLogicalRangeChange(state.overlayRangeHandler);
-    // También refrescar durante el gesto táctil/arrastre, no solo al terminar el zoom.
-    if(typeof state.main.subscribeCrosshairMove==='function')state.main.subscribeCrosshairMove(state.overlayRangeHandler);
-  }
+  };state.main.timeScale().subscribeVisibleLogicalRangeChange(state.overlayRangeHandler);}
   if(window.ResizeObserver){state.overlayResizeObserver=new ResizeObserver(update);state.overlayResizeObserver.observe(host);}
   requestAnimationFrame(update);
 }
@@ -391,17 +341,6 @@ function getHourlyBias(raw){
  const ob=side?findOB(h1,h1.length,side):null;
  return{trend,side,ob,h1};
 }
-function buildHourlyBiasTimeline(raw){
- const h1=aggregate(raw,60),close=h1.map(x=>x.close),fast=ema(close,3),slow=ema(close,13);
- return time=>{
-  let lo=0,hi=h1.length-1,best=-1;
-  while(lo<=hi){const mid=(lo+hi)>>1;if(h1[mid].time+3600<=time){best=mid;lo=mid+1;}else hi=mid-1;}
-  if(best<3)return null;
-  const up=fast[best]>slow[best]&&slow[best]>slow[best-2];
-  const down=fast[best]<slow[best]&&slow[best]<slow[best-2];
-  return up?'BUY':down?'SELL':null;
- };
-}
 function showLatest(calc,trades,c,raw=state.rawCandles){
  const t=trades.filter(x=>x.result==='PENDIENTE').slice(-1)[0]||trades.slice(-1)[0],rv=calc.rv[calc.rv.length-1];
  const hourly=getHourlyBias(raw),trend=hourly.trend;
@@ -416,8 +355,7 @@ function showLatest(calc,trades,c,raw=state.rawCandles){
  $('rsiLegend').textContent='Valor actual: '+fmt(rv);
 }
 function renderHistory(trades){
- // El resultado del backtesting histórico es la fuente principal; el análisis del gráfico solo completa operaciones que aún no estén registradas.
- const cutoff=Math.floor(Date.now()/1000)-86400;const source=mergeTrades(state.savedChartTrades,state.marketBacktests.length?state.marketBacktests:(trades||[]),2000).filter(t=>Number(t.time)>=cutoff);
+ const source=mergeTrades(state.marketBacktests,state.savedChartTrades.length?state.savedChartTrades:(trades||[]),2000);
  const rows=[...source].sort((a,b)=>Number(a.time)-Number(b.time)).slice(-550).reverse();
  const shown=Math.min(rows.length,550);
  $('historyCount').textContent='Mostrando '+shown+' de '+source.length+' · +'+fmt(source.filter(t=>t.result==='GANADA'&&Number.isFinite(t.points)).reduce((a,t)=>a+Math.max(0,t.points),0))+' / -'+fmt(source.filter(t=>t.result==='PERDIDA'&&Number.isFinite(t.points)).reduce((a,t)=>a+Math.abs(Math.min(0,t.points)),0))+' pts';
@@ -429,19 +367,19 @@ async function runUniverseBacktest(refresh=false){
  if(!state.rawCandles.length)$('dataStatus').textContent='Preparando análisis de 24 horas…';
  if(refresh){state.rawBySymbol.clear();state.downloadErrors=[];}else if(!state.downloadErrors)state.downloadErrors=[];
  let cursor=0,done=0;const workers=Array.from({length:Math.min(4,state.symbols.length)},async()=>{
-  while(cursor<state.symbols.length){const item=state.symbols[cursor++];try{if(refresh||!state.rawBySymbol.has(item.symbol)||(state.rawBySymbol.get(item.symbol)||[]).length<HISTORY_CANDLES){const raw=await getCandles(item.symbol,HISTORY_CANDLES);state.rawBySymbol.set(item.symbol,raw);}done++;$('backtestInfo').textContent='Descargando historial: '+done+' / '+state.symbols.length+' instrumentos…';}catch(e){state.rawBySymbol.set(item.symbol,[]);if(!state.downloadErrors)state.downloadErrors=[];state.downloadErrors.push(item.name+': '+e.message);if(!state.rawBySymbol.has(item.symbol))state.rawBySymbol.set(item.symbol,[]);done++;$('backtestInfo').textContent='Descargas '+done+' / '+state.symbols.length+' · falló '+item.name;}}
+  while(cursor<state.symbols.length){const item=state.symbols[cursor++];try{if(refresh||!state.rawBySymbol.has(item.symbol)||(state.rawBySymbol.get(item.symbol)||[]).length<HISTORY_CANDLES){const raw=await getCandles(item.symbol,1440);state.rawBySymbol.set(item.symbol,raw);}done++;$('backtestInfo').textContent='Descargando historial: '+done+' / '+state.symbols.length+' instrumentos…';}catch(e){state.rawBySymbol.set(item.symbol,[]);if(!state.downloadErrors)state.downloadErrors=[];state.downloadErrors.push(item.name+': '+e.message);if(!state.rawBySymbol.has(item.symbol))state.rawBySymbol.set(item.symbol,[]);done++;$('backtestInfo').textContent='Descargas '+done+' / '+state.symbols.length+' · falló '+item.name;}}
  });
  await Promise.all(workers);
  const allTrades=[],shortHistory=[];
- for(const item of state.symbols){const source=state.rawBySymbol.get(item.symbol)||[];if(!source.length)continue;const cutoff=Math.floor(Date.now()/1000)-86400;const raw=source.filter(v=>v.time>=cutoff);if(raw.length<HISTORY_CANDLES)shortHistory.push(item.name+' ('+raw.length+' velas/24h)');const candles=aggregate(raw,2);if(candles.length<70)continue;const historicalBias=buildHourlyBiasTimeline(raw),obCandles=raw,pivotCandles=aggregate(raw,state.pivotTf),calc=buildSetups(candles,obCandles,pivotCandles,pivotCandles,historicalBias,raw),trades=simulate(candles,calc.setups);allTrades.push(...trades.map(t=>({...t,symbol:item.symbol})));}
+ for(const item of state.symbols){const source=state.rawBySymbol.get(item.symbol)||[];if(!source.length)continue;const cutoff=Math.floor(Date.now()/1000)-86400;const raw=source.filter(v=>v.time>=cutoff);if(raw.length<HISTORY_CANDLES)shortHistory.push(item.name+' ('+raw.length+' velas/24h)');const candles=aggregate(raw,2);if(candles.length<70)continue;const hourly=getHourlyBias(raw),obCandles=raw,pivotCandles=aggregate(raw,state.pivotTf),calc=buildSetups(candles,obCandles,pivotCandles,pivotCandles,hourly.side,raw),setups=hourly.side?calc.setups.filter(x=>x.side===hourly.side):[],trades=simulate(candles,setups);allTrades.push(...trades.map(t=>({...t,symbol:item.symbol})));}
  state.marketBacktests=mergeTrades(state.marketBacktests,allTrades,2000);
  state.savedChartTrades=mergeTrades(state.savedChartTrades,allTrades,2000);
  state.trades=state.savedChartTrades.filter(t=>t.symbol===state.selected);
  // Al terminar el backtest, vuelve a pintar el gráfico con las entradas históricas recién guardadas.
  const currentRaw=state.rawBySymbol.get(state.selected)||state.rawCandles;
  if(currentRaw.length&&state.main){
-  state.rawCandles=currentRaw;const chartRaw=currentRaw.filter(v=>v.time>=currentRaw.at(-1).time-86400);const chartCandles=aggregate(chartRaw,state.tf),signalCandles=aggregate(currentRaw,2),pivotCandles=aggregate(currentRaw,state.pivotTf),chartPivots=aggregate(chartRaw,state.pivotTf),hourly=getHourlyBias(currentRaw);
-  const chartCalc=buildSetups(chartCandles,chartRaw,chartPivots,chartPivots,hourly.side,chartRaw);
+  state.rawCandles=currentRaw;const chartCandles=aggregate(currentRaw,state.tf),signalCandles=aggregate(currentRaw,2),pivotCandles=aggregate(currentRaw,state.pivotTf),hourly=getHourlyBias(currentRaw);
+  const chartCalc=buildSetups(chartCandles,currentRaw,pivotCandles,pivotCandles,hourly.side,currentRaw);
   const signalCalc=buildSetups(signalCandles,currentRaw,pivotCandles,pivotCandles,hourly.side,currentRaw);
   const aligned=hourly.side?signalCalc.setups.filter(x=>x.side===hourly.side):[];
   state.candles=chartCandles;draw(chartCandles,chartCalc,state.trades,chartCalc.obZones,aligned);showLatest(signalCalc,state.trades,signalCandles);
@@ -452,15 +390,15 @@ async function runUniverseBacktest(refresh=false){
  const closed=allTrades.filter(t=>t.result==='GANADA'||t.result==='PERDIDA');
  $('wins').textContent=closed.filter(t=>t.result==='GANADA').length;$('losses').textContent=closed.filter(t=>t.result==='PERDIDA').length;
  $('pending').textContent=allTrades.filter(t=>t.result==='PENDIENTE').length;$('expired').textContent=allTrades.filter(t=>t.result==='CANCELADA').length;
- const failed=state.downloadErrors.length;$('backtestInfo').textContent='Universo: '+state.symbols.length+' instrumentos · señales M2 · backtesting: últimas 24 horas · gráfico M'+state.tf+' (24 horas visibles) · '+allTrades.length+' señales simuladas · '+failed+' descargas fallidas · '+shortHistory.length+' con historial parcial'+(failed?'. Errores: '+state.downloadErrors.slice(0,2).join(' | '):'')+(shortHistory.length?'. Parciales: '+shortHistory.slice(0,3).join(', '):'.');
+ const failed=state.downloadErrors.length;$('backtestInfo').textContent='Universo: '+state.symbols.length+' instrumentos · señales M2 · gráfico M'+state.tf+' · período: últimas 24 horas · '+allTrades.length+' señales simuladas · '+failed+' descargas fallidas · '+shortHistory.length+' con historial parcial'+(failed?'. Errores: '+state.downloadErrors.slice(0,2).join(' | '):'')+(shortHistory.length?'. Parciales: '+shortHistory.slice(0,3).join(', '):'.');
 }
 async function analyze(){
  if(state.busy){state.analyzeQueued=true;return;}state.busy=true;$('dataStatus').textContent='Cargando gráfico…';
- try{const raw=state.rawBySymbol.get(state.selected)||await getCandles(state.selected,HISTORY_CANDLES);if(!raw.length)throw new Error('No llegaron velas para '+state.selected);state.rawBySymbol.set(state.selected,raw);
- state.rawCandles=raw;state.lastRecalcBucket=Math.floor(raw.at(-1).time/120);const chartRaw=raw.filter(v=>v.time>=raw.at(-1).time-86400);const c=aggregate(chartRaw,state.tf);state.candles=c;const signalCandles=aggregate(raw,2);const obCandles=raw;const pivotCandles=aggregate(raw,state.pivotTf);const chartPivots=aggregate(chartRaw,state.pivotTf);
- const hourly=getHourlyBias(raw),activeSide=hourly.side,historicalBias=buildHourlyBiasTimeline(raw);const signalCalc=buildSetups(signalCandles,obCandles,pivotCandles,pivotCandles,historicalBias,raw);const chartCalc=buildSetups(c,chartRaw,chartPivots,chartPivots,activeSide,chartRaw);
- // El backtest y el historial usan el sesgo H1 que existía en cada vela, no el sesgo actual aplicado al pasado.
- const alignedSetups=signalCalc.setups;
+ try{const raw=state.rawBySymbol.get(state.selected)||await getCandles(state.selected,1440);if(!raw.length)throw new Error('No llegaron velas para '+state.selected);state.rawBySymbol.set(state.selected,raw);
+ state.rawCandles=raw;state.lastRecalcBucket=Math.floor(raw.at(-1).time/120);const c=aggregate(raw,state.tf);state.candles=c;const signalCandles=aggregate(raw,2);const obCandles=raw;const pivotCandles=aggregate(raw,state.pivotTf);
+ const hourly=getHourlyBias(raw),activeSide=hourly.side;const signalCalc=buildSetups(signalCandles,obCandles,pivotCandles,pivotCandles,activeSide,raw);const chartCalc=buildSetups(c,obCandles,pivotCandles,pivotCandles,activeSide,raw);
+ // Una sola dirección gobierna las señales y los OB visibles: la tendencia H1.
+ const alignedSetups=activeSide?signalCalc.setups.filter(setup=>setup.side===activeSide):[];
  const alignedZones=chartCalc.obZones;
  const freshTrades=simulate(signalCandles,alignedSetups).map(t=>({...t,symbol:state.selected}));
  state.savedChartTrades=mergeTrades(state.savedChartTrades,freshTrades,2000);
@@ -468,9 +406,9 @@ async function analyze(){
  savePersistentState();
  draw(c,chartCalc,state.trades,alignedZones,alignedSetups);showLatest(signalCalc,state.trades.filter(t=>t.symbol===state.selected),signalCandles);renderHistory(state.trades);
  $('chartTitle').textContent=(state.symbols.find(s=>s.symbol===state.selected)?.name||state.selected)+' · M'+state.tf;
- $('chartSubtitle').textContent='Velas '+c.length+' · 24 horas visibles · análisis 24 horas';
- $('chartRange').textContent='Gráfico: últimas 24 horas · '+new Date(c[0].time*1000).toLocaleTimeString('es-PA')+' — '+new Date(c.at(-1).time*1000).toLocaleTimeString('es-PA');
- $('dataStatus').textContent='Datos actualizados · '+raw.length+' velas M1 · '+(raw.length>1?Math.round((raw.at(-1).time-raw[0].time)/3600)+' h de historial':'historial insuficiente');
+ $('chartSubtitle').textContent='Velas '+c.length+' · últimas 24 horas · señales proyectadas';
+ $('chartRange').textContent='Últimas 24 horas · '+new Date(c[0].time*1000).toLocaleTimeString('es-PA')+' — '+new Date(c.at(-1).time*1000).toLocaleTimeString('es-PA');
+ $('dataStatus').textContent='Datos actualizados · '+raw.length+' velas M1';
  }catch(e){$('dataStatus').textContent='ERROR DE DATOS: '+e.message;$('signalDetails').textContent='No se pudo cargar este instrumento. '+e.message;}finally{state.busy=false;if(state.analyzeQueued){state.analyzeQueued=false;Promise.resolve().then(analyze);}}
 }
 function onLiveTick(tick){
