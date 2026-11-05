@@ -80,7 +80,7 @@ function buildSetups(c,liquidityCandles=c,pivotCandles=liquidityCandles,obStruct
   let lo=0,hi=m30Bars.length;
   while(lo<hi){const mid=(lo+hi)>>1;if(m30Bars[mid].time+1800<=time)lo=mid+1;else hi=mid;}
   const k=lo-1;
-  if(k<49)return null;
+  if(k<29)return null;
   return m30E20[k]>m30E50[k]?'BUY':m30E20[k]<m30E50[k]?'SELL':null;
  };
  const m2Bars=aggregate(targetRawCandles,2),m2Close=m2Bars.map(v=>v.close);
@@ -344,7 +344,7 @@ function fmt(n){return Number.isFinite(n)?Number(n).toFixed(2):'—';}
 function getTrend30(raw){
  const m30=aggregate(raw,30),latest=raw.length?raw[raw.length-1].time:0;
  const closed=m30.filter(bar=>bar.time+1800<=latest);
- if(closed.length<50)return{trend:'SIN DATOS M30',side:null,ob:null,m30:closed};
+ if(closed.length<30)return{trend:'SIN DATOS M30',side:null,ob:null,m30:closed};
  const close=closed.map(x=>x.close),fast=ema(close,20),slow=ema(close,50);
  const side=fast.at(-1)>slow.at(-1)?'BUY':fast.at(-1)<slow.at(-1)?'SELL':null;
  const trend=side==='BUY'?'ALCISTA':side==='SELL'?'BAJISTA':'LATERAL';
