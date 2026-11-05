@@ -59,7 +59,7 @@ function connectDeriv() {
       if (rows) {
         historical = rows.map(c => ({time:Number(c.epoch ?? c.open_time),open:Number(c.open),high:Number(c.high),low:Number(c.low),close:Number(c.close)})).filter(c => [c.time,c.open,c.high,c.low,c.close].every(Number.isFinite));
       } else if (Array.isArray(history.times) && Array.isArray(history.prices)) {
-        historical = aggregateTicks(history.times, history.prices, 60);
+        historical = aggregateTicks(history.times, history.prices, selectedGranularity === 30 ? 30 : 60);
       }
       if (historical.length) {
         // Conserva los ticks que hayan llegado mientras se descargaba el historial.
