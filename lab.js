@@ -20,23 +20,69 @@ function ema(a,p){let o=Array(a.length).fill(null);if(a.length<p)return o;let v=
 function rsi(c,p=14){let o=Array(c.length).fill(null),g=0,l=0;if(c.length<=p)return o;for(let i=1;i<=p;i++){let d=c[i]-c[i-1];g+=Math.max(d,0);l+=Math.max(-d,0)}g/=p;l/=p;o[p]=l?100-100/(1+g/l):100;for(let i=p+1;i<c.length;i++){let d=c[i]-c[i-1];g=(g*(p-1)+Math.max(d,0))/p;l=(l*(p-1)+Math.max(-d,0))/p;o[i]=l?100-100/(1+g/l):100}return o}
 function atr(d,p=14){let tr=d.map((c,i)=>i?Math.max(c.high-c.low,Math.abs(c.high-d[i-1].close),Math.abs(c.low-d[i-1].close)):c.high-c.low),o=Array(d.length).fill(null);if(d.length<p)return o;let v=tr.slice(0,p).reduce((a,b)=>a+b,0)/p;o[p-1]=v;for(let i=p;i<d.length;i++){v=(v*(p-1)+tr[i])/p;o[i]=v}return o}
 function max(a){return a.length?Math.max(...a):null}function min(a){return a.length?Math.min(...a):null}
-function features(d){const c=d.map(x=>x.close),e9=ema(c,9),e21=ema(c,21),e25=ema(c,25),e50=ema(c,50),r=rsi(c),a=atr(d),body=d.map(x=>Math.abs(x.close-x.open)),avg=body.map((_,i)=>i<10?null:body.slice(i-10,i).reduce((s,v)=>s+v,0)/10),ob=Array(d.length).fill(null),sweep=Array(d.length).fill(0),fvg=Array(d.length).fill(null),swingH=Array(d.length).fill(null),swingL=Array(d.length).fill(null),bos=Array(d.length).fill(0),touch=Array(d.length).fill(0),double=Array(d.length).fill(0);
-let lastHigh=null,lastLow=null;
-for(let i=3;i<d.length;i++){
- const z=d[i],p=d[i-1],q=d[i-2],hi=max(d.slice(Math.max(0,i-12),i).map(x=>x.high)),lo=min(d.slice(Math.max(0,i-12),i).map(x=>x.low));
- swingH[i]=hi;swingL[i]=lo;
- if(z.low<lo&&z.close>lo)sweep[i]=1;else if(z.high>hi&&z.close<hi)sweep[i]=-1;
- if(z.close>hi)bos[i]=1;else if(z.close<lo)bos[i]=-1;
- if(z.low>q.high)fvg[i]={dir:1,low:q.high,high:z.low};else if(z.high<q.low)fvg[i]={dir:-1,low:z.high,high:q.low};
- const strong=avg[i]!=null&&body[i]>avg[i]*1.35;
- if(strong&&z.close>z.open&&z.close>p.high){let j=i-1;while(j>Math.max(0,i-5)&&d[j].close>=d[j].open)j--;if(d[j].close<d[j].open)ob[i]={dir:1,low:d[j].low,high:d[j].open,at:j}}
- if(strong&&z.close<z.open&&z.close<p.low){let j=i-1;while(j>Math.max(0,i-5)&&d[j].close<=d[j].open)j--;if(d[j].close>d[j].open)ob[i]={dir:-1,low:d[j].open,high:d[j].high,at:j}}
- if(lastHigh&&Math.abs(lastHigh.v-hi)<(a[i]||0)*.25)double[i]=-1;
- if(lastLow&&Math.abs(lastLow.v-lo)<(a[i]||0)*.25)double[i]=1;
- if(i>5){let near=d.slice(i-5,i).filter(x=>Math.abs(x.high-hi)<(a[i]||0)*.18||Math.abs(x.low-lo)<(a[i]||0)*.18);touch[i]=near.length>=2?1:0}
- if(hi!=null)lastHigh={v:hi,i};if(lo!=null)lastLow={v:lo,i};
+function features(d){
+ const c=d.map(x=>x.close),e9=ema(c,9),e21=ema(c,21),e50=ema(c,50),r=rsi(c),a=atr(d);
+ const body=d.map(x=>Math.abs(x.close-x.open));
+ const avg=body.map((_,i)=>i<10?null:body.slice(i-10,i).reduce((s,v)=>s+v,0)/10);
+ const ob=Array(d.length).fill(null),sweep=Array(d.length).fill(0),fvg=Array(d.length).fill(null);
+ const swingH=Array(d.length).fill(null),swingL=Array(d.length).fill(null),bos=Array(d.length).fill(0);
+ const touch=Array(d.length).fill(0),double=Array(d.length).fill(0);
+ let lastPivotHigh=null,lastPivotLow=null,topSetup=null,bottomSetup=null,pendingBreak=null;
+ for(let i=3;i<d.length;i++){
+  const z=d[i],p=d[i-1],q=d[i-2];
+  const hi=max(d.slice(Math.max(0,i-12),i).map(x=>x.high));
+  const lo=min(d.slice(Math.max(0,i-12),i).map(x=>x.low));
+  swingH[i]=hi;swingL[i]=lo;
+  if(z.low<lo&&z.close>lo)sweep[i]=1;else if(z.high>hi&&z.close<hi)sweep[i]=-1;
+  if(z.low>q.high)fvg[i]={dir:1,low:q.high,high:z.low};
+  else if(z.high<q.low)fvg[i]={dir:-1,low:z.high,high:q.low};
+  const strong=avg[i]!=null&&body[i]>avg[i]*1.35;
+  if(strong&&z.close>z.open&&z.close>p.high){
+   let j=i-1;while(j>Math.max(0,i-5)&&d[j].close>=d[j].open)j--;
+   if(d[j].close<d[j].open)ob[i]={dir:1,low:d[j].low,high:d[j].open,at:j};
+  }
+  if(strong&&z.close<z.open&&z.close<p.low){
+   let j=i-1;while(j>Math.max(0,i-5)&&d[j].close<=d[j].open)j--;
+   if(d[j].close>d[j].open)ob[i]={dir:-1,low:d[j].open,high:d[j].high,at:j};
+  }
+  const recent=d.slice(Math.max(0,i-5),i+1),tol=(a[i]||0)*.18;
+  const highTouches=recent.filter(x=>Math.abs(x.high-hi)<=tol).length;
+  const lowTouches=recent.filter(x=>Math.abs(x.low-lo)<=tol).length;
+  if(lowTouches>=3)touch[i]=1;else if(highTouches>=3)touch[i]=-1;
+  const pivot=i-2;
+  if(pivot>=2){
+   const ph=d[pivot].high,pl=d[pivot].low;
+   const isHigh=ph>d[pivot-1].high&&ph>d[pivot-2].high&&ph>=d[pivot+1].high&&ph>=d[pivot+2].high;
+   const isLow=pl<d[pivot-1].low&&pl<d[pivot-2].low&&pl<=d[pivot+1].low&&pl<=d[pivot+2].low;
+   if(isHigh){
+    if(lastPivotHigh&&pivot-lastPivotHigh.i>=3&&Math.abs(ph-lastPivotHigh.v)<=(a[i]||0)*.35){
+     const neck=min(d.slice(lastPivotHigh.i+1,pivot).map(x=>x.low));
+     if(neck!=null)topSetup={level:neck,until:i+15};
+    }
+    lastPivotHigh={v:ph,i:pivot};
+   }
+   if(isLow){
+    if(lastPivotLow&&pivot-lastPivotLow.i>=3&&Math.abs(pl-lastPivotLow.v)<=(a[i]||0)*.35){
+     const neck=max(d.slice(lastPivotLow.i+1,pivot).map(x=>x.high));
+     if(neck!=null)bottomSetup={level:neck,until:i+15};
+    }
+    lastPivotLow={v:pl,i:pivot};
+   }
+  }
+  if(topSetup&&i<=topSetup.until&&z.close<topSetup.level&&p.close>=topSetup.level){double[i]=-1;topSetup=null}
+  if(bottomSetup&&i<=bottomSetup.until&&z.close>bottomSetup.level&&p.close<=bottomSetup.level){double[i]=1;bottomSetup=null}
+  if(topSetup&&i>topSetup.until)topSetup=null;
+  if(bottomSetup&&i>bottomSetup.until)bottomSetup=null;
+  if(pendingBreak&&i>pendingBreak.i){
+   if(i<=pendingBreak.i+6&&pendingBreak.dir===1&&z.low<=pendingBreak.level+(a[i]||0)*.12&&z.close>pendingBreak.level&&z.close>z.open){bos[i]=1;pendingBreak=null}
+   else if(i<=pendingBreak.i+6&&pendingBreak.dir===-1&&z.high>=pendingBreak.level-(a[i]||0)*.12&&z.close<pendingBreak.level&&z.close<z.open){bos[i]=-1;pendingBreak=null}
+   else if(i>pendingBreak.i+6)pendingBreak=null;
+  }
+  if(z.close>hi)pendingBreak={dir:1,level:hi,i};
+  else if(z.close<lo)pendingBreak={dir:-1,level:lo,i};
+ }
+ return{e9,e21,e50,r,a,avg,body,ob,sweep,fvg,swingH,swingL,bos,touch,double};
 }
-return{e9,e21,e25,e50,r,a,avg,body,ob,sweep,fvg,swingH,swingL,bos,touch,double}}
 function latestOB(f,i,dir){for(let j=i;j>=Math.max(0,i-12);j--)if(f.ob[j]&&f.ob[j].dir===dir)return f.ob[j];return null}
 function contextSignal(id,i,d,f){
  if(i<55||!d[i])return 0;
@@ -47,12 +93,12 @@ function contextSignal(id,i,d,f){
  switch(id){
  case 1: if(up&&ob&&z.close>=ob.low&&z.close<=ob.high)return 1;if(dn&&bear&&z.close<=bear.high&&z.close>=bear.low)return -1;break;
  case 2: if(f.sweep[i]===1)return 1;if(f.sweep[i]===-1)return -1;break;
- case 3: if(f.touch[i]&&z.close>z.open&&z.close>p.high)return 1;if(f.touch[i]&&z.close<z.open&&z.close<p.low)return -1;break;
- case 4: if(f.bos[i]===1&&p.low<=f.e9[i]&&z.close>f.e9[i])return 1;if(f.bos[i]===-1&&p.high>=f.e9[i]&&z.close<f.e9[i])return -1;break;
+ case 3: if(f.touch[i]===1&&z.close>z.open&&z.close>p.high)return 1;if(f.touch[i]===-1&&z.close<z.open&&z.close<p.low)return -1;break;
+ case 4: if(f.bos[i]===1)return 1;if(f.bos[i]===-1)return -1;break;
  case 5: if(up&&z.low<=f.e21[i]&&z.close>f.e9[i]&&bull)return 1;if(dn&&z.high>=f.e21[i]&&z.close<f.e9[i]&&bearC)return -1;break;
  case 6: if(prev<30&&r>=30&&bull)return 1;if(prev>70&&r<=70&&bearC)return -1;break;
- case 7: {let g=f.fvg.slice(Math.max(0,i-8),i+1).filter(Boolean).slice(-1)[0];if(g&&g.dir===1&&z.low<=g.high&&z.close>g.high)return 1;if(g&&g.dir===-1&&z.high>=g.low&&z.close<g.low)return -1;break}
- case 8: if(f.double[i]===1&&z.close>p.high)return 1;if(f.double[i]===-1&&z.close<p.low)return -1;break;
+ case 7: {let g=f.fvg.slice(Math.max(0,i-8),i).filter(Boolean).slice(-1)[0];if(g&&g.dir===1&&z.low<=g.high&&z.close>g.high)return 1;if(g&&g.dir===-1&&z.high>=g.low&&z.close<g.low)return -1;break}
+ case 8: if(f.double[i]===1)return 1;if(f.double[i]===-1)return -1;break;
  case 9: if(bull&&f.body[i]>(f.avg[i]||0)*1.6&&z.close>p.high)return 1;if(bearC&&f.body[i]>(f.avg[i]||0)*1.6&&z.close<p.low)return -1;break;
  case 10: if(f.sweep[i]===1&&ob&&z.low<=ob.high&&z.close>ob.high)return 1;if(f.sweep[i]===-1&&bear&&z.high>=bear.low&&z.close<bear.low)return -1;break;
  case 11:{
