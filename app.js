@@ -5,7 +5,7 @@ const HISTORY_CANDLES = 1440;
 const REQUEST_TIMEOUT_MS = 45000;
 const API_URL = 'wss://api.derivws.com/trading/v1/options/ws/public';
 const $ = id => document.getElementById(id);
-const state = { ws:null, req:0, pending:new Map(), symbols:[], selected:null, tf:1, candles:[], rawCandles:[], rawBySymbol:new Map(), marketBacktests:[], trades:[], liveSub:null, main:null, rsi:null, markerPlugin:null, overlayResizeObserver:null, overlayUpdate:null, overlayRangeHandler:null, pivotLines:[], chartKey:null, series:{}, busy:false, analyzeQueued:false, forceFitNext:true, lastRecalcBucket:null, pendingLiveTick:null, liveFrame:0 };
+const state = { ws:null, req:0, pending:new Map(), symbols:[], selected:null, tf:1, candles:[], rawCandles:[], rawBySymbol:new Map(), marketBacktests:[], trades:[], liveSub:null, main:null, rsi:null, markerPlugin:null, overlayResizeObserver:null, overlayUpdate:null, overlayRangeHandler:null, pivotLines:[], chartKey:null, series:{}, busy:false, analyzeQueued:false, forceFitNext:true, lastRecalcBucket:null, pendingLiveTick:null, liveFrame:0, overlayFrame:0 };
 const CANDIDATES = [
  ['1HZ10V','Volatility 10 (1s)'],['1HZ15V','Volatility 15 (1s)'],['1HZ25V','Volatility 25 (1s)'],['1HZ30V','Volatility 30 (1s)'],['1HZ50V','Volatility 50 (1s)'],['1HZ75V','Volatility 75 (1s)'],['1HZ90V','Volatility 90 (1s)'],['1HZ100V','Volatility 100 (1s)'],['1HZ150V','Volatility 150 (1s)'],['1HZ250V','Volatility 250 (1s)'],
  ['R_10','Volatility 10'],['R_25','Volatility 25'],['R_50','Volatility 50'],['R_75','Volatility 75'],['R_100','Volatility 100'],
@@ -142,11 +142,14 @@ function drawPivotLines(){
  // independientemente de la temporalidad seleccionada para visualizar el gráfico.
  // No se mezclan cálculos M1/M2/M3/M5 ni niveles H1.
  const m10=pivots(aggregate(raw,10),3,600);
+ // Buscar el nivel M10 válido más cercano en todo el historial disponible.
+ // Si no hay pivote M10 dentro de la última hora, se conserva uno anterior
+ // en vez de dejar vacío el lado del soporte o de la resistencia.
  const resistanceCandidates=m10.highs
-  .filter(p=>p.time>=cutoff&&Number.isFinite(p.price)&&p.price>current)
+  .filter(p=>Number.isFinite(p.price)&&p.price>current)
   .map(p=>({...p,kind:'resistance-m10'}));
  const supportCandidates=m10.lows
-  .filter(p=>p.time>=cutoff&&Number.isFinite(p.price)&&p.price<current)
+  .filter(p=>Number.isFinite(p.price)&&p.price<current)
   .map(p=>({...p,kind:'support-m10'}));
  const resistance=resistanceCandidates.sort((a,b)=>a.price-b.price)[0];
  const support=supportCandidates.sort((a,b)=>b.price-a.price)[0];
@@ -207,7 +210,14 @@ function drawOverlays(trades,c,host){
   positioned.forEach(item=>{const desired=Math.max(13,Math.min(host.clientHeight-13,item.y)),placed=Math.max(desired,previous+27);item.tag.style.top=Math.max(2,Math.min(host.clientHeight-27,placed-13))+'px';previous=placed;});
  };
  state.overlayUpdate=update;
- if(!state.overlayRangeHandler){state.overlayRangeHandler=()=>{if(state.overlayUpdate)state.overlayUpdate();};state.main.timeScale().subscribeVisibleLogicalRangeChange(state.overlayRangeHandler);}
+ if(!state.overlayRangeHandler){state.overlayRangeHandler=()=>{
+  // Limita el trabajo del overlay a una ejecución por frame durante el desplazamiento.
+  if(state.overlayFrame)return;
+  state.overlayFrame=requestAnimationFrame(()=>{
+   state.overlayFrame=0;
+   if(state.overlayUpdate)state.overlayUpdate();
+  });
+ };state.main.timeScale().subscribeVisibleLogicalRangeChange(state.overlayRangeHandler);}
  if(window.ResizeObserver){state.overlayResizeObserver=new ResizeObserver(update);state.overlayResizeObserver.observe(host);}
  requestAnimationFrame(update);
 }
