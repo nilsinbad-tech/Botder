@@ -1,15 +1,15 @@
 (()=>{
 "use strict";
-const WS="wss://api.derivws.com/trading/v1/options/ws/public",DAY=86400,TEST_DAYS=2,COUNT=5000,INSTRUMENT_LIMIT=8,MAX_HISTORY_PAGES=500;
+const WS="wss://api.derivws.com/trading/v1/options/ws/public",DAY=86400,TEST_DAYS=2,INSTRUMENT_LIMIT=8;
 const strategies=[
-{id:1,name:"OB + EMA",group:"Tendencia",rules:"OB M1 + EMA 9/21 alineadas; confirmación de ruptura en 30s",ob:true},
-{id:2,name:"Liquidity Sweep",group:"Liquidez",rules:"Barrida de swing M1 + recuperación; confirmación en 30s"},
-{id:3,name:"Tres toques",group:"Price Action",rules:"Tres pruebas de zona M1 + rechazo; ruptura de vela en 30s"},
-{id:4,name:"BOS + Retest",group:"Estructura",rules:"Ruptura de estructura M1 + retesteo; confirmación en 30s"},
-{id:5,name:"EMA Pullback",group:"Tendencia",rules:"EMA 9/21/50 M1 alineadas + retroceso y continuación en 30s"},
-{id:6,name:"RSI Reversal",group:"Reversión",rules:"RSI M1 sale de extremo + giro confirmado en 30s"},
-{id:7,name:"FVG + Reacción",group:"Desequilibrio",rules:"Regreso a FVG M1 + rechazo confirmado en 30s"},
-{id:8,name:"Doble techo / suelo",group:"Price Action",rules:"Segundo test M1 + ruptura de neckline en 30s"}
+{id:1,name:"OB + EMA",group:"Tendencia",rules:"OB M2 + EMA 9/21 alineadas; confirmación de ruptura en M1",ob:true},
+{id:2,name:"Liquidity Sweep",group:"Liquidez",rules:"Barrida de swing M2 + recuperación; confirmación en M1"},
+{id:3,name:"Tres toques",group:"Price Action",rules:"Tres pruebas de zona M2 + rechazo; ruptura de vela en M1"},
+{id:4,name:"BOS + Retest",group:"Estructura",rules:"Ruptura de estructura M2 + retesteo; confirmación en M1"},
+{id:5,name:"EMA Pullback",group:"Tendencia",rules:"EMA 9/21/50 M2 alineadas + retroceso y continuación en M1"},
+{id:6,name:"RSI Reversal",group:"Reversión",rules:"RSI M2 sale de extremo + giro confirmado en M1"},
+{id:7,name:"FVG + Reacción",group:"Desequilibrio",rules:"Regreso a FVG M2 + rechazo confirmado en M1"},
+{id:8,name:"Doble techo / suelo",group:"Price Action",rules:"Segundo test M2 + ruptura de neckline en M1"}
 ];
 let socket=null,busy=false,req=1,reqState=null,symbols=[],results=[],hist={},idx=0,active=null,queue=[],timer=null,connectTimer=null,symbolTimer=null,overallTimer=null,validInstruments=0,failedInstruments=0;
 const $=id=>document.getElementById(id),esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
@@ -65,7 +65,7 @@ function contextSignal(id,i,d,f){
  }}
  return 0;
 }
-function entryConfirm(dir,d30,i){const c=d30[i],p=d30[i-1];if(!c||!p)return false;const body=Math.abs(c.close-c.open),range=c.high-c.low||1,solid=body/range>=.45;if(dir>0)return c.close>c.open&&c.close>p.high&&solid;return c.close<c.open&&c.close<p.low&&solid}
+function entryConfirm(dir,m1,i){const c=m1[i],p=m1[i-1];if(!c||!p)return false;const body=Math.abs(c.close-c.open),range=c.high-c.low||1,solid=body/range>=.45;if(dir>0)return c.close>c.open&&c.close>p.high&&solid;return c.close<c.open&&c.close<p.low&&solid}
 function buildTrades(m2,m1,strat){
  const f=features(m2),a1=atr(m1),trades=[],entries=[],contextIndex=Array(m1.length).fill(-1);let k=0;
  for(let i=0;i<m1.length;i++){while(k+1<m2.length&&m2[k+1].time+120<=m1[i].time)k++;contextIndex[i]=k}
@@ -75,7 +75,7 @@ function buildTrades(m2,m1,strat){
   const entry=m1[i+1].open,zone=latestOB(f,mi,dir),pad=(a1[i]||Math.abs(entry)*.0002)*.12;
   const look=m2.slice(Math.max(0,mi-8),mi+1),swing=dir>0?min(look.map(x=>x.low)):max(look.map(x=>x.high));
   let sl=zone?(dir>0?zone.low-pad:zone.high+pad):(dir>0?swing-pad:swing+pad);
-  let risk=Math.abs(entry-sl);if(!Number.isFinite(risk)||risk<=0||risk>Math.max(a30[i]||0,Math.abs(entry)*.00001)*4)continue;
+  let risk=Math.abs(entry-sl);if(!Number.isFinite(risk)||risk<=0||risk>Math.max(a1[i]||0,Math.abs(entry)*.00001)*4)continue;
   const targetR=1.25;let tp=entry+dir*risk*targetR,tp2=entry+dir*risk*2;
   const liquidity=dir>0?min(m2.slice(Math.max(0,mi-15),mi+1).map(x=>x.high).filter(v=>v>entry)):max(m2.slice(Math.max(0,mi-15),mi+1).map(x=>x.low).filter(v=>v<entry));
   if(liquidity!=null&&Math.abs(liquidity-entry)>=risk*.75&&Math.abs(liquidity-entry)<Math.abs(tp-entry))tp=liquidity;
@@ -113,7 +113,7 @@ function drawChart(){
  view.forEach((c,j)=>{let x=X(j),up=c.close>=c.open,col=up?"#42dfa0":"#ff7184",top=Y(Math.max(c.open,c.close)),h=Math.max(1.2,Math.abs(Y(c.open)-Y(c.close)));svg+='<line x1="'+x+'" y1="'+Y(c.high)+'" x2="'+x+'" y2="'+Y(c.low)+'" stroke="'+col+'"/><rect x="'+(x-1.6)+'" y="'+top+'" width="3.2" height="'+h+'" fill="'+col+'"/>'});
  r.entries.forEach(t=>{let j=t.entryIndex-offset;if(j<0||j>=view.length)return;let x=X(j),y=Y(t.entry),col=t.direction==="BUY"?"#42dfa0":"#ff7184";svg+='<path d="M '+x+' '+(y-7)+' l -5 -9 h 10 z" fill="'+col+'"/>';if(t.exitIndex>=offset&&t.exitIndex<d.length)svg+='<circle cx="'+X(t.exitIndex-offset)+'" cy="'+Y(t.exitPrice)+'" r="3" fill="'+(t.result==="GANADA"?"#42dfa0":"#ff7184")+'"/>'});
  if(chosen){svg+='<line x1="18" y1="'+Y(chosen.tp)+'" x2="982" y2="'+Y(chosen.tp)+'" stroke="#42dfa0" stroke-dasharray="5 4"/><line x1="18" y1="'+Y(chosen.sl)+'" x2="982" y2="'+Y(chosen.sl)+'" stroke="#ff7184" stroke-dasharray="5 4"/>'}
- host.innerHTML='<svg class="market-chart" viewBox="0 0 1000 300" role="img" aria-label="Velas de treinta segundos con entradas y niveles TP y SL">'+svg+'</svg><div class="chart-legend"><span>🟢 BUY / TP</span><span>🔴 SELL / SL</span><span>Velas de 1 minuto · entrada con contexto M2</span></div>';
+ host.innerHTML='<svg class="market-chart" viewBox="0 0 1000 300" role="img" aria-label="Velas M1 con entradas y niveles TP y SL">'+svg+'</svg><div class="chart-legend"><span>🟢 BUY / TP</span><span>🔴 SELL / SL</span><span>Velas M1 · contexto M2</span></div>';
  $("trade-audit-list").innerHTML=r.entries.slice(-30).reverse().map(t=>'<article class="audit-trade"><b class="'+(t.result==="GANADA"?"rate":"loss")+'">'+t.result+' · '+t.direction+'</b><span>Entrada '+fmt(t.entry)+' · '+new Date(t.entryTime*1000).toLocaleString("es-PA")+'</span><span>TP1 '+fmt(t.tp)+' · TP2 '+fmt(t.tp2)+' · SL '+fmt(t.sl)+'</span><span>Salida '+fmt(t.exitPrice)+' · '+(t.exitTime?new Date(t.exitTime*1000).toLocaleString("es-PA"):"sin salida")+'</span></article>').join("");
 }
 function progress(){const total=symbols.length;$("progress-count").textContent=idx+" / "+total+" instrumentos · 8 estrategias por instrumento";$("progress-bar").style.width=(total?idx/total*100:0)+"%";$("progress-title").textContent=busy?"Analizando "+(active?.name||"Deriv"):"Análisis finalizado"}
@@ -121,64 +121,50 @@ function finish(msg){busy=false;clearTimeout(timer);clearTimeout(connectTimer);c
 function requestPage(){
  if(!busy||!reqState)return;
  req++;reqState.req=req;
- $("live-detail").textContent="Descargando "+(active?.name||reqState.symbol)+" · página "+(reqState.pages+1)+" · "+reqState.data.length.toLocaleString("es-PA")+" ticks recibidos…";
- try{socket.send(JSON.stringify({ticks_history:reqState.symbol,count:COUNT,end:reqState.end,style:"ticks",req_id:req}));}
- catch(e){const st=reqState;reqState=null;st.done([],"No se pudo enviar la solicitud: "+(e.message||e));return}
+ $("live-detail").textContent="Descargando velas M1 de "+(active?.name||reqState.symbol)+" · historial de 2 días…";
+ try{socket.send(JSON.stringify({ticks_history:reqState.symbol,start:reqState.start,end:String(reqState.targetEnd),count:3000,style:"candles",granularity:60,req_id:req}));}
+ catch(e){const st=reqState;reqState=null;st.done([], "No se pudo solicitar el gráfico M1: "+(e.message||e));return}
  clearTimeout(timer);
- timer=setTimeout(()=>{if(busy&&reqState){const st=reqState;reqState=null;st.done([],"Deriv no respondió a la página de ticks en 60 segundos.")}},60000);
+ timer=setTimeout(()=>{if(busy&&reqState){const st=reqState;reqState=null;st.done([], "Deriv no respondió al historial de velas M1 en 30 segundos.")}},30000);
 }
-function parseTicks(m){
- const times=m.history?.times||[],prices=m.history?.prices||[];
- return times.map((time,i)=>({time:Number(time),price:Number(prices[i])}))
-  .filter(x=>Number.isFinite(x.time)&&Number.isFinite(x.price)).sort((a,b)=>a.time-b.time);
+function parseCandles(m){
+ return (m.candles||[]).map(c=>({time:Number(c.epoch),open:Number(c.open),high:Number(c.high),low:Number(c.low),close:Number(c.close)}))
+  .filter(c=>Number.isFinite(c.time)&&Number.isFinite(c.open)&&Number.isFinite(c.high)&&Number.isFinite(c.low)&&Number.isFinite(c.close))
+  .sort((a,b)=>a.time-b.time);
 }
-function candlesFromTicks(ticks,gran){
- const map=new Map();
- for(const t of ticks){
-  const time=Math.floor(t.time/gran)*gran;
-  let c=map.get(time);
-  if(!c)map.set(time,{time,open:t.price,high:t.price,low:t.price,close:t.price});
-  else{c.high=Math.max(c.high,t.price);c.low=Math.min(c.low,t.price);c.close=t.price}
- }
- return [...map.values()].sort((a,b)=>a.time-b.time);
+function buildM2FromM1(m1){
+ const groups=new Map();
+ for(const c of m1){const t=Math.floor(c.time/120)*120;let g=groups.get(t);if(!g)groups.set(t,{time:t,parts:[]});groups.get(t).parts.push(c)}
+ return [...groups.values()].filter(g=>g.parts.length===2&&g.parts[0].time===g.time&&g.parts[1].time===g.time+60)
+  .map(g=>({time:g.time,open:g.parts[0].open,high:Math.max(g.parts[0].high,g.parts[1].high),low:Math.min(g.parts[0].low,g.parts[1].low),close:g.parts[1].close}));
 }
-function loadTwoDayTicks(symbol,done){
+function loadTwoDayCandles(symbol,done){
  const end=Math.floor(Date.now()/60000)*60,start=end-TEST_DAYS*DAY;
- reqState={symbol,done,data:[],end:"latest",pages:0,start,targetEnd:end,lastOldest:null};requestPage();
+ reqState={symbol,done,pages:0,start,targetEnd:end,req:0};requestPage();
 }
 function handleHistory(m){
  if(!reqState||m.req_id!==reqState.req)return;
  clearTimeout(timer);
- const st=reqState,part=parseTicks(m);
- if(!part.length){reqState=null;st.done([],"Deriv devolvió una página sin ticks históricos.");return}
- st.data=[...part,...st.data].sort((a,b)=>a.time-b.time);
- st.data=[...new Map(st.data.map(x=>[x.time,x])).values()];
- st.pages++;
- const oldest=st.data[0].time;
- if(oldest>st.start&&st.pages<MAX_HISTORY_PAGES&&st.lastOldest!==oldest){
-  st.lastOldest=oldest;st.end=Math.floor(oldest)-1;requestPage();return;
- }
- if(oldest>st.start&&st.pages>=MAX_HISTORY_PAGES){reqState=null;st.done([],"Se alcanzó el límite de "+MAX_HISTORY_PAGES+" páginas antes de completar los 2 días.");return}
- if(oldest>st.start&&st.lastOldest===oldest){reqState=null;st.done([],"La paginación de Deriv no avanzó hacia datos más antiguos.");return}
- const ticks=st.data.filter(x=>x.time>=st.start&&x.time<st.targetEnd);
- const m2=candlesFromTicks(ticks,120).filter(c=>c.time>=st.start&&c.time+120<=st.targetEnd);
- const m1=candlesFromTicks(ticks,60).filter(c=>c.time>=st.start&&c.time+60<=st.targetEnd);
- const coverage=ticks.length?(ticks[ticks.length-1].time-ticks[0].time)/DAY:0;
+ const st=reqState,m1raw=parseCandles(m);
+ if(!m1raw.length){reqState=null;st.done([], "Deriv no devolvió velas M1. Comprueba la respuesta histórica de Deriv.");return}
+ const m1=m1raw.filter(c=>c.time>=st.start&&c.time+60<=st.targetEnd);
+ const m2=buildM2FromM1(m1);
+ const coverage=m1.length?(m1[m1.length-1].time+60-m1[0].time)/DAY:0;
  reqState=null;
- st.done({m1,m2,tickCount:ticks.length,pages:st.pages,coverage,start:st.start,end:st.targetEnd});
+ st.done({m1,m2,candleCount:m1.length,pages:1,coverage,start:st.start,end:st.targetEnd});
 }
 function runInstrument(){
  if(!busy)return;
  if(idx>=symbols.length){finish("ANÁLISIS COMPLETADO · 2 DÍAS · M2 + M1");return}
  active=symbols[idx];
- $("live-detail").textContent="Descargando ticks para construir exactamente 2 días de velas M1 y 30 segundos: "+active.name;
+ $("live-detail").textContent="Descargando gráfico M1 para construir contexto M2 y entradas M1: "+active.name;
  status("DESCARGANDO · "+active.name);progress();
- loadTwoDayTicks(active.symbol,(series,error)=>{
+ loadTwoDayCandles(active.symbol,(series,error)=>{
   if(!busy)return;
   if(error){
    failedInstruments++;$("live-detail").textContent=active.name+": ERROR DE HISTORIAL · "+error;
   }else{
-   const {m1,m2,tickCount,pages,coverage}=series;
+   const {m1,m2,candleCount,pages,coverage}=series;
    if(coverage<1.98||m1.length<2800||m2.length<1400){
     failedInstruments++;$("live-detail").textContent=active.name+": datos insuficientes. Cobertura "+coverage.toFixed(2)+" días; M2 contexto "+m2.length+" velas; M1 entrada "+m1.length+" velas. No se publican resultados parciales.";
    }else{
@@ -193,14 +179,14 @@ function runInstrument(){
      updateTotals();
      $("live-count").textContent=results.length+" / "+(symbols.length*strategies.length)+" pruebas completadas";
     }
-    $("live-detail").textContent=active.name+": 2 días completos · "+m2.length+" velas M2 de contexto · "+m1.length+" velas M1 de entrada · "+tickCount.toLocaleString("es-PA")+" ticks descargados en "+pages+" páginas · 8 estrategias probadas.";
+    $("live-detail").textContent=active.name+": 2 días completos · "+m2.length+" velas M2 de contexto · "+m1.length+" velas M1 de entrada · "+candleCount.toLocaleString("es-PA")+" velas M1 recibidas en una solicitud · 8 estrategias probadas.";
    }
   }
   idx++;progress();render();runInstrument();
  });
 }
 function start(){
- if(busy)return;busy=true;idx=0;symbols=[];results=[];hist={};$("start").disabled=true;$("live-detail").textContent="Conectando con Deriv para descargar datos reales…";$("updated").textContent="Conectando…";$("strategy-list").innerHTML="";$("best-list").innerHTML="";$("worst-list").innerHTML="";$("market-list").innerHTML="";connection("CONECTANDO…",false);status("CONECTANDO CON DERIV");progress();
+ if(busy)return;busy=true;idx=0;symbols=[];results=[];hist={};validInstruments=0;failedInstruments=0;$("start").disabled=true;$("live-detail").textContent="Conectando con Deriv para descargar datos reales…";$("updated").textContent="Conectando…";$("strategy-list").innerHTML="";$("best-list").innerHTML="";$("worst-list").innerHTML="";$("market-list").innerHTML="";connection("CONECTANDO…",false);status("CONECTANDO CON DERIV");progress();
  try{socket=new WebSocket(WS)}catch(e){finish("NO SE PUDO ABRIR LA CONEXIÓN");return}
  connectTimer=setTimeout(()=>{if(busy&&socket?.readyState!==WebSocket.OPEN)finish("NO SE PUDO CONECTAR A DERIV EN 15 SEGUNDOS")},15000);
  overallTimer=setTimeout(()=>{if(busy)finish("TIEMPO MÁXIMO · "+validInstruments+" instrumentos analizados · "+failedInstruments+" con error")},2700000);
@@ -208,7 +194,7 @@ function start(){
  socket.onerror=()=>{if(busy)finish("ERROR DE RED: EL NAVEGADOR NO PUDO COMPLETAR EL WEBSOCKET DE DERIV")};
  socket.onclose=e=>{if(busy)finish("DERIV DESCONECTÓ · CÓDIGO "+e.code)};
  socket.onmessage=e=>{let m;try{m=JSON.parse(e.data)}catch(err){return}
-  if(m.error){const msg=m.error.message||"Error de API";if(m.req_id===1){finish("ERROR DE DERIV: "+msg);return}if(reqState&&m.req_id===reqState.req){const st=reqState;reqState=null;clearTimeout(timer);st.done([],"Deriv rechazó la descarga de ticks: "+msg)}return}
+  if(m.error){const msg=m.error.message||"Error de API";if(m.req_id===1){finish("ERROR DE DERIV: "+msg);return}if(reqState&&m.req_id===reqState.req){const st=reqState;reqState=null;clearTimeout(timer);st.done([],"Deriv rechazó la descarga de velas: "+msg)}return}
   if(m.msg_type==="active_symbols"||Array.isArray(m.active_symbols)){clearTimeout(symbolTimer);connection("DERIV API CONFIRMADA",true);const list=m.active_symbols||[];const found=list.map(s=>({symbol:s.underlying_symbol||s.symbol||"",name:s.underlying_symbol_name||s.display_name||s.symbol||""})).filter(s=>s.symbol&&/volatility/i.test(s.name)&&/1s/i.test(s.name));symbols=[...new Map(found.map(s=>[s.symbol,s])).values()].sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true})).slice(0,INSTRUMENT_LIMIT);$("updated").textContent="Deriv devolvió "+list.length+" símbolos · "+symbols.length+" índices 1s";if(!symbols.length){finish("DERIV NO DEVOLVIÓ ÍNDICES VOLATILITY 1s");return}$("live-detail").textContent="Índices encontrados: "+symbols.length+". Se analizarán "+strategies.length+" estrategias por instrumento.";runInstrument();return}
   if(reqState&&m.req_id===reqState.req){handleHistory(m);return}
  };
@@ -217,6 +203,6 @@ document.addEventListener("DOMContentLoaded",()=>{
  $("start").addEventListener("click",start);$("chart-market").addEventListener("change",drawChart);$("chart-strategy").addEventListener("change",drawChart);
  document.querySelectorAll(".tab").forEach(b=>b.addEventListener("click",()=>{document.querySelectorAll(".tab").forEach(x=>x.classList.toggle("active",x===b));document.querySelectorAll(".panel").forEach(p=>p.classList.toggle("active",p.id==="panel-"+b.dataset.tab));if(b.dataset.tab==="chart")drawChart()}));
  document.addEventListener("click",e=>{const b=e.target.closest(".inspect-result");if(b){$("chart-market").value=b.dataset.symbol;$("chart-strategy").value=b.dataset.strategy;document.querySelector('[data-tab="chart"]').click();drawChart()}});
- $("live-detail").textContent="Preparado para analizar M2 de contexto y entradas de 1 minuto.";start();
+ $("live-detail").textContent="Preparado: gráfico M1, contexto M2 y simulación de entradas en M1.";start();
 });
 })();
