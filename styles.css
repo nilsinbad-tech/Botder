@@ -62,3 +62,16 @@
 
 /* BOTDER v47: controles de filtro estructural de OB */
 .ob-settings{border-color:#287c70!important;background:#10251f!important}.ob-toggle{display:flex;align-items:center;gap:9px;color:#d8f4eb;font-size:11px;font-weight:800}.ob-toggle input{width:18px;height:18px;accent-color:#20d69a}.ob-tf-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;color:#c5d6e9;font-size:11px;font-weight:700}.ob-settings .pivot-tf-controls button{min-width:48px}.ob-settings .pivot-tf-controls button.active{background:#087653;border:2px solid #48e0ad;color:#fff}
+
+/* BOTDER v48: OB planos y niveles de operación por encima del gráfico */
+.chart-overlay{z-index:4!important}
+.chart-overlay .ob-zone{z-index:1!important;min-height:6px!important;height:6px!important;min-width:24px!important;padding:0!important;border-width:1px!important;border-radius:0!important;opacity:.48!important;box-shadow:none!important;background-image:none!important;overflow:visible!important}
+.chart-overlay .ob-zone b{position:absolute;left:0;top:-14px;padding:1px 3px;background:rgba(8,18,30,.82);font-size:8px!important;line-height:10px!important;letter-spacing:.1px!important;text-shadow:none!important;border-radius:2px}
+.chart-overlay .bull-zone{background:rgba(32,230,174,.22)!important;border-color:#20d69a!important;color:#a5ffe6!important}
+.chart-overlay .bear-zone{background:rgba(255,89,104,.22)!important;border-color:#ff5968!important;color:#ffd0d4!important}
+.chart-overlay .level-line{z-index:6!important;opacity:1!important;border-top-width:2px!important}
+.chart-overlay .level-tag{z-index:7!important;display:flex!important;align-items:center!important;gap:7px!important;min-width:128px!important;padding:4px 6px!important;background:#07111f!important;border:1px solid currentColor!important;box-shadow:0 2px 7px #000b!important;white-space:nowrap!important}
+.chart-overlay .level-copy{display:flex;flex-direction:column;gap:2px}
+.chart-overlay .level-copy b{font-size:8px!important;line-height:10px!important}
+.chart-overlay .level-copy small{font-size:7px!important;line-height:9px!important;color:#c5d6e9!important}
+.chart-overlay .level-tag strong{font-size:9px!important}
