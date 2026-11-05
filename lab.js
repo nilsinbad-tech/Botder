@@ -192,7 +192,7 @@ function handleHistory(m){
 }
 function processInstrument(m,series,error){
  if(!busy)return;
- active=m;idx++;
+ active=m;idx++;$("live-count").textContent=results.length+" / "+(symbols.length*strategies.length)+" pruebas · "+idx+"/"+symbols.length+" índices recibidos";
  if(error){
   failedInstruments++;$("live-detail").textContent=m.name+": ERROR · "+error;
  }else{
@@ -228,7 +228,7 @@ function runAllInstruments(){
   else pending.push(m);
  }
  const work=[...cached.map(x=>({m:x.m,c:x.c})),...pending.map(m=>({m}))];
- idx=0;
+ idx=0;$("live-detail").textContent="Preparando "+symbols.length+" índices: "+cached.length+" gráficos en caché y "+pending.length+" descargas M1 simultáneas. No se descargan ticks individuales.";
  for(const item of work){
   if(item.c){processInstrument(item.m,item.c,null);if(!busy)return}
   else loadTwoDayCandles(item.m.symbol,(series,error)=>processInstrument(item.m,series,error));
