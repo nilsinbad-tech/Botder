@@ -5,7 +5,7 @@ const HISTORY_CANDLES = 1440;
 const REQUEST_TIMEOUT_MS = 45000;
 const API_URL = 'wss://api.derivws.com/trading/v1/options/ws/public';
 const $ = id => document.getElementById(id);
-const state = { ws:null, req:0, pending:new Map(), symbols:[], selected:null, tf:1, candles:[], rawCandles:[], rawBySymbol:new Map(), marketBacktests:[], trades:[], liveSub:null, main:null, rsi:null, markerPlugin:null, overlayResizeObserver:null, overlayUpdate:null, overlayRangeHandler:null, pivotLines:[], tradePriceLines:[], overlayPriceLevels:[], pivotTfEnabled:{1:false,2:false,3:false,4:false,5:true,10:false}, obStructureOnly:true, obTf:2, pivotTf:5, chartKey:null, series:{}, busy:false, analyzeQueued:false, forceFitNext:true, lastRecalcBucket:null, pendingLiveTick:null, liveFrame:0, overlayFrame:0 };
+const state = { ws:null, req:0, pending:new Map(), symbols:[], selected:null, tf:1, candles:[], rawCandles:[], rawBySymbol:new Map(), marketBacktests:[], trades:[], liveSub:null, main:null, rsi:null, markerPlugin:null, overlayResizeObserver:null, overlayUpdate:null, overlayRangeHandler:null, pivotLines:[], tradePriceLines:[], overlayPriceLevels:[],levelOverrides:{}, pivotTfEnabled:{1:false,2:false,3:false,4:false,5:true,10:false}, obStructureOnly:true, obTf:2, pivotTf:5, chartKey:null, series:{}, busy:false, analyzeQueued:false, forceFitNext:true, lastRecalcBucket:null, pendingLiveTick:null, liveFrame:0, overlayFrame:0 };
 const CANDIDATES = [
  ['1HZ10V','Volatility 10 (1s)'],['1HZ15V','Volatility 15 (1s)'],['1HZ25V','Volatility 25 (1s)'],['1HZ30V','Volatility 30 (1s)'],['1HZ50V','Volatility 50 (1s)'],['1HZ75V','Volatility 75 (1s)'],['1HZ90V','Volatility 90 (1s)'],['1HZ100V','Volatility 100 (1s)'],['1HZ150V','Volatility 150 (1s)'],['1HZ250V','Volatility 250 (1s)'],
  ['R_10','Volatility 10'],['R_25','Volatility 25'],['R_50','Volatility 50'],['R_75','Volatility 75'],['R_100','Volatility 100'],
@@ -232,12 +232,14 @@ function drawOverlays(trades,c,host,obZones=[],setups=[]){
  });
  const t=[...trades].reverse().find(x=>x.result==='PENDIENTE')||[...setups].reverse()[0]||trades[trades.length-1];
  const lineEls=[];
+ const overrideKey=t?String(state.selected||'')+':'+String(t.time)+':'+t.side:null;
+ if(t&&overrideKey&&state.levelOverrides[overrideKey])Object.assign(t,state.levelOverrides[overrideKey]);
  state.overlayPriceLevels=t?[t.entry,t.sl,t.tp1,t.tp2].filter(Number.isFinite):[];
  if(t){
-  const levels=[{p:t.entry,label:'ENTRADA · OB',detail:t.side==='BUY'?'ZONA DE COMPRA':'ZONA DE VENTA',cls:'entry-line',priority:0},{p:t.sl,label:'STOP LOSS',detail:t.slPivot?(t.side==='BUY'?'PIVOTE SOPORTE':'PIVOTE RESISTENCIA'):'LÍMITE DEL OB',cls:'sl-line',priority:1},{p:t.tp1,label:'TP1 · OBJETIVO',detail:t.side==='BUY'?'RESISTENCIA M10':'PIVOTE M10',cls:'tp-line',priority:2}];
-  if(Math.abs(t.tp2-t.tp1)>1e-10)levels.push({p:t.tp2,label:'TP2 · OBJETIVO',detail:t.side==='BUY'?'RESISTENCIA M10':'PIVOTE M10',cls:'tp2-line',priority:3});
-  state.series.candle.setData(c); // Recalcula autoescalado para incluir entrada, SL y TP.
-  levels.forEach(v=>{const el=document.createElement('div');el.className='level-line '+v.cls;const tag=document.createElement('span');tag.className='level-tag';tag.innerHTML='<span class="level-copy"><b>'+v.label+'</b><small>'+v.detail+'</small></span><strong>'+fmt(v.p)+'</strong>';el.appendChild(tag);overlay.appendChild(el);lineEls.push({el,tag,...v});try{const color=v.cls==='entry-line'?'#f1c45b':v.cls==='sl-line'?'#ff5968':v.cls==='tp-line'?'#20d69a':'#46b6ff';state.tradePriceLines.push(state.series.candle.createPriceLine({price:v.p,color,lineWidth:2,axisLabelVisible:true,title:v.label+' · '+v.detail}));}catch(error){console.warn('No se pudo dibujar nivel de operación',error);}});
+  const levels=[{key:'entry',p:t.entry,label:t.side==='BUY'?'ENTRADA · ZONA COMPRA':'ENTRADA · ZONA VENTA',cls:'entry-line',priority:0},{key:'sl',p:t.sl,label:t.side==='BUY'?'STOP LOSS · PIVOTE SOPORTE':'STOP LOSS · PIVOTE RESISTENCIA',cls:'sl-line',priority:1},{key:'tp1',p:t.tp1,label:'TP1 · OBJETIVO',cls:'tp-line',priority:2}];
+  if(Math.abs(t.tp2-t.tp1)>1e-10)levels.push({key:'tp2',p:t.tp2,label:'TP2 · OBJETIVO',cls:'tp2-line',priority:3});
+  state.series.candle.setData(c);
+  levels.forEach(v=>{const el=document.createElement('div');el.className='level-line '+v.cls;el.setAttribute('role','slider');el.setAttribute('aria-label',v.label+'; arrastra para modificar');el.title='Arrastra para mover '+v.label;overlay.appendChild(el);lineEls.push({...v,el});});
  }
  const update=()=>{
   const width=host.clientWidth,scale=state.main.timeScale(),candleSeries=state.series.candle;
@@ -253,10 +255,15 @@ function drawOverlays(trades,c,host,obZones=[],setups=[]){
    el.style.display='flex';el.style.left=left+'px';el.style.width=Math.min(window.innerWidth<=600?126:150,Math.max(112,width-left-8))+'px';el.style.top=Math.max(0,mid-15)+'px';el.style.height='30px';
   });
   const xSignal=t?scale.timeToCoordinate(Number.isFinite(t.entryTime)?t.entryTime:t.time):null,xStart=Math.max(0,Math.min(width-8,xSignal==null?width*.35:xSignal)),positioned=[];
-  lineEls.forEach(v=>{const y=candleSeries.priceToCoordinate(v.p);if(y==null){v.el.style.display='none';return;}v.el.style.display='block';v.el.style.left=xStart+'px';v.el.style.width=Math.max(30,width-xStart-3)+'px';v.el.style.top=y+'px';positioned.push({tag:v.tag,y,priority:v.priority});});
-  positioned.sort((a,b)=>a.y-b.y);let previous=-Infinity;
-  positioned.forEach(item=>{const desired=Math.max(16,Math.min(host.clientHeight-16,item.y)),placed=Math.max(desired,previous+34);item.tag.style.top=Math.max(2,Math.min(host.clientHeight-34,placed-16))+'px';previous=placed;});
+  lineEls.forEach(v=>{const y=candleSeries.priceToCoordinate(v.p);if(y==null){v.el.style.display='none';return;}v.el.style.display='block';v.el.style.left=xStart+'px';v.el.style.width=Math.max(30,width-xStart-3)+'px';v.el.style.top=(y-8)+'px';});
  };
+ lineEls.forEach(v=>{
+  v.el.style.pointerEvents='auto';v.el.style.touchAction='none';v.el.style.cursor='ns-resize';
+  let dragging=false;
+  v.el.addEventListener('pointerdown',event=>{dragging=true;v.el.setPointerCapture?.(event.pointerId);event.preventDefault();});
+  v.el.addEventListener('pointermove',event=>{if(!dragging)return;const rect=host.getBoundingClientRect(),y=event.clientY-rect.top;const price=state.series.candle.coordinateToPrice(y);if(!Number.isFinite(price))return;v.p=price;t[v.key]=price;state.overlayPriceLevels=[t.entry,t.sl,t.tp1,t.tp2].filter(Number.isFinite);const oldLine=state.tradePriceLines[v.priority];if(oldLine){try{state.series.candle.removePriceLine(oldLine);}catch{}}const color=v.cls==='entry-line'?'#f1c45b':v.cls==='sl-line'?'#ff5968':v.cls==='tp-line'?'#20d69a':'#46b6ff';state.tradePriceLines[v.priority]=state.series.candle.createPriceLine({price,title:v.label+' '+fmt(price),color,lineWidth:2,axisLabelVisible:true});if(overrideKey)state.levelOverrides[overrideKey]={...(state.levelOverrides[overrideKey]||{}),[v.key]:price};update();});
+  const stop=()=>{dragging=false;};v.el.addEventListener('pointerup',stop);v.el.addEventListener('pointercancel',stop);
+ });
  state.overlayUpdate=update;
  if(!state.overlayRangeHandler){state.overlayRangeHandler=()=>{
   if(state.overlayFrame)return;
