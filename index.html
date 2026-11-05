@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#080d16"><title>BOTDER · Deriv Structural Lab</title>
+<link rel="stylesheet" href="styles.css?v=1">
+<script src="https://unpkg.com/lightweight-charts@5.0.8/dist/lightweight-charts.standalone.production.js"></script>
+</head>
+<body>
+<header class="topbar">
+  <div class="brand"><span class="brand-mark">B</span><div><b>BOTDER</b><small>DERIV STRUCTURAL LAB</small></div></div>
+  <div class="connection"><i id="connectionDot"></i><span id="connectionText">Conectando Deriv…</span></div>
+  <button id="refreshBtn" class="icon-btn" aria-label="Actualizar">↻</button>
+</header>
+<main class="app">
+  <section class="toolbar">
+    <label>Instrumento<select id="symbolSelect"><option>Buscando instrumentos…</option></select></label>
+    <div class="timeframes" id="timeframes">
+      <button data-tf="1" class="active">M1</button><button data-tf="2">M2</button><button data-tf="3">M3</button><button data-tf="4">M4</button><button data-tf="5">M5</button>
+    </div>
+    <span class="data-status" id="dataStatus">Preparando datos</span>
+  </section>
+
+  <section class="summary-grid">
+    <article><small>TENDENCIA</small><b id="trendValue">—</b></article>
+    <article><small>SEÑAL</small><b id="signalValue">ESPERANDO</b></article>
+    <article><small>ENTRADA</small><b id="entryValue">—</b></article>
+    <article><small>STOP LOSS</small><b id="slValue">—</b></article>
+    <article><small>TP1 · PIVOTE</small><b id="tp1Value">—</b></article>
+    <article><small>TP2 · ESTRUCTURA</small><b id="tp2Value">—</b></article>
+    <article><small>RSI (14)</small><b id="rsiValue">—</b><em id="rsiConfirm">Sin confirmación</em></article>
+  </section>
+
+  <section class="chart-card">
+    <div class="chart-head"><div><b id="chartTitle">Gráfico Deriv</b><small id="chartSubtitle">Velas reales · histórico de 24 horas</small></div><div class="legend"><span><i class="ema9"></i>EMA 9</span><span><i class="ema21"></i>EMA 21</span><span><i class="ema50"></i>EMA 50</span></div></div>
+    <div id="mainChart" class="main-chart"><div class="chart-placeholder">Esperando velas de Deriv…</div></div>
+    <div class="rsi-head"><b>RSI (14)</b><span id="rsiLegend">—</span></div>
+    <div id="rsiChart" class="rsi-chart"></div>
+    <div class="chart-foot"><span>Arrastra para moverte · pellizca o usa dos dedos para zoom</span><span id="chartRange">Últimas 24 horas</span></div>
+  </section>
+
+  <section class="lower-grid">
+    <article class="panel">
+      <div class="panel-title"><b>Backtesting · 24 horas</b><button id="runBacktest" class="text-btn">Recalcular</button></div>
+      <div class="stats-row"><div><small>GANADAS</small><b class="win" id="wins">0</b></div><div><small>PERDIDAS</small><b class="loss" id="losses">0</b></div><div><small>PENDIENTES</small><b id="pending">0</b></div><div><small>EXPIRADAS</small><b id="expired">0</b></div></div>
+      <p class="muted" id="backtestInfo">El análisis se ejecuta con las velas descargadas de Deriv.</p>
+    </article>
+    <article class="panel">
+      <div class="panel-title"><b>Estado de la señal</b><span class="live-pill" id="signalState">ESPERANDO</span></div>
+      <div class="signal-details" id="signalDetails">El motor buscará OB, tendencia, pivotes y confirmación RSI.</div>
+      <div class="tiny-legend"><span><i class="bull"></i>OB alcista</span><span><i class="bear"></i>OB bajista</span><span><i class="pivot"></i>Pivote / soporte</span></div>
+    </article>
+  </section>
+
+  <section class="panel history-panel">
+    <div class="panel-title"><b>Historial de operaciones</b><span id="historyCount">0 operaciones</span></div>
+    <div class="history-scroll"><table><thead><tr><th>Hora</th><th>Dirección</th><th>Entrada</th><th>SL</th><th>TP1</th><th>TP2</th><th>Resultado</th></tr></thead><tbody id="historyBody"><tr><td colspan="7" class="empty-cell">Esperando backtesting…</td></tr></tbody></table></div>
+  </section>
+  <section class="panel instruments-panel">
+    <div class="panel-title"><b>Universo Deriv</b><span id="instrumentCount">0 / 25 instrumentos</span></div>
+    <div id="instrumentList" class="instrument-list">Cargando catálogo de Deriv…</div>
+  </section>
+  <footer>BOTDER · Solo análisis y simulación. No envía órdenes ni garantiza resultados futuros.</footer>
+</main>
+<script src="app.js?v=1"></script>
+</body></html>
