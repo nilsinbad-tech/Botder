@@ -113,3 +113,9 @@
 
 /* Niveles de operación alineados al margen derecho del gráfico, separados del precio de escala. */
 .chart-overlay .price-label{left:auto!important;right:4px!important;justify-content:flex-end!important;z-index:20!important;}
+
+/* v66: zona visual de búsqueda de entrada dentro del OB */
+.entry-search-zone{position:absolute;pointer-events:none;box-sizing:border-box;border:1px dashed rgba(255,255,255,.78);z-index:4;background:rgba(255,255,255,.035);}
+.entry-search-zone.entry-buy{border-color:rgba(32,214,154,.9);background:rgba(32,214,154,.10);}
+.entry-search-zone.entry-sell{border-color:rgba(255,89,104,.9);background:rgba(255,89,104,.10);}
+.entry-search-zone b{position:absolute;left:5px;top:2px;font-size:8px;line-height:12px;padding:1px 4px;border-radius:3px;background:rgba(8,13,22,.88);color:#eaf0f8;white-space:nowrap;}
