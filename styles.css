@@ -14,3 +14,8 @@
 .level-tag strong{font-size:10px;color:#fff;font-variant-numeric:tabular-nums}
 .ob-zone{font-weight:800;text-shadow:0 1px 2px #000;min-width:70px}
 @media(max-width:600px){.main-chart{height:390px}.level-line .level-tag{right:3px;min-width:104px;padding:4px 5px;gap:5px;font-size:8px}.level-tag b{font-size:7px}.level-tag strong{font-size:9px}.ob-zone{font-size:9px}}
+
+/* OB: zona rectangular extendida, no marcador cuadrado */
+.ob-zone{min-height:18px!important;border-width:1.5px!important;border-style:solid!important;border-radius:3px;background-image:linear-gradient(90deg,#0b121e22,#0b121e08);padding:3px 7px!important;font-size:9px!important;line-height:1.2;overflow:hidden;white-space:nowrap}
+.bull-zone{background-color:#087c6538!important;box-shadow:inset 0 0 0 1px #20d69a22}
+.bear-zone{background-color:#a32d3b38!important;box-shadow:inset 0 0 0 1px #ff596822}
