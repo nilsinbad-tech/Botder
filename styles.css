@@ -135,3 +135,5 @@
 
 /* v78 · temporalidades de estructura ampliadas */
 #pivotTfControls{flex-wrap:wrap;gap:4px}#pivotTfControls button{min-width:35px;padding:5px 7px;font-size:11px}
+
+.chart-points-summary{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:7px 13px;background:#0e1928;border-top:1px solid #1d2b40;border-bottom:1px solid #1d2b40;font-size:10px;font-weight:800}.chart-points-summary span{display:flex;align-items:center;gap:5px;color:#aab8ca}.chart-points-summary span:first-child b{color:var(--green)}.chart-points-summary span:nth-child(2) b{color:var(--red)}.chart-points-summary small{margin-left:auto;color:var(--muted);font-size:9px;font-weight:500}@media(max-width:600px){.chart-points-summary{gap:9px;padding:7px 9px}.chart-points-summary small{width:100%;margin-left:0}}
