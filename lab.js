@@ -1,176 +1,168 @@
 (()=>{
 "use strict";
-const WS="wss://api.derivws.com/trading/v1/options/ws/public",N=10,DAY=86400,MIN=5,TARGET_DAYS=5,MIN_DAYS=2,TFS=[120,300],COUNT=5000;
-const raw=[["Triple EMA 8/21/55","Tendencia","Alineación triple + expansión + ADX"],["Parabolic SAR","Tendencia","Cambio de lado + EMA50 + ADX"],["ADX + DMI","Tendencia","Cruce DI + ADX20 + ruptura micro"],["RSI Reversal","Reversión","Salida de extremo RSI + vela + ruptura micro"],["DeMarker Reversal","Reversión","DeMarker 14 sale de <0.3/>0.7 y cruza 0.5 + vela"],["PPO Crossover","Momentum","PPO cruza señal + cero + expansión"],["Liquidity Sweep","Estructura","Barrido swing + recuperación + BOS"],["Doble Techo / Suelo","Price Action","Segundo test falla + neckline + RSI"]] .map((a,i)=>({id:[3,6,7,11,20,35,43,48][i],name:a[0],group:a[1],rules:a[2],number:i+1}));
-let socket=null,busy=false,req=10,symbols=[],results=[],marketHistory={},idx=0,active=null,activeTf=120,historyPage=false,pendingHistory=[],historyPageRows=0,wait=null,requestTimer=null,connectTimer=null,selectedTradeIndex=0,selectedStrategyId=null;
-const $=id=>document.getElementById(id),esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
-const f=(v,n=1)=>Number.isFinite(v)?v.toFixed(n):"—";
-function status(t){$("status").textContent=t;let n=$("live-status");if(n)n.textContent=t}function connection(t,ok){const n=$("connection-state");if(n){n.textContent=t;n.className=ok?"connected":"disconnected"}}
-function ema(a,p){let o=Array(a.length).fill(null);if(a.length<p)return o;let z=a.slice(0,p).reduce((x,y)=>x+y,0)/p,k=2/(p+1);o[p-1]=z;for(let i=p;i<a.length;i++){z=a[i]*k+z*(1-k);o[i]=z}return o}
-function sma(a,p){return a.map((_,i)=>i<p-1?null:a.slice(i-p+1,i+1).reduce((x,y)=>x+y,0)/p)}
-function rsi(a,p=14){let o=Array(a.length).fill(null),g=0,l=0;if(a.length<=p)return o;for(let i=1;i<=p;i++){let d=a[i]-a[i-1];g+=Math.max(d,0);l+=Math.max(-d,0)}g/=p;l/=p;o[p]=l?100-100/(1+g/l):100;for(let i=p+1;i<a.length;i++){let d=a[i]-a[i-1];g=(g*(p-1)+Math.max(d,0))/p;l=(l*(p-1)+Math.max(-d,0))/p;o[i]=l?100-100/(1+g/l):100}return o}
+const WS="wss://api.derivws.com/trading/v1/options/ws/public",DAY=86400,MAX_DAYS=5,MIN_DAYS=2,COUNT=5000;
+const strategies=[
+{id:1,name:"OB + EMA",group:"Tendencia",rules:"OB M1 + EMA 9/21 alineadas; confirmación de ruptura en 30s",ob:true},
+{id:2,name:"Liquidity Sweep",group:"Liquidez",rules:"Barrida de swing M1 + recuperación; confirmación en 30s"},
+{id:3,name:"Tres toques",group:"Price Action",rules:"Tres pruebas de zona M1 + rechazo; ruptura de vela en 30s"},
+{id:4,name:"BOS + Retest",group:"Estructura",rules:"Ruptura de estructura M1 + retesteo; confirmación en 30s"},
+{id:5,name:"EMA Pullback",group:"Tendencia",rules:"EMA 9/21/50 M1 alineadas + retroceso y continuación en 30s"},
+{id:6,name:"RSI Reversal",group:"Reversión",rules:"RSI M1 sale de extremo + giro confirmado en 30s"},
+{id:7,name:"FVG + Reacción",group:"Desequilibrio",rules:"Regreso a FVG M1 + rechazo confirmado en 30s"},
+{id:8,name:"Doble techo / suelo",group:"Price Action",rules:"Segundo test M1 + ruptura de neckline en 30s"},
+{id:9,name:"Momentum",group:"Impulso",rules:"Vela de impulso M1 + continuación en 30s"},
+{id:10,name:"OB + Liquidity Sweep",group:"Confluencia",rules:"Barrida de liquidez dentro de OB M1 + confirmación en 30s",ob:true},
+{id:11,name:"EMA 9/25 + EMA 50 + OB + RSI",group:"Estrategia personalizada",rules:"Cruce EMA 9/25 M1 hacia la dirección de EMA 50 + OB + vela fuerte + RSI; entrada en 30s",ob:true}
+];
+let socket=null,busy=false,req=1,reqState=null,symbols=[],results=[],hist={},idx=0,active=null,queue=[],timer=null,connectTimer=null;
+const $=id=>document.getElementById(id),esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const fmt=(v,n=5)=>Number.isFinite(v)?v.toFixed(n):"—";
+function status(s){$("status").textContent=s;$("live-status").textContent=s}
+function connection(s,ok){$("connection-state").textContent=s;$("connection-state").className=ok?"connected":"disconnected"}
+function ema(a,p){let o=Array(a.length).fill(null);if(a.length<p)return o;let v=a.slice(0,p).reduce((x,y)=>x+y,0)/p,k=2/(p+1);o[p-1]=v;for(let i=p;i<a.length;i++){v=a[i]*k+a[i-1]*0+v*(1-k);o[i]=v}return o}
+function rsi(c,p=14){let o=Array(c.length).fill(null),g=0,l=0;if(c.length<=p)return o;for(let i=1;i<=p;i++){let d=c[i]-c[i-1];g+=Math.max(d,0);l+=Math.max(-d,0)}g/=p;l/=p;o[p]=l?100-100/(1+g/l):100;for(let i=p+1;i<c.length;i++){let d=c[i]-c[i-1];g=(g*(p-1)+Math.max(d,0))/p;l=(l*(p-1)+Math.max(-d,0))/p;o[i]=l?100-100/(1+g/l):100}return o}
 function atr(d,p=14){let tr=d.map((c,i)=>i?Math.max(c.high-c.low,Math.abs(c.high-d[i-1].close),Math.abs(c.low-d[i-1].close)):c.high-c.low),o=Array(d.length).fill(null);if(d.length<p)return o;let v=tr.slice(0,p).reduce((a,b)=>a+b,0)/p;o[p-1]=v;for(let i=p;i<d.length;i++){v=(v*(p-1)+tr[i])/p;o[i]=v}return o}
-function emaValid(a,p){let first=a.findIndex(Number.isFinite),o=Array(a.length).fill(null);if(first<0)return o;let z=ema(a.slice(first),p);for(let i=0;i<z.length;i++)o[first+i]=z[i];return o}
-function adx(d,p=14){let plus=Array(d.length).fill(null),minus=plus.slice(),dx=plus.slice(),out=plus.slice(),tr=0,u=0,v=0,seed=[];for(let i=1;i<d.length;i++){let up=d[i].high-d[i-1].high,dn=d[i-1].low-d[i].low,t=Math.max(d[i].high-d[i].low,Math.abs(d[i].high-d[i-1].close),Math.abs(d[i].low-d[i-1].close));if(i<=p){tr+=t;u+=up>dn&&up>0?up:0;v+=dn>up&&dn>0?dn:0}else{tr=tr-tr/p+t;u=u-u/p+(up>dn&&up>0?up:0);v=v-v/p+(dn>up&&dn>0?dn:0)}if(i>=p){plus[i]=100*u/(tr||1);minus[i]=100*v/(tr||1);dx[i]=100*Math.abs(plus[i]-minus[i])/(plus[i]+minus[i]||1);if(seed.length<p){seed.push(dx[i]);if(seed.length===p)out[i]=seed.reduce((a,b)=>a+b,0)/p}else out[i]=(out[i-1]*(p-1)+dx[i])/p}}return{v:out,p:plus,m:minus}}
-function macd(c){let a=ema(c,12),b=ema(c,26),line=c.map((_,i)=>a[i]!=null&&b[i]!=null?a[i]-b[i]:null),sig=emaValid(line,9);return{line,sig,h:line.map((x,i)=>x==null||sig[i]==null?null:x-sig[i])}}
-function hi(d,i,n,k="high"){let a=d.slice(Math.max(0,i-n),i).map(x=>x[k]);return a.length?Math.max(...a):null}
-function lo(d,i,n,k="low"){let a=d.slice(Math.max(0,i-n),i).map(x=>x[k]);return a.length?Math.min(...a):null}
-function bands(c,i,p=20,m=2){if(i<p-1)return null;let a=c.slice(i-p+1,i+1),v=a.reduce((x,y)=>x+y,0)/p,s=Math.sqrt(a.reduce((x,y)=>x+(y-v)**2,0)/p);return{mid:v,up:v+m*s,low:v-m*s,w:2*s}}
-function wma(a,p){let o=Array(a.length).fill(null),den=p*(p+1)/2;for(let i=p-1;i<a.length;i++){let s=0;for(let j=0;j<p;j++)s+=a[i-p+1+j]*(j+1);o[i]=s/den}return o}
-function smma(a,p){let o=Array(a.length).fill(null);if(a.length<p)return o;let z=a.slice(0,p).reduce((u,v)=>u+v,0)/p;o[p-1]=z;for(let i=p;i<a.length;i++){z=(z*(p-1)+a[i])/p;o[i]=z}return o}
-function crossUp(a,b,i){return a[i]!=null&&b[i]!=null&&a[i-1]!=null&&b[i-1]!=null&&a[i]>b[i]&&a[i-1]<=b[i-1]}
-function crossDn(a,b,i){return a[i]!=null&&b[i]!=null&&a[i-1]!=null&&b[i-1]!=null&&a[i]<b[i]&&a[i-1]>=b[i-1]}
-function pivots(d,left=2,right=2){let highs=Array(d.length).fill(null),lows=Array(d.length).fill(null);for(let i=left+right;i<d.length;i++){let k=i-right,h=true,l=true;for(let j=k-left;j<=k+right;j++){if(j===k)continue;if(d[j].high>=d[k].high)h=false;if(d[j].low<=d[k].low)l=false}if(h)highs[i]=d[k].high;if(l)lows[i]=d[k].low}return{highs,lows}}
-function calc(d){
- const c=d.map(z=>z.close),hl2=d.map(z=>(z.high+z.low)/2),tp=d.map(z=>(z.high+z.low+z.close)/3),e5=ema(c,5),e8=ema(c,8),e9=ema(c,9),e20=ema(c,20),e21=ema(c,21),e50=ema(c,50),e55=ema(c,55),s10=sma(c,10),s30=sma(c,30),r=rsi(c,14),r2=rsi(c,2),a=atr(d,14),ad=adx(d,14),m=macd(c);
- const k=Array(c.length).fill(null),kd=k.slice(),cci=k.slice(),wpr=k.slice(),ao=k.slice(),roc=k.slice(),dem=k.slice(),rvi=k.slice(),rvSig=k.slice(),tsi=k.slice(),tsiSig=k.slice(),ppo=k.slice(),ppoSig=k.slice(),trix=k.slice(),trixSig=k.slice(),zscore=k.slice(),stochRsi=k.slice();const ema12=ema(c,12),ema26=ema(c,26),ao5=sma(hl2,5),ao34=sma(hl2,34),sm13=smma(hl2,13),sm8=smma(hl2,8),sm5=smma(hl2,5),mom=c.map((v,i)=>i?v-c[i-1]:0),absMom=mom.map(Math.abs),tsiNum=ema(ema(mom,25),13),tsiDen=ema(ema(absMom,25),13),ema15=ema(c,15),ema15b=ema(ema15.map(v=>v??0),15),ema15c=ema(ema15b.map(v=>v??0),15);
- const demUp=Array(c.length).fill(0),demDn=demUp.slice();
- for(let i=0;i<c.length;i++){
-  if(i>=13){let h=hi(d,i+1,14),l=lo(d,i+1,14);k[i]=100*(c[i]-l)/(h-l||1)}
-  if(i>=2){let z=k.slice(Math.max(0,i-2),i+1).filter(Number.isFinite);if(z.length===3)kd[i]=z.reduce((u,v)=>u+v,0)/3}
-  if(i>=19){let z=tp.slice(i-19,i+1),av=z.reduce((u,v)=>u+v,0)/20,md=z.reduce((u,v)=>u+Math.abs(v-av),0)/20;cci[i]=(tp[i]-av)/(.015*(md||1e-10))}
-  if(i>=13){let h=hi(d,i+1,14),l=lo(d,i+1,14);wpr[i]=-100*(h-c[i])/(h-l||1)}
-  if(i>=9)roc[i]=100*(c[i]/c[i-9]-1);
-  if(i>=33)ao[i]=ao5[i]-ao34[i];
-  if(i>=13){for(let j=i-13;j<=i;j++){if(j===0)continue;demUp[i]+=Math.max(d[j].high-d[j-1].high,0);demDn[i]+=Math.max(d[j-1].low-d[j].low,0)}dem[i]=demUp[i]/(demUp[i]+demDn[i]||1)}
-  if(i>=9){let up=0,dn=0;for(let j=i-9;j<=i;j++){let z=c[j]-c[j-1];up+=Math.max(z,0);dn+=Math.max(-z,0)}rvi[i]=(c[i]-c[i-1]+2*(c[i-1]-c[i-2])+2*(c[i-2]-c[i-3])+(c[i-3]-c[i-4]))/6}
-  if(i>=25)tsi[i]=100*tsiNum[i]/(tsiDen[i]||1)
-  if(i>=25)ppo[i]=100*(ema12[i]-ema26[i])/(ema26[i]||1)
-  if(i>=3)trix[i]=100*(ema15c[i]-ema15c[i-1])/(ema15c[i-1]||1)
-  if(i>=29){let av=c.slice(i-29,i+1).reduce((u,v)=>u+v,0)/30,sd=Math.sqrt(c.slice(i-29,i+1).reduce((u,v)=>u+(v-av)**2,0)/30);zscore[i]=(c[i]-av)/(sd||1)}
-  if(i>=13){let vals=r.slice(i-13,i+1).filter(Number.isFinite);if(vals.length===14){let mn=Math.min(...vals),mx=Math.max(...vals);stochRsi[i]=100*(r[i]-mn)/(mx-mn||1)}}
- }
- const rviNumerator=Array(c.length).fill(null),rviDenominator=Array(c.length).fill(null);
- for(let i=3;i<c.length;i++){let n=0,v=0;for(let j=i-3;j<=i;j++){n+=(d[j].close-d[j].open);v+=(d[j].high-d[j].low)}rviNumerator[i]=n/4;rviDenominator[i]=v/4}
- for(let i=0;i<c.length;i++)if(i>=6){let ns=rviNumerator.slice(i-3,i+1).filter(Number.isFinite),ds=rviDenominator.slice(i-3,i+1).filter(Number.isFinite);if(ns.length===4&&ds.length===4)rvi[i]=ns.reduce((u,v)=>u+v,0)/(ds.reduce((u,v)=>u+v,0)||1)}
- const hmaCalc=p=>{let half=wma(c,Math.max(1,Math.floor(p/2))),full=wma(c,p),diff=c.map((_,i)=>half[i]!=null&&full[i]!=null?2*half[i]-full[i]:null);return wma(diff,Math.max(1,Math.floor(Math.sqrt(p))))};
- const hma16=hmaCalc(16),hma32=hmaCalc(32);
- const ha=Array(c.length);for(let i=0;i<c.length;i++){let close=(d[i].open+d[i].high+d[i].low+d[i].close)/4,open=i?(ha[i-1].open+ha[i-1].close)/2:(d[i].open+d[i].close)/2;ha[i]={open,close,high:Math.max(d[i].high,open,close),low:Math.min(d[i].low,open,close)}}
- const tenkan=Array(c.length).fill(null),kijun=tenkan.slice(),spanA=tenkan.slice(),spanB=tenkan.slice(),sar=tenkan.slice(),sarDir=tenkan.slice(),jaw=tenkan.slice(),teeth=tenkan.slice(),lips=tenkan.slice(),supertrend=tenkan.slice(),superDir=tenkan.slice();
- for(let i=0;i<c.length;i++){
-  if(i>=8)tenkan[i]=(hi(d,i+1,9)+lo(d,i+1,9))/2;
-  if(i>=25)kijun[i]=(hi(d,i+1,26)+lo(d,i+1,26))/2;
-  if(tenkan[i]!=null&&kijun[i]!=null)spanA[i]=(tenkan[i]+kijun[i])/2;
-  if(i>=51)spanB[i]=(hi(d,i+1,52)+lo(d,i+1,52))/2;
-  if(i>=13){jaw[i]=sm13[i];teeth[i]=sm8[i];lips[i]=sm5[i]}
- }
- let af=.02,maxAf=.2,ep=d[0]?.high||0,dir=1,sv=d[0]?.low||0;
- for(let i=1;i<c.length;i++){if(i===1){dir=d[i].close>=d[i-1].close?1:-1;sv=dir>0?d[i-1].low:d[i-1].high;ep=dir>0?d[i].high:d[i].low}let next=sv+af*(ep-sv);if(dir>0){next=Math.min(next,d[i-1].low,i>1?d[i-2].low:d[i-1].low);if(d[i].low<next){dir=-1;next=ep;ep=d[i].low;af=.02}else if(d[i].high>ep){ep=d[i].high;af=Math.min(maxAf,af+.02)}}else{next=Math.max(next,d[i-1].high,i>1?d[i-2].high:d[i-1].high);if(d[i].high>next){dir=1;next=ep;ep=d[i].high;af=.02}else if(d[i].low<ep){ep=d[i].low;af=Math.min(maxAf,af+.02)}}sar[i]=next;sarDir[i]=dir}
- let ub=Array(c.length).fill(null),lb=ub.slice();for(let i=0;i<c.length;i++){let mid=hl2[i],av=a[i]||0;ub[i]=mid+3*av;lb[i]=mid-3*av;if(i===0){supertrend[i]=ub[i];superDir[i]=-1;continue}ub[i]=ub[i]<ub[i-1]||d[i-1].close>ub[i-1]?ub[i]:ub[i-1];lb[i]=lb[i]>lb[i-1]||d[i-1].close<lb[i-1]?lb[i]:lb[i-1];if(superDir[i-1]<0){superDir[i]=c[i]>ub[i]?1:-1}else superDir[i]=c[i]<lb[i]?-1:1;supertrend[i]=superDir[i]>0?lb[i]:ub[i]}
- const ps=pivots(d,2,2);
- const atrRatio=Array(c.length).fill(null);for(let i=20;i<c.length;i++){let v=a.slice(i-19,i+1).filter(Number.isFinite);if(v.length===20)atrRatio[i]=a[i]/(v.reduce((u,z)=>u+z,0)/20||1)}
- const ppoSig2=emaValid(ppo,9),tsiSig2=emaValid(tsi,7),trixSig2=emaValid(trix,9),rvSig2=sma(rvi,4);return{c,hl2,tp,e5,e8,e9,e20,e21,e50,e55,s10,s30,r,r2,a,ad,m,k,kd,cci,wpr,ao,roc,dem,rvi,rvSig:rvSig2,tsi,tsiSig:tsiSig2,ppo,ppoSig:ppoSig2,trix,trixSig:trixSig2,zscore,stochRsi,hma16,hma32,ha,tenkan,kijun,spanA,spanB,sar,sarDir,jaw,teeth,lips,supertrend,superDir,ps,atrRatio};
+function max(a){return a.length?Math.max(...a):null}function min(a){return a.length?Math.min(...a):null}
+function features(d){const c=d.map(x=>x.close),e9=ema(c,9),e21=ema(c,21),e25=ema(c,25),e50=ema(c,50),r=rsi(c),a=atr(d),body=d.map(x=>Math.abs(x.close-x.open)),avg=body.map((_,i)=>i<10?null:body.slice(i-10,i).reduce((s,v)=>s+v,0)/10),ob=Array(d.length).fill(null),sweep=Array(d.length).fill(0),fvg=Array(d.length).fill(null),swingH=Array(d.length).fill(null),swingL=Array(d.length).fill(null),bos=Array(d.length).fill(0),touch=Array(d.length).fill(0),double=Array(d.length).fill(0);
+let lastHigh=null,lastLow=null;
+for(let i=3;i<d.length;i++){
+ const z=d[i],p=d[i-1],q=d[i-2],hi=max(d.slice(Math.max(0,i-12),i).map(x=>x.high)),lo=min(d.slice(Math.max(0,i-12),i).map(x=>x.low));
+ swingH[i]=hi;swingL[i]=lo;
+ if(z.low<lo&&z.close>lo)sweep[i]=1;else if(z.high>hi&&z.close<hi)sweep[i]=-1;
+ if(z.close>hi)bos[i]=1;else if(z.close<lo)bos[i]=-1;
+ if(z.low>q.high)fvg[i]={dir:1,low:q.high,high:z.low};else if(z.high<q.low)fvg[i]={dir:-1,low:z.high,high:q.low};
+ const strong=avg[i]!=null&&body[i]>avg[i]*1.35;
+ if(strong&&z.close>z.open&&z.close>p.high){let j=i-1;while(j>Math.max(0,i-5)&&d[j].close>=d[j].open)j--;if(d[j].close<d[j].open)ob[i]={dir:1,low:d[j].low,high:d[j].open,at:j}}
+ if(strong&&z.close<z.open&&z.close<p.low){let j=i-1;while(j>Math.max(0,i-5)&&d[j].close<=d[j].open)j--;if(d[j].close>d[j].open)ob[i]={dir:-1,low:d[j].open,high:d[j].high,at:j}}
+ if(lastHigh&&Math.abs(lastHigh.v-hi)<(a[i]||0)*.25)double[i]=-1;
+ if(lastLow&&Math.abs(lastLow.v-lo)<(a[i]||0)*.25)double[i]=1;
+ if(i>5){let near=d.slice(i-5,i).filter(x=>Math.abs(x.high-hi)<(a[i]||0)*.18||Math.abs(x.low-lo)<(a[i]||0)*.18);touch[i]=near.length>=2?1:0}
+ if(hi!=null)lastHigh={v:hi,i};if(lo!=null)lastLow={v:lo,i};
 }
-function signal(id,i,d,x){
- if(i<60||!d[i-1]||!d[i-2])return 0;
- const c=d[i],p=d[i-1],q=d[i-2],up=c.close>c.open,dn=c.close<c.open,r=x.r[i],ad=x.ad.v[i],a=x.a[i]||0;
- const ph=hi(d,i,3),pl=lo(d,i,3),h20=hi(d,i,20),l20=lo(d,i,20),m=x.m;
- const bull=(cond)=>cond?1:0,bear=(cond)=>cond?-1:0;
- const confirmedHigh=(arr,i)=>{for(let j=i;j>=0;j--)if(arr[j]!=null)return arr[j];return null};
- const lastH=confirmedHigh(x.ps.highs,i-1),lastL=confirmedHigh(x.ps.lows,i-1);
- const crossedUp=(v)=>v[i]!=null&&v[i-1]!=null&&v[i-2]!=null&&v[i]>v[i-1]&&v[i-1]<=v[i-2];
- const crossedDn=(v)=>v[i]!=null&&v[i-1]!=null&&v[i-2]!=null&&v[i]<v[i-1]&&v[i-1]>=v[i-2];
- const bb=bands(x.c,i,20,2),bbPrev=bands(x.c,i-1,20,2);
- const kcMid=x.e20[i],kcUp=kcMid+1.5*a,kcDn=kcMid-1.5*a;
+return{e9,e21,e25,e50,r,a,avg,body,ob,sweep,fvg,swingH,swingL,bos,touch,double}}
+function latestOB(f,i,dir){for(let j=i;j>=Math.max(0,i-12);j--)if(f.ob[j]&&f.ob[j].dir===dir)return f.ob[j];return null}
+function contextSignal(id,i,d,f){
+ if(i<55||!d[i])return 0;
+ const z=d[i],p=d[i-1],q=d[i-2],r=f.r[i],prev=f.r[i-1],atr=f.a[i]||0,ob=latestOB(f,i,1),bear=latestOB(f,i,-1);
+ const bull= z.close>z.open && f.body[i]>(f.avg[i]||0)*.75;
+ const bearC=z.close<z.open && f.body[i]>(f.avg[i]||0)*.75;
+ const up=f.e9[i]>f.e21[i]&&f.e21[i]>f.e50[i],dn=f.e9[i]<f.e21[i]&&f.e21[i]<f.e50[i];
  switch(id){
- case 3: if(x.e8[i]>x.e21[i]&&x.e21[i]>x.e55[i]&&x.e8[i-1]<=x.e21[i-1]&&x.e8[i]-x.e21[i]>x.e8[i-1]-x.e21[i-1]&&ad>20)return 1;if(x.e8[i]<x.e21[i]&&x.e21[i]<x.e55[i]&&x.e8[i-1]>=x.e21[i-1]&&x.e8[i]-x.e21[i]<x.e8[i-1]-x.e21[i-1]&&ad>20)return -1;break;
- case 6: if(x.sarDir[i]===1&&x.sarDir[i-1]===-1&&c.close>x.e50[i]&&ad>18)return 1;if(x.sarDir[i]===-1&&x.sarDir[i-1]===1&&c.close<x.e50[i]&&ad>18)return -1;break;
- case 7: if(x.ad.p[i]>x.ad.m[i]&&x.ad.p[i-1]<=x.ad.m[i-1]&&ad>20&&c.close>ph)return 1;if(x.ad.m[i]>x.ad.p[i]&&x.ad.m[i-1]<=x.ad.p[i-1]&&ad>20&&c.close<pl)return -1;break;
- case 11: if(x.r[i-1]<30&&r>=30&&up&&c.close>ph)return 1;if(x.r[i-1]>70&&r<=70&&dn&&c.close<pl)return -1;break;
- case 20: if(x.dem[i-1]<.3&&x.dem[i]>=.5&&up&&c.close>p.high)return 1;if(x.dem[i-1]>.7&&x.dem[i]<=.5&&dn&&c.close<p.low)return -1;break;
- case 35: if(crossUp(x.ppo,x.ppoSig,i)&&x.ppo[i]>0&&x.ppo[i]>x.ppo[i-1])return 1;if(crossDn(x.ppo,x.ppoSig,i)&&x.ppo[i]<0&&x.ppo[i]<x.ppo[i-1])return -1;break;
- case 43:{let low=lo(d,i,12),high=hi(d,i,12);if(c.low<low&&c.close>low&&c.close>p.high&&up)return 1;if(c.high>high&&c.close<high&&c.close<p.low&&dn)return -1;break}
- case 48:{let hs=[],ls=[];for(let j=Math.max(0,i-80);j<i;j++){if(x.ps.highs[j]!=null)hs.push({v:x.ps.highs[j],i:j});if(x.ps.lows[j]!=null)ls.push({v:x.ps.lows[j],i:j})}if(hs.length>=2){let a1=hs[hs.length-2],a2=hs[hs.length-1],neck=ls.filter(z=>z.i>a1.i&&z.i<a2.i).slice(-1)[0];if(neck&&Math.abs(a1.v-a2.v)<a*.4&&a2.v<=a1.v+a*.2&&p.close>=neck.v&&c.close<neck.v&&r<48)return -1}if(ls.length>=2){let a1=ls[ls.length-2],a2=ls[ls.length-1],neck=hs.filter(z=>z.i>a1.i&&z.i<a2.i).slice(-1)[0];if(neck&&Math.abs(a1.v-a2.v)<a*.4&&a2.v>=a1.v-a*.2&&p.close<=neck.v&&c.close>neck.v&&r>52)return 1}break}
- default:break;
- }
+ case 1: if(up&&ob&&z.close>=ob.low&&z.close<=ob.high)return 1;if(dn&&bear&&z.close<=bear.high&&z.close>=bear.low)return -1;break;
+ case 2: if(f.sweep[i]===1)return 1;if(f.sweep[i]===-1)return -1;break;
+ case 3: if(f.touch[i]&&z.close>z.open&&z.close>p.high)return 1;if(f.touch[i]&&z.close<z.open&&z.close<p.low)return -1;break;
+ case 4: if(f.bos[i]===1&&p.low<=f.e9[i]&&z.close>f.e9[i])return 1;if(f.bos[i]===-1&&p.high>=f.e9[i]&&z.close<f.e9[i])return -1;break;
+ case 5: if(up&&z.low<=f.e21[i]&&z.close>f.e9[i]&&bull)return 1;if(dn&&z.high>=f.e21[i]&&z.close<f.e9[i]&&bearC)return -1;break;
+ case 6: if(prev<30&&r>=30&&bull)return 1;if(prev>70&&r<=70&&bearC)return -1;break;
+ case 7: {let g=f.fvg.slice(Math.max(0,i-8),i+1).filter(Boolean).slice(-1)[0];if(g&&g.dir===1&&z.low<=g.high&&z.close>g.high)return 1;if(g&&g.dir===-1&&z.high>=g.low&&z.close<g.low)return -1;break}
+ case 8: if(f.double[i]===1&&z.close>p.high)return 1;if(f.double[i]===-1&&z.close<p.low)return -1;break;
+ case 9: if(bull&&f.body[i]>(f.avg[i]||0)*1.6&&z.close>p.high)return 1;if(bearC&&f.body[i]>(f.avg[i]||0)*1.6&&z.close<p.low)return -1;break;
+ case 10: if(f.sweep[i]===1&&ob&&z.low<=ob.high&&z.close>ob.high)return 1;if(f.sweep[i]===-1&&bear&&z.high>=bear.low&&z.close<bear.low)return -1;break;
+ case 11:{
+  const crossUp=f.e9[i]>f.e25[i]&&f.e9[i-1]<=f.e25[i-1],crossDn=f.e9[i]<f.e25[i]&&f.e9[i-1]>=f.e25[i-1];
+  const towardUp=f.e9[i]>f.e9[i-1]&&f.e25[i]>f.e25[i-1]&&z.close>f.e50[i],towardDn=f.e9[i]<f.e9[i-1]&&f.e25[i]<f.e25[i-1]&&z.close<f.e50[i];
+  const strong=f.avg[i]!=null&&f.body[i]>=f.avg[i]*1.35;
+  if(crossUp&&towardUp&&ob&&r>=50&&r<=60&&r>prev&&bull&&strong)return 1;
+  if(crossDn&&towardDn&&bear&&r<=55&&r>=40&&r<prev&&bearC&&strong)return -1;
+  break;
+ }}
  return 0;
 }
-function backtest(d,s,g){
- const coverageDays=(d[d.length-1].time-d[0].time)/DAY,usedDays=Math.min(TARGET_DAYS,coverageDays),cutoff=d[d.length-1].time-usedDays*DAY;let x=calc(d),start=Math.max(100,d.findIndex(z=>z.time>=cutoff)),trades=[],entries=[],next=start;
- for(let i=start;i<d.length-1;i++){
-  if(i<next)continue;
-  let dir=signal(s.id,i,d,x);if(!dir)continue;
-  let entry=d[i+1].open,look=d.slice(Math.max(0,i-10),i+1),pad=(x.a[i]||0)*.12;
-  let sl=dir>0?Math.min(...look.map(z=>z.low))-pad:Math.max(...look.map(z=>z.high))+pad,risk=Math.abs(entry-sl);
-  if(!Number.isFinite(risk)||risk<=0)continue;
-  let tp=entry+dir*risk*1.5,result="ABIERTA",exitIndex=-1,exitPrice=null;
-  for(let j=i+1;j<d.length;j++){
-   let z=d[j],stop=dir>0?z.low<=sl:z.high>=sl,target=dir>0?z.high>=tp:z.low<=tp;
-   if(stop){result="PERDIDA";exitIndex=j;exitPrice=sl;break}
-   if(target){result="GANADA";exitIndex=j;exitPrice=tp;break}
-  }
-  let trade={result,signalIndex:i,entryIndex:i+1,exitIndex,signalTime:d[i].time,entryTime:d[i+1].time,exitTime:exitIndex>=0?d[exitIndex].time:null,direction:dir>0?"BUY":"SELL",signalPrice:d[i].close,entry,sl,tp,exitPrice,risk,ruleText:s.rules};
-  entries.push(trade);
-  if(exitIndex>=0){trades.push(trade);next=exitIndex+1}else{next=d.length}
+function entryConfirm(dir,d30,i){const c=d30[i],p=d30[i-1];if(!c||!p)return false;const body=Math.abs(c.close-c.open),range=c.high-c.low||1,solid=body/range>=.45;if(dir>0)return c.close>c.open&&c.close>p.high&&solid;return c.close<c.open&&c.close<p.low&&solid}
+function buildTrades(m1,m30,strat){
+ const f=features(m1),a30=atr(m30),trades=[],entries=[],m1Index=Array(m30.length).fill(-1);let k=0;
+ for(let i=0;i<m30.length;i++){while(k+1<m1.length&&m1[k+1].time+60<=m30[i].time)k++;m1Index[i]=k}
+ let next=60;
+ for(let i=60;i<m30.length-1;i++){
+  if(i<next)continue;const mi=m1Index[i];if(mi<55)continue;const dir=contextSignal(strat.id,mi,m1,f);if(!dir||!entryConfirm(dir,m30,i))continue;
+  const entry=m30[i+1].open,zone=latestOB(f,mi,dir),pad=(a30[i]||Math.abs(entry)*.0002)*.12;
+  const look=m1.slice(Math.max(0,mi-8),mi+1),swing=dir>0?min(look.map(x=>x.low)):max(look.map(x=>x.high));
+  let sl=zone?(dir>0?zone.low-pad:zone.high+pad):(dir>0?swing-pad:swing+pad);
+  let risk=Math.abs(entry-sl);if(!Number.isFinite(risk)||risk<=0||risk>Math.max(a30[i]||0,Math.abs(entry)*.00001)*4)continue;
+  const targetR=1.25;let tp=entry+dir*risk*targetR,tp2=entry+dir*risk*2;
+  const liquidity=dir>0?max(m1.slice(Math.max(0,mi-15),mi+1).map(x=>x.high).filter(v=>v>entry)):min(m1.slice(Math.max(0,mi-15),mi+1).map(x=>x.low).filter(v=>v<entry));
+  if(liquidity!=null&&Math.abs(liquidity-entry)>=risk*.75&&Math.abs(liquidity-entry)<Math.abs(tp-entry))tp=liquidity;
+  let result="ABIERTA",exitIndex=-1,exitPrice=null;
+  for(let j=i+1;j<Math.min(m30.length,i+41);j++){const c=m30[j],stop=dir>0?c.low<=sl:c.high>=sl,target=dir>0?c.high>=tp:c.low<=tp;if(stop){result="PERDIDA";exitIndex=j;exitPrice=sl;break}if(target){result="GANADA";exitIndex=j;exitPrice=tp;break}}
+  if(exitIndex<0&&i+40<m30.length){exitIndex=i+40;exitPrice=m30[exitIndex].close;result=(dir>0?exitPrice>entry:exitPrice<entry)?"GANADA":"PERDIDA"}
+  const t={result,signalIndex:i,entryIndex:i+1,exitIndex,signalTime:m30[i].time,entryTime:m30[i+1].time,exitTime:exitIndex>=0?m30[exitIndex].time:null,direction:dir>0?"BUY":"SELL",entry,sl,tp,tp2,exitPrice,risk,ruleText:strat.rules,m1Index:mi};
+  entries.push(t);if(exitIndex>=0)trades.push(t);next=exitIndex>=0?exitIndex+1:i+1;
  }
- let wins=trades.filter(t=>t.result==="GANADA").length,losses=trades.filter(t=>t.result==="PERDIDA").length,total=trades.length;
- return{wins,losses,total,rate:total?wins/total*100:null,lossRate:total?losses/total*100:null,open:entries.filter(t=>t.result==="ABIERTA").length,candles:d.length,tf:g,days:usedDays,trades,entries}
-}
-function process(m,d,g){marketHistory[m.symbol+"_"+g]=d;let done=0;for(const s of raw){results.push({strategy:s,market:m.name,symbol:m.symbol,...backtest(d,s,g)});done++;$("live-detail").textContent="Instrumento: "+m.name+" · "+(g===120?"M2":"M5")+" · estrategia "+done+" de "+raw.length;$("live-count").textContent=results.length+" / "+(symbols.length*raw.length*2)+" pruebas";if(done%5===0){render();prog()}}}
-function renderWinners(tf,id){
- const host=$(id),label=tf===120?'M2':'M5';
- host.className='instrument-ranking';
- host.innerHTML=symbols.map(m=>{
-  const rows=results.filter(r=>r.symbol===m.symbol&&r.tf===tf&&r.total>=MIN).sort((a,b)=>b.rate-a.rate||b.wins-a.wins||a.losses-b.losses);
-  if(!rows.length)return '<article class="instrument-rank-card"><strong>'+esc(m.name)+'</strong><small>'+esc(m.symbol)+' · '+label+'</small><div class="empty">No hay estrategias con al menos '+MIN+' operaciones cerradas.</div></article>';
-  const best=rows[0],worst=rows[rows.length-1];
-  const item=(r,kind)=>'<div class="instrument-rank '+kind+'"><div class="rank-label">'+(kind==='best'?'MEJOR ESTRATEGIA':'PEOR ESTRATEGIA')+'</div><b>'+esc(r.strategy.name)+'</b><strong>'+f(r.rate)+'% acierto</strong><small>'+r.wins+' ganadas · '+r.losses+' perdidas · '+r.total+' operaciones</small><button class="inspect-result" data-symbol="'+esc(r.symbol)+'" data-strategy="'+r.strategy.id+'" data-tf="'+tf+'">VER GRÁFICO</button></div>';
-  return '<article class="instrument-rank-card"><div class="instrument-rank-title"><strong>'+esc(m.name)+'</strong><small>'+esc(m.symbol)+' · '+label+'</small></div><div class="instrument-rank-pair">'+item(best,'best')+item(worst,'worst')+'</div></article>';
- }).join('')||'<div class="empty">Esperando instrumentos de Deriv…</div>';
+ const wins=trades.filter(t=>t.result==="GANADA").length,losses=trades.length-wins;
+ return{strategy:strat,wins,losses,total:trades.length,rate:trades.length?wins/trades.length*100:null,entries,trades,days:m30.length?(m30[m30.length-1].time-m30[0].time)/DAY:0};
 }
 function render(){
- renderWinners(120,'winners-m2');renderWinners(300,'winners-m5');
- const filter=$('strategy-filter')?.value||'all',chosen=filter==='all'?symbols.map(m=>m.symbol):[filter],tf=Number($('overview-timeframe')?.value||300);
- $('strategy-list').className='strategy-list';
- $('strategy-list').innerHTML=raw.map(st=>{
-  const cells=chosen.map(sym=>{
-   const r=results.find(x=>x.symbol===sym&&x.strategy.id===st.id&&x.tf===tf),market=symbols.find(m=>m.symbol===sym);
-   if(!r)return '<div class="instrument-result"><b>—</b><span>'+esc(market?.name||sym)+' · Esperando análisis</span></div>';
-   const lossRate=r.total?100-r.rate:null;
-   return '<div class="instrument-result"><b class="'+(r.rate>=80?'rate':'')+'">'+(r.rate==null?'—':f(r.rate)+'% acierto')+'</b><span>'+esc(r.market)+' · '+(lossRate==null?'—':f(lossRate)+'% pérdidas')+' · '+r.wins+'G / '+r.losses+'P · '+r.total+' ops</span></div>';
-  }).join('');
-  return '<article class="strategy-card"><div class="strategy-top"><strong>'+st.number+'. '+esc(st.name)+'</strong><small>'+esc(st.group)+' · '+esc(st.rules)+'</small></div><div class="strategy-results">'+cells+'</div></article>';
- }).join('');
- $('market-list').className='market-list';$('market-list').innerHTML=symbols.map((m,i)=>'<div class="market-chip"><span>'+(i+1)+'. '+esc(m.name)+'</span><small>'+esc(m.symbol)+'</small></div>').join('');
- $('s-symbols').textContent=Math.floor(idx/2)+'/'+symbols.length;$('s-tests').textContent=results.length+'/'+(symbols.length*raw.length*2);
- if($('chart-market')&&symbols.length){const old=$('chart-market').value;$('chart-market').innerHTML=symbols.map(m=>'<option value="'+esc(m.symbol)+'">'+esc(m.name)+'</option>').join('');$('chart-market').value=symbols.some(m=>m.symbol===old)?old:symbols[0].symbol;drawChart()}
+ $("strategy-list").innerHTML=strategies.map(s=>{const cells=symbols.map(m=>{const r=results.find(x=>x.symbol===m.symbol&&x.strategy.id===s.id);return '<div class="instrument-result"><b>'+(r?fmt(r.rate,1)+"%":"—")+'</b><span>'+esc(m.name)+' · '+(r?r.wins+"G / "+r.losses+"P · "+r.total+" ops":"pendiente")+'</span></div>'}).join("");return '<article class="strategy-card"><div class="strategy-top"><strong>'+s.id+'. '+esc(s.name)+'</strong><small>'+esc(s.group)+' · '+esc(s.rules)+'</small></div><div class="strategy-results">'+cells+'</div></article>'}).join("");
+ $("market-list").innerHTML=symbols.map(m=>'<div class="market-chip"><span>'+esc(m.name)+'</span><small>'+m.symbol+'</small></div>').join("");
+ $("s-symbols").textContent=symbols.length;$("s-tests").textContent=results.length+"/"+(symbols.length*strategies.length);
+ const sorted=results.filter(r=>r.total>=5).sort((a,b)=>b.rate-a.rate);
+ $("best-list").innerHTML=sorted.slice(0,5).map(r=>rankCard(r,"best")).join("")||'<div class="empty">Se necesitan al menos 5 operaciones cerradas por estrategia.</div>';
+ $("worst-list").innerHTML=sorted.slice(-5).reverse().map(r=>rankCard(r,"worst")).join("")||'<div class="empty">Todavía no hay resultados suficientes.</div>';
+ const old=$("chart-market").value;$("chart-market").innerHTML=symbols.map(m=>'<option value="'+m.symbol+'">'+esc(m.name)+'</option>').join("");if(symbols.some(m=>m.symbol===old))$("chart-market").value=old;
+ $("chart-strategy").innerHTML=strategies.map(s=>'<option value="'+s.id+'">'+s.id+". "+esc(s.name)+'</option>').join("");
+ $("s-strategies").textContent=strategies.length;$("live-count").textContent=results.length+" / "+(symbols.length*strategies.length)+" pruebas";
+ drawChart();
 }
-
+function rankCard(r,kind){return '<article class="rank-card"><div><b>'+esc(r.market)+'</b><small>'+r.strategy.name+'</small></div><strong class="'+(kind==="best"?"rate":"loss")+'">'+fmt(r.rate,1)+'%</strong><small>'+r.wins+' ganadas · '+r.losses+' perdidas · '+r.total+' operaciones</small><button class="inspect-result" data-symbol="'+r.symbol+'" data-strategy="'+r.strategy.id+'">VER GRÁFICO</button></article>'}
 function drawChart(){
- const sym=$('chart-market')?.value||symbols[0]?.symbol,sid=Number($('chart-strategy')?.value||raw[0].id),tf=Number($('chart-timeframe')?.value||300),d=marketHistory[sym+'_'+tf]||[],r=results.find(z=>z.symbol===sym&&z.strategy.id===sid&&z.tf===tf),host=$('strategy-chart');if(!host)return;
- if(!d.length||!r){host.innerHTML='<div class="empty">Esperando velas reales y resultados de esta estrategia.</div>';$('chart-audit').textContent='Aún no hay datos de esta combinación.';return}
- const all=r.entries||[],from=Math.max(0,d.findIndex(z=>z.time>=d[d.length-1].time-Math.min(TARGET_DAYS,(d[d.length-1].time-d[0].time)/DAY)*DAY)),view=d.slice(from),trades=all.filter(t=>t.entryIndex>=from),pick=Math.min(selectedTradeIndex,Math.max(0,trades.length-1)),chosen=trades[pick]||null;
- const w=r.wins,l=r.losses,rate=r.rate;
- $('chart-audit').innerHTML='<div><b>'+r.total+'</b><span> operaciones cerradas</span></div><div><b class="rate">'+w+'</b><span> ganadas</span></div><div><b class="loss">'+l+'</b><span> perdidas</span></div><div><b>'+(rate==null?'—':f(rate)+'%')+'</b><span> porcentaje de acierto</span></div><p>Reglas de entrada: '+esc(r.strategy.rules)+'</p>';
- const tradeSelect=$('chart-trade');tradeSelect.innerHTML=trades.map((t,i)=>'<option value="'+i+'">#'+(i+1)+' · '+t.direction+' · '+t.result+' · '+new Date(t.entryTime*1000).toLocaleString('es-PA')+'</option>').join('')||'<option value="">No hay entradas en el periodo analizado</option>';if(chosen)tradeSelect.value=String(pick);
- const prices=view.flatMap(c=>[c.high,c.low]);if(chosen)prices.push(chosen.entry,chosen.tp,chosen.sl,chosen.exitPrice??chosen.tp);const lo=Math.min(...prices),hi=Math.max(...prices),span=hi-lo||1,X=i=>22+i*956/Math.max(1,view.length-1),Y=p=>16+(hi-p)/span*300;let shapes='';
- view.forEach((c,j)=>{const x=X(j),yo=Y(c.open),yc=Y(c.close),yh=Y(c.high),yl=Y(c.low),up=c.close>=c.open,top=Math.min(yo,yc),height=Math.max(1.4,Math.abs(yc-yo));shapes+='<line x1="'+x+'" y1="'+yh+'" x2="'+x+'" y2="'+yl+'" stroke="'+(up?'#48e0a2':'#ff7184')+'" stroke-width="1.3"/><rect x="'+(x-1.5)+'" y="'+top+'" width="3" height="'+height+'" fill="'+(up?'#48e0a2':'#ff7184')+'"/>'});
- trades.forEach(t=>{const j=t.entryIndex-from;if(j<0||j>=view.length)return;const x=X(j),y=Y(t.entry),col=t.direction==='BUY'?'#48e0a2':'#ff7184';shapes+='<path d="M '+x+' '+(y+(t.direction==='BUY'?8:-8))+' l -5 '+(t.direction==='BUY'?9:-9)+' h 10 z" fill="'+col+'" opacity="'+(chosen===t?1:.45)+'"/>';if(t.exitIndex>=from&&t.exitIndex<d.length){const ex=X(t.exitIndex-from),ey=Y(t.exitPrice);shapes+='<circle cx="'+ex+'" cy="'+ey+'" r="'+(chosen===t?5:2.5)+'" fill="'+(t.result==='GANADA'?'#48e0a2':'#ff7184')+'"/>'}});
- let levels='';if(chosen){levels='<line x1="22" y1="'+Y(chosen.entry)+'" x2="978" y2="'+Y(chosen.entry)+'" stroke="#70baff" stroke-dasharray="5 4"/><line x1="22" y1="'+Y(chosen.tp)+'" x2="978" y2="'+Y(chosen.tp)+'" stroke="#48e0a2" stroke-dasharray="5 4"/><line x1="22" y1="'+Y(chosen.sl)+'" x2="978" y2="'+Y(chosen.sl)+'" stroke="#ff7184" stroke-dasharray="5 4"/>'}
- host.innerHTML='<svg class="market-chart" viewBox="0 0 1000 340" role="img" aria-label="Gráfico '+(tf===120?'M2':'M5')+' de '+esc(r.strategy.name)+'">'+levels+shapes+'</svg><div class="chart-legend"><span><i class="buy-dot"></i> Entrada BUY</span><span><i class="sell-dot"></i> Entrada SELL</span><span>TP verde · SL rojo · salida con punto</span><span>'+view.length+' velas '+(tf===120?'M2':'M5')+'</span></div>';
- const list=$('trade-audit-list');list.innerHTML=trades.slice().reverse().map(t=>'<article class="audit-trade"><b>'+(t.result==='GANADA'?'GANADA':t.result==='PERDIDA'?'PERDIDA':'ABIERTA')+' · '+t.direction+'</b><span>Entrada: '+f(t.entry,5)+' · '+new Date(t.entryTime*1000).toLocaleString('es-PA')+'</span><span>TP: '+f(t.tp,5)+' · SL: '+f(t.sl,5)+'</span><span>'+(t.exitTime?'Salida: '+f(t.exitPrice,5)+' · '+new Date(t.exitTime*1000).toLocaleString('es-PA'):'Sin salida dentro del periodo analizado')+'</span><small>Condiciones declaradas: '+esc(t.ruleText)+'</small></article>').join('')||'<p class="chart-note">Esta estrategia no generó entradas durante el periodo analizado para este instrumento.</p>';
- if(chosen){const item=list.querySelector('.audit-trade');if(item)item.classList.add('selected')}
+ const sym=$("chart-market").value||symbols[0]?.symbol,sid=Number($("chart-strategy").value||1),r=results.find(x=>x.symbol===sym&&x.strategy.id===sid),host=$("strategy-chart");if(!host)return;
+ if(!r){host.innerHTML='<div class="empty">Selecciona un instrumento y espera los datos reales.</div>';return}
+ const d=hist[sym]?.m30||[],m1=hist[sym]?.m1||[],view=d.slice(-180),offset=d.length-view.length,chosen=r.entries.slice(-1)[0];
+ $("chart-audit").innerHTML='<div><b>'+r.total+'</b><span>Operaciones</span></div><div><b class="rate">'+r.wins+'</b><span>Ganadas</span></div><div><b class="loss">'+r.losses+'</b><span>Perdidas</span></div><div><b>'+fmt(r.rate,1)+'%</b><span>Acierto</span></div>';
+ if(!view.length){host.innerHTML="Sin velas";return}
+ const vals=view.flatMap(c=>[c.high,c.low]),lo=Math.min(...vals),hi=Math.max(...vals),span=hi-lo||1,X=i=>18+i*964/Math.max(1,view.length-1),Y=v=>12+(hi-v)/span*265;let svg="";
+ view.forEach((c,j)=>{let x=X(j),up=c.close>=c.open,col=up?"#42dfa0":"#ff7184",top=Y(Math.max(c.open,c.close)),h=Math.max(1.2,Math.abs(Y(c.open)-Y(c.close)));svg+='<line x1="'+x+'" y1="'+Y(c.high)+'" x2="'+x+'" y2="'+Y(c.low)+'" stroke="'+col+'"/><rect x="'+(x-1.6)+'" y="'+top+'" width="3.2" height="'+h+'" fill="'+col+'"/>'});
+ r.entries.forEach(t=>{let j=t.entryIndex-offset;if(j<0||j>=view.length)return;let x=X(j),y=Y(t.entry),col=t.direction==="BUY"?"#42dfa0":"#ff7184";svg+='<path d="M '+x+' '+(y-7)+' l -5 -9 h 10 z" fill="'+col+'"/>';if(t.exitIndex>=offset&&t.exitIndex<d.length)svg+='<circle cx="'+X(t.exitIndex-offset)+'" cy="'+Y(t.exitPrice)+'" r="3" fill="'+(t.result==="GANADA"?"#42dfa0":"#ff7184")+'"/>'});
+ if(chosen){svg+='<line x1="18" y1="'+Y(chosen.tp)+'" x2="982" y2="'+Y(chosen.tp)+'" stroke="#42dfa0" stroke-dasharray="5 4"/><line x1="18" y1="'+Y(chosen.sl)+'" x2="982" y2="'+Y(chosen.sl)+'" stroke="#ff7184" stroke-dasharray="5 4"/>'}
+ host.innerHTML='<svg class="market-chart" viewBox="0 0 1000 300" role="img" aria-label="Velas de treinta segundos con entradas y niveles TP y SL">'+svg+'</svg><div class="chart-legend"><span>🟢 BUY / TP</span><span>🔴 SELL / SL</span><span>Velas de 30 segundos · contexto y señales M1</span></div>';
+ $("trade-audit-list").innerHTML=r.entries.slice(-30).reverse().map(t=>'<article class="audit-trade"><b class="'+(t.result==="GANADA"?"rate":"loss")+'">'+t.result+' · '+t.direction+'</b><span>Entrada '+fmt(t.entry)+' · '+new Date(t.entryTime*1000).toLocaleString("es-PA")+'</span><span>TP1 '+fmt(t.tp)+' · TP2 '+fmt(t.tp2)+' · SL '+fmt(t.sl)+'</span><span>Salida '+fmt(t.exitPrice)+' · '+(t.exitTime?new Date(t.exitTime*1000).toLocaleString("es-PA"):"sin salida")+'</span></article>').join("");
 }
-function prog(){$('progress-count').textContent=Math.floor(idx/2)+' / '+symbols.length+' instrumentos · '+(idx%2?'M5':'M2');$('progress-bar').style.width=(symbols.length?idx/(symbols.length*2)*100:0)+'%';$('progress-title').textContent=busy?'Analizando '+(active?active.name:'Deriv'):'Análisis finalizado'}
-function finish(msg){busy=false;clearTimeout(wait);clearTimeout(requestTimer);clearTimeout(connectTimer);if(socket){try{socket.close()}catch(e){}socket=null}status(msg);$('live-detail').textContent=msg;$('live-count').textContent=results.length+' / '+(symbols.length*raw.length*2)+' pruebas';$('start').disabled=false;prog();render();$('updated').textContent='Actualizado: '+new Date().toLocaleString('es-PA')}
-function next(){if(!busy)return;if(idx>=symbols.length*TFS.length){finish(results.length===symbols.length*raw.length*2?'ANÁLISIS COMPLETADO · M2 Y M5 · HASTA 5 DÍAS':'ANÁLISIS INCOMPLETO · '+results.length+' DE '+(symbols.length*raw.length*2)+' PRUEBAS');return}
-active=symbols[Math.floor(idx/TFS.length)];activeTf=TFS[idx%TFS.length];historyPage=false;pendingHistory=[];historyPageRows=0;req++;status('CONSULTANDO DATOS · '+active.name+' · '+(activeTf===120?'M2':'M5'));$('live-detail').textContent='Buscando hasta 5 días de historial en '+(activeTf===120?'M2':'M5')+'…';$('live-count').textContent=results.length+' / '+(symbols.length*raw.length*2)+' pruebas';socket.send(JSON.stringify({ticks_history:active.symbol,count:COUNT,end:'latest',style:'candles',granularity:activeTf,req_id:req}));clearTimeout(requestTimer);requestTimer=setTimeout(()=>{if(busy){$('live-detail').textContent='Deriv no respondió el historial de '+active.name+' en '+(activeTf===120?'M2':'M5')+'. Se continúa con el siguiente análisis.';idx++;prog();next()}},30000)}
-
-function start(){if(busy)return;const check=validateEngine();if(!check.ok){status('ERROR EN MOTOR DE ESTRATEGIAS');$('live-detail').textContent=check.detail;return}busy=true;idx=0;symbols=[];results=[];marketHistory={};$('start').disabled=true;$('live-detail').textContent=check.detail+' Conectando con Deriv…';$('updated').textContent='Conectando con Deriv…';connection('CONECTANDO A DERIV…',false);$('live-detail').textContent='Abriendo conexión segura con Deriv…';$('live-count').textContent='0 / '+(symbols.length*raw.length*2)+' pruebas';$('winners-m2').className='winner-list empty';$('winners-m2').textContent='Esperando datos reales M2…';$('winners-m5').className='winner-list empty';$('winners-m5').textContent='Esperando datos reales M5…';$('strategy-list').className='strategy-list';$('strategy-list').innerHTML=raw.map(s=>'<article class="strategy-card"><strong>'+s.number+'. '+esc(s.name)+'</strong><div class="empty">Análisis en curso…</div></article>').join('');$('market-list').innerHTML='';prog();status('CONECTANDO CON DERIV');try{socket=new WebSocket(WS)}catch(e){finish('ERROR AL CONECTAR');return}connectTimer=setTimeout(()=>{if(busy&&socket&&socket.readyState!==WebSocket.OPEN){$('live-detail').textContent='No se pudo abrir el WebSocket público de Deriv en 15 segundos. Comprueba si la red o el navegador bloquea conexiones WebSocket.';finish('NO SE PUDO ESTABLECER CONEXIÓN CON DERIV.');}},15000);wait=setTimeout(()=>{if(busy)finish('TIEMPO AGOTADO: DERIV NO RESPONDIÓ.')},720000);socket.onopen=()=>{clearTimeout(connectTimer);connection('WEBSOCKET ABIERTO · VALIDANDO API',false);status('SOLICITANDO INSTRUMENTOS A DERIV');$('updated').textContent='Conexión WebSocket establecida';$('live-detail').textContent='Conexión establecida. Solicitando lista de instrumentos activos…';socket.send(JSON.stringify({active_symbols:'brief',req_id:1}))};socket.onerror=()=>{connection('ERROR DE RED',false);$('live-detail').textContent='El navegador notificó un error WebSocket al conectar con api.derivws.com. Esto suele indicar bloqueo de red, DNS, VPN o fallo de conexión TLS; el evento no revela más detalle.';if(busy)finish('ERROR DE RED AL CONECTAR CON DERIV.');};socket.onclose=e=>{if(!busy)return;connection('DERIV DESCONECTADA',false);const detail='Conexión cerrada. Código: '+e.code+'. Motivo: '+(e.reason||'Deriv o la red no informó un motivo.')+'.';$('live-detail').textContent=detail;if(busy)finish('DERIV DESCONECTÓ EL WEBSOCKET. '+detail)};socket.onmessage=e=>{let m;try{m=JSON.parse(e.data)}catch(e){return}if(m.error){const detail='Deriv respondió con error: '+(m.error.message||'error desconocido');$('live-detail').textContent=detail;if(m.req_id===1||!active){finish('ERROR DE DERIV: '+(m.error.message||'respuesta inválida'));}else{clearTimeout(requestTimer);$('updated').textContent=active.name+': error de historial';idx++;prog();next()}return}if(m.msg_type==='active_symbols'||Array.isArray(m.active_symbols)){connection('DERIV API CONFIRMADA',true);const list=Array.isArray(m.active_symbols)?m.active_symbols:[];const normalized=list.map(s=>{const symbol=s.underlying_symbol||s.symbol||'';const name=s.underlying_symbol_name||s.display_name||symbol;const market=String(s.market||'').toLowerCase();const subgroup=String(s.subgroup||'').toLowerCase();const submarket=String(s.submarket||'').toLowerCase();return{symbol,name,market,subgroup,submarket,open:s.exchange_is_open,suspended:s.is_trading_suspended}});const candidates=normalized.filter(s=>s.symbol&&/volatility/i.test(s.name)&&/\b1s\b/i.test(s.name));const unique=[...new Map(candidates.map(x=>[x.symbol,x])).values()];unique.sort((x,y)=>x.name.localeCompare(y.name,undefined,{numeric:true}));symbols=unique.slice(0,N).map(({symbol,name})=>({symbol,name}));$('updated').textContent='Deriv respondió: '+list.length+' símbolos; '+unique.length+' índices Volatility 1s detectados';$('live-detail').textContent='Instrumentos 1s encontrados: '+unique.length+'. Se analizarán '+symbols.length+' instrumentos de un segundo. Códigos: '+symbols.map(s=>s.symbol).join(', ')+'.';$('strategy-filter').innerHTML='<option value="all">Todos los instrumentos</option>';if($('chart-strategy'))$('chart-strategy').innerHTML=raw.map(s=>'<option value="'+s.id+'">'+s.number+'. '+esc(s.name)+'</option>').join('');if(!symbols.length){$('market-list').className='market-list';$('market-list').textContent='Deriv no devolvió instrumentos Volatility 1s.';finish('DERIV NO DEVOLVIÓ ÍNDICES VOLATILITY 1s.');return}if(symbols.length<N){$('live-detail').textContent='Deriv entregó '+symbols.length+' de los 10 índices esperados. Se analizarán los '+symbols.length+' disponibles, sin inventar datos. Revisa la lista de instrumentos.';}symbols.forEach(m=>{let o=document.createElement('option');o.value=m.symbol;o.textContent=m.name;$('strategy-filter').append(o)});prog();next();return}if(m.req_id===req&&(m.msg_type==='candles'||m.msg_type==='history'||Array.isArray(m.candles)||Array.isArray(m.history?.candles)||Array.isArray(m.history?.prices))){clearTimeout(requestTimer);let source=Array.isArray(m.candles)?m.candles:(Array.isArray(m.history?.candles)?m.history.candles:[]);let d=source.map(c=>({time:+(c.epoch??c.open_time),open:+c.open,high:+c.high,low:+c.low,close:+c.close})).filter(c=>Number.isFinite(c.time)&&Number.isFinite(c.open)&&Number.isFinite(c.high)&&Number.isFinite(c.low)&&Number.isFinite(c.close)&&c.high>=c.low).sort((a,b)=>a.time-b.time);
-if(!d.length){const h=m.history||{},prices=h.prices||m.prices||[],times=h.times||m.times||[];if(Array.isArray(prices)&&Array.isArray(times)&&prices.length===times.length){const buckets=new Map();for(let k=0;k<prices.length;k++){const t=+times[k],v=+prices[k];if(!Number.isFinite(t)||!Number.isFinite(v))continue;const bucket=Math.floor(t/activeTf)*activeTf;let z=buckets.get(bucket);if(!z)buckets.set(bucket,{time:bucket,open:v,high:v,low:v,close:v});else{z.high=Math.max(z.high,v);z.low=Math.min(z.low,v);z.close=v}}d=[...buckets.values()].sort((a,b)=>a.time-b.time)}}
-const receivedRows=d.length,wasHistoryPage=historyPage;
-if(historyPage){d=[...d,...pendingHistory].sort((a,b)=>a.time-b.time);historyPage=false;pendingHistory=[];historyPageRows=receivedRows}
-if(d.length&&d[d.length-1].time+activeTf>Date.now()/1000)d.pop();
-const coverage=d.length?(d[d.length-1].time-d[0].time)/DAY:0;
-const target=Math.ceil(TARGET_DAYS*DAY/activeTf)+100,minimum=Math.ceil(MIN_DAYS*DAY/activeTf)+100;
-if(d.length>0&&d.length<target&&coverage<TARGET_DAYS&&(receivedRows>0||!wasHistoryPage)){
- historyPage=true;pendingHistory=d;req++;socket.send(JSON.stringify({ticks_history:active.symbol,count:COUNT,end:d[0].time-1,style:'candles',granularity:activeTf,req_id:req}));
- clearTimeout(requestTimer);requestTimer=setTimeout(()=>{if(busy&&historyPage){historyPage=false;const oldData=pendingHistory;pendingHistory=[];const days=oldData.length?(oldData[oldData.length-1].time-oldData[0].time)/DAY:0;if(days>=MIN_DAYS&&oldData.length>=minimum){$('live-detail').textContent='Deriv dejó de entregar historial adicional. Se analizarán '+days.toFixed(2)+' días disponibles de '+active.name+' en '+(activeTf===120?'M2':'M5')+'.';process(active,oldData,activeTf)}else{$('live-detail').textContent='Historial insuficiente: '+active.name+' solo entregó '+days.toFixed(2)+' días; el mínimo es 2 días.'}idx++;prog();render();next()}},30000);return;
+function progress(){const total=symbols.length;$("progress-count").textContent=idx+" / "+total+" instrumentos";$("progress-bar").style.width=(total?idx/total*100:0)+"%";$("progress-title").textContent=busy?"Analizando "+(active?.name||"Deriv"):"Análisis finalizado"}
+function finish(msg){busy=false;clearTimeout(timer);clearTimeout(connectTimer);if(socket){try{socket.close()}catch(e){}socket=null}status(msg);$("live-detail").textContent=msg;$("start").disabled=false;progress();render();$("updated").textContent="Actualizado: "+new Date().toLocaleString("es-PA")}
+function requestPage(){if(!busy||!reqState)return;req++;reqState.req=req;socket.send(JSON.stringify({ticks_history:reqState.symbol,count:COUNT,end:reqState.end,style:"candles",granularity:reqState.gran,req_id:req}));clearTimeout(timer);timer=setTimeout(()=>{if(busy&&reqState){const st=reqState;reqState=null;st.done(st.data)}},25000)}
+function parseCandles(m){let arr=Array.isArray(m.candles)?m.candles:(Array.isArray(m.history?.candles)?m.history.candles:[]);return arr.map(c=>({time:+(c.epoch??c.open_time),open:+c.open,high:+c.high,low:+c.low,close:+c.close})).filter(c=>Number.isFinite(c.time)&&Number.isFinite(c.open)&&Number.isFinite(c.high)&&Number.isFinite(c.low)&&Number.isFinite(c.close)&&c.high>=c.low).sort((a,b)=>a.time-b.time)}
+function loadSeries(symbol,gran,done){
+ reqState={symbol,gran,done,data:[],end:"latest",pages:0};requestPage();
 }
-if(coverage>=MIN_DAYS&&d.length>=minimum){$('updated').textContent=active.name+': '+coverage.toFixed(2)+' días · '+d.length+' velas '+(activeTf===120?'M2':'M5');status('ANALIZANDO 8 ESTRATEGIAS · '+active.name+' · '+(activeTf===120?'M2':'M5'));$('live-detail').textContent='Historial confirmado: '+coverage.toFixed(2)+' días disponibles. Se usa el máximo entregado, hasta 5 días.';process(active,d,activeTf)}
-else{$('updated').textContent='Historial insuficiente en '+active.name+': '+coverage.toFixed(2)+' días';$('live-detail').textContent='Historial insuficiente: '+active.name+' entregó '+coverage.toFixed(2)+' días y '+d.length+' velas '+(activeTf===120?'M2':'M5')+'; se requieren al menos 2 días y '+minimum+' velas con calentamiento.'}
-idx++;prog();render();next();return}if(m.req_id===req){$('live-detail').textContent='Deriv respondió, pero el formato de historial no coincide con lo esperado. Tipo recibido: '+(m.msg_type||'sin msg_type')+'.';clearTimeout(requestTimer);idx++;prog();next()}}}
-function validateEngine(){const ids=new Set(raw.map(s=>s.id)),names=new Set(raw.map(s=>s.name));if(raw.length!==8||ids.size!==8||names.size!==8)return{ok:false,detail:'La lista no contiene las 8 estrategias seleccionadas de forma única.'};const d=[];for(let i=0;i<1000;i++){let base=100+Math.sin(i/17)*4+Math.sin(i/5)*1.2+i*.003,open=base+Math.sin(i/3)*.18,close=base+Math.cos(i/4)*.22;d.push({time:1700000000+i*300,open,close,high:Math.max(open,close)+.25+Math.abs(Math.sin(i))*0.1,low:Math.min(open,close)-.25-Math.abs(Math.cos(i))*.1})}let failed=[];for(const s of raw){try{const r=backtest(d,s,300);if(!r||!Number.isFinite(r.wins)||!Number.isFinite(r.losses)||!Number.isFinite(r.total)||r.wins+r.losses!==r.total)failed.push(s.id+'. '+s.name)}catch(e){failed.push(s.id+'. '+s.name+': '+e.message)}}return{ok:failed.length===0,detail:failed.length?'Fallaron: '+failed.join(', '):'8/8 motores seleccionados ejecutados sin errores con datos de prueba.'}}
-function openWinner(e){const b=e.target.closest('.inspect-result');if(!b)return;$('chart-market').value=b.dataset.symbol;$('chart-strategy').value=b.dataset.strategy;$('chart-timeframe').value=b.dataset.tf;selectedTradeIndex=0;document.querySelector('[data-tab=chart]').click();drawChart()}
-document.addEventListener('DOMContentLoaded',()=>{$('start').textContent='↻ REINICIAR ANÁLISIS';$('start').addEventListener('click',start);$('strategy-filter').addEventListener('change',render);$('overview-timeframe')?.addEventListener('change',render);document.querySelectorAll('.tab').forEach(b=>b.addEventListener('click',()=>{document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('active',x===b));document.querySelectorAll('.panel').forEach(p=>p.classList.toggle('active',p.id==='panel-'+b.dataset.tab));if(b.dataset.tab==='chart')drawChart()}));$('chart-market')?.addEventListener('change',drawChart);$('chart-strategy')?.addEventListener('change',()=>{selectedTradeIndex=0;drawChart()});$('chart-trade')?.addEventListener('change',e=>{selectedTradeIndex=Number(e.target.value)||0;drawChart()});$('chart-timeframe')?.addEventListener('change',()=>{selectedTradeIndex=0;drawChart()});$('winners-m2')?.addEventListener('click',e=>openWinner(e));$('winners-m5')?.addEventListener('click',e=>openWinner(e));connection('DERIV DESCONECTADA',false);$('live-detail').textContent='La aplicación inició. Conectando automáticamente con Deriv…';start()});
+function handleHistory(m){
+ if(!reqState||m.req_id!==reqState.req)return;clearTimeout(timer);
+ const st=reqState,part=parseCandles(m);if(!part.length){reqState=null;st.done(st.data);return}
+ st.data=[...part,...st.data].sort((a,b)=>a.time-b.time);st.data=[...new Map(st.data.map(x=>[x.time,x])).values()];st.pages++;
+ const now=Date.now()/1000;if(st.data.length&&st.data[st.data.length-1].time+st.gran>now)st.data.pop();
+ const days=st.data.length?(st.data[st.data.length-1].time-st.data[0].time)/DAY:0;
+ if(days<MAX_DAYS&&part.length>=COUNT&&st.pages<5){st.end=st.data[0].time-1;requestPage();return}
+ reqState=null;st.done(st.data);
+}
+function runInstrument(){
+ if(!busy)return;if(idx>=symbols.length){finish("ANÁLISIS COMPLETADO · M1 + 30 SEGUNDOS");return}
+ active=symbols[idx];$("live-detail").textContent="Descargando hasta 5 días M1 y 30 segundos de "+active.name+"…";status("HISTORIAL · "+active.name);
+ loadSeries(active.symbol,60,m1=>{
+  if(!busy)return;loadSeries(active.symbol,30,m30=>{
+   if(!busy)return;const days=Math.min(m1.length?(m1.at(-1).time-m1[0].time)/DAY:0,m30.length?(m30.at(-1).time-m30[0].time)/DAY:0);
+   if(days<MIN_DAYS||m1.length<100||m30.length<200){$("live-detail").textContent=active.name+": historial insuficiente ("+days.toFixed(2)+" días). No se publica como resultado válido."}
+   else{hist[active.symbol]={m1,m30};for(const s of strategies){const r=buildTrades(m1,m30,s);results.push({symbol:active.symbol,market:active.name,strategy:s,...r})}$("live-detail").textContent=active.name+": "+days.toFixed(2)+" días · "+m1.length+" velas M1 · "+m30.length+" velas de 30 segundos · "+strategies.length+" estrategias."}
+   idx++;progress();render();runInstrument();
+  });
+ });
+}
+function start(){
+ if(busy)return;busy=true;idx=0;symbols=[];results=[];hist={};$("start").disabled=true;$("live-detail").textContent="Conectando con Deriv para descargar datos reales…";$("updated").textContent="Conectando…";$("strategy-list").innerHTML="";$("best-list").innerHTML="";$("worst-list").innerHTML="";$("market-list").innerHTML="";connection("CONECTANDO…",false);status("CONECTANDO CON DERIV");progress();
+ try{socket=new WebSocket(WS)}catch(e){finish("NO SE PUDO ABRIR LA CONEXIÓN");return}
+ connectTimer=setTimeout(()=>{if(busy&&socket?.readyState!==WebSocket.OPEN)finish("NO SE PUDO CONECTAR A DERIV EN 15 SEGUNDOS")},15000);
+ timer=setTimeout(()=>{if(busy)finish("TIEMPO AGOTADO · REVISA LA CONEXIÓN")},900000);
+ socket.onopen=()=>{clearTimeout(connectTimer);socket.send(JSON.stringify({active_symbols:"brief",req_id:1}))};
+ socket.onerror=()=>{if(busy)finish("ERROR DE RED CON DERIV")};
+ socket.onclose=e=>{if(busy)finish("DERIV DESCONECTÓ · CÓDIGO "+e.code)};
+ socket.onmessage=e=>{let m;try{m=JSON.parse(e.data)}catch(err){return}
+  if(m.error){const msg=m.error.message||"Error de API";if(m.req_id===1){finish("ERROR DE DERIV: "+msg);return}if(reqState&&m.req_id===reqState.req){const st=reqState;reqState=null;clearTimeout(timer);st.done(st.data)}return}
+  if(m.msg_type==="active_symbols"||Array.isArray(m.active_symbols)){connection("DERIV API CONFIRMADA",true);const list=m.active_symbols||[];const found=list.map(s=>({symbol:s.underlying_symbol||s.symbol||"",name:s.underlying_symbol_name||s.display_name||s.symbol||""})).filter(s=>s.symbol&&/volatility/i.test(s.name)&&/1s/i.test(s.name));symbols=[...new Map(found.map(s=>[s.symbol,s])).values()].sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true})).slice(0,10);$("updated").textContent="Deriv devolvió "+list.length+" símbolos · "+symbols.length+" índices 1s";if(!symbols.length){finish("DERIV NO DEVOLVIÓ ÍNDICES VOLATILITY 1s");return}$("live-detail").textContent="Índices encontrados: "+symbols.length+". Se analizarán "+strategies.length+" estrategias por instrumento.";runInstrument();return}
+  if(reqState&&m.req_id===reqState.req){handleHistory(m);return}
+ };
+}
+document.addEventListener("DOMContentLoaded",()=>{
+ $("start").addEventListener("click",start);$("chart-market").addEventListener("change",drawChart);$("chart-strategy").addEventListener("change",drawChart);
+ document.querySelectorAll(".tab").forEach(b=>b.addEventListener("click",()=>{document.querySelectorAll(".tab").forEach(x=>x.classList.toggle("active",x===b));document.querySelectorAll(".panel").forEach(p=>p.classList.toggle("active",p.id==="panel-"+b.dataset.tab));if(b.dataset.tab==="chart")drawChart()}));
+ document.addEventListener("click",e=>{const b=e.target.closest(".inspect-result");if(b){$("chart-market").value=b.dataset.symbol;$("chart-strategy").value=b.dataset.strategy;document.querySelector('[data-tab="chart"]').click();drawChart()}});
+ $("live-detail").textContent="Preparado para analizar M1 y entradas de 30 segundos.";start();
+});
 })();
