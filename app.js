@@ -5,7 +5,7 @@ const HISTORY_CANDLES = 1440;
 const REQUEST_TIMEOUT_MS = 45000;
 const API_URL = 'wss://api.derivws.com/trading/v1/options/ws/public';
 const $ = id => document.getElementById(id);
-const state = { ws:null, req:0, pending:new Map(), symbols:[], selected:null, tf:1, candles:[], rawCandles:[], rawBySymbol:new Map(), marketBacktests:[], trades:[], liveSub:null, main:null, rsi:null, markerPlugin:null, overlayResizeObserver:null, overlayUpdate:null, overlayRangeHandler:null, pivotLines:[], tradePriceLines:[], overlayPriceLevels:[],levelOverrides:{}, pivotTfEnabled:{1:false,2:false,3:false,4:false,5:true,10:false}, tpTfs:[1,3,5,10], slTfs:[1,3,5,10], obStructureOnly:true, obTf:2, pivotTf:5, chartKey:null, series:{}, busy:false, analyzeQueued:false, forceFitNext:true, lastRecalcBucket:null, pendingLiveTick:null, liveFrame:0, overlayFrame:0 };
+const state = { ws:null, req:0, pending:new Map(), symbols:[], selected:null, tf:1, candles:[], rawCandles:[], rawBySymbol:new Map(), marketBacktests:[], trades:[], liveSub:null, main:null, rsi:null, markerPlugin:null, overlayResizeObserver:null, overlayUpdate:null, overlayRangeHandler:null, pivotLines:[], tradePriceLines:[], overlayPriceLevels:[],levelOverrides:{}, pivotTfEnabled:{1:false,2:false,3:false,4:false,5:true,10:false}, tpTfs:[1,3,5,10], slTfs:[1,3,5,10], obStructureOnly:true, obTf:1, pivotTf:5, chartKey:null, series:{}, busy:false, analyzeQueued:false, forceFitNext:true, lastRecalcBucket:null, pendingLiveTick:null, liveFrame:0, overlayFrame:0 };
 const CANDIDATES = [
  ['1HZ10V','Volatility 10 (1s)'],['1HZ15V','Volatility 15 (1s)'],['1HZ25V','Volatility 25 (1s)'],['1HZ30V','Volatility 30 (1s)'],['1HZ50V','Volatility 50 (1s)'],['1HZ75V','Volatility 75 (1s)'],['1HZ90V','Volatility 90 (1s)'],['1HZ100V','Volatility 100 (1s)'],['1HZ150V','Volatility 150 (1s)'],['1HZ250V','Volatility 250 (1s)'],
  ['R_10','Volatility 10'],['R_25','Volatility 25'],['R_50','Volatility 50'],['R_75','Volatility 75'],['R_100','Volatility 100'],
@@ -74,16 +74,14 @@ function buildSetups(c,liquidityCandles=c,pivotCandles=liquidityCandles,obStruct
  // La estructura que valida los OB queda fija en M10, independiente del selector visual de pivotes.
  const m10Candles=aggregate(targetRawCandles,10),m10Pv=fixedM10Pivots(m10Candles,3);
  const stopPivots=state.slTfs.map(mins=>({mins,pv:pivots(aggregate(targetRawCandles,mins),3,mins*60)}));
- const setups=[],latestZones=new Map(),usedOBs=new Set();
+ const setups=[],latestZones=[],zoneKeys=new Set(),usedOBs=new Set();
  for(let i=55;i<c.length;i++){
   const x=c[i];
   for(const side of (trendSide?[trendSide]:[])){
-   const candidate=findValidOBAtTime(liquidityCandles,x.time,side,state.obTf,m10Pv,m10Candles,targetRawCandles);
-   if(!candidate)continue;
-   const {ob,structure}=candidate,key=side+':'+ob.time;
-   if(!latestZones.has(side)||ob.time>latestZones.get(side).time)
-    latestZones.set(side,{...ob,side,timeframe:state.obTf,structurePrice:structure.price,structureTime:structure.time,structureType:side==='BUY'?'SOPORTE M10':'RESISTENCIA M10'});
-   // Los setups/backtesting siguen respetando el sesgo H1; los dos OB se dibujan independientemente.
+   const candidates=findValidOBsAtTime(liquidityCandles,x.time,side,m10Pv,m10Candles,targetRawCandles);
+   if(candidates.length<2)continue;
+   for(const item of candidates){const zoneKey=side+':'+item.ob.time;if(!zoneKeys.has(zoneKey)){latestZones.push({...item.ob,side,timeframe:1,structurePrice:item.structure.price,structureTime:item.structure.time,structureType:side==='BUY'?'SOPORTE M10':'RESISTENCIA M10'});zoneKeys.add(zoneKey);}}
+   const {ob,structure}=candidates[0],key=side+':'+ob.time;
    if(!trendSide||side!==trendSide||usedOBs.has(key))continue;
    // TP1 y TP2: los dos niveles M10 anteriores al OB, en dirección del objetivo.
    const targets=(side==='BUY'?m10Pv.highs:m10Pv.lows)
@@ -103,7 +101,7 @@ function buildSetups(c,liquidityCandles=c,pivotCandles=liquidityCandles,obStruct
    usedOBs.add(key);
   }
  }
- return{setups,e3,e9,e13,e50,rv,pv,obZones:[...latestZones.values()]};
+ return{setups,e3,e9,e13,e50,rv,pv,obZones:latestZones.sort((a,b)=>a.time-b.time).slice(-2)};
 }
 function fixedM10Pivots(c,span=3){
  const highs=[],lows=[];
@@ -115,16 +113,18 @@ function fixedM10Pivots(c,span=3){
  }
  return{highs,lows};
 }
-function findValidOBAtTime(c,time,side,tf,pv,m10Candles,raw){
- const completed=c.filter(bar=>bar.time+tf*60<=time);
- for(let j=completed.length-1;j>=Math.max(0,completed.length-9);j--){
-  const q=completed[j],opposite=side==='BUY'?q.close<q.open:q.close>q.open;
+function findValidOBsAtTime(c,time,side,pv,m10Candles,raw){
+ let lo=0,hi=c.length;
+ while(lo<hi){const mid=(lo+hi)>>1;if(c[mid].time+60<=time)lo=mid+1;else hi=mid;}
+ const valid=[];
+ for(let j=lo-1;j>=Math.max(0,lo-60)&&valid.length<2;j--){
+  const q=c[j],opposite=side==='BUY'?q.close<q.open:q.close>q.open;
   if(!opposite)continue;
   const ob={time:q.time,high:q.high,low:q.low,entry:(q.high+q.low)/2};
   const structure=findM10Structure(ob,side,pv,m10Candles,time);
-  if(structure&&!isOBInvalidated(ob,side,structure,raw,time))return{ob,structure};
+  if(structure&&!isOBInvalidated(ob,side,structure,raw,time))valid.push({ob,structure});
  }
- return null;
+ return valid.length===2?valid:[];
 }
 function findM10Structure(ob,side,pv,candles,time){
  // Exige que ya existan dos máximos (venta) o dos mínimos (compra) confirmados.
@@ -140,7 +140,10 @@ function findM10Structure(ob,side,pv,candles,time){
  return{...p,tolerance,previousPrice:lastTwo[0].price,previousTime:lastTwo[0].time};
 }
 function isOBInvalidated(ob,side,structure,raw,time){
- return raw.some(bar=>bar.time>=structure.confirmedTime&&bar.time<=time&&(side==='SELL'?bar.close>structure.price:bar.close<structure.price));
+ let lo=0,hi=raw.length;
+ while(lo<hi){const mid=(lo+hi)>>1;if(raw[mid].time<structure.confirmedTime)lo=mid+1;else hi=mid;}
+ for(let i=lo;i<raw.length&&raw[i].time<=time;i++){const bar=raw[i];if(side==='SELL'?bar.close>structure.price:bar.close<structure.price)return true;}
+ return false;
 }
 function findOBAtTime(c,time,side,tf=state.obTf){const completed=c.filter(bar=>bar.time+tf*60<=time);return findOB(completed,completed.length,side);}
 function findOB(c,i,side){for(let j=i-1;j>=Math.max(0,i-9);j--){const q=c[j],opposite=side==='BUY'?q.close<q.open:q.close>q.open;if(opposite){const entry=(q.high+q.low)/2;return{time:q.time,high:q.high,low:q.low,entry};}}return null;}
@@ -259,7 +262,7 @@ function drawOverlays(trades,c,host,obZones=[],setups=[]){
  const zones=(obZones||[]).filter(ob=>ob&&Number.isFinite(ob.time)).sort((x,y)=>x.time-y.time);
  const zoneEls=zones.map(ob=>{
   const el=document.createElement('div');el.className='ob-zone '+(ob.fvg?'fvg-zone ':'')+(ob.side==='BUY'?'bull-zone':'bear-zone');
-  el.innerHTML='<b>'+(ob.side==='BUY'?'OB COMPRA':'OB VENTA')+' · M'+(ob.timeframe||state.obTf)+' · '+(ob.structureType||'M10')+'</b>';
+  el.innerHTML='<b>'+(ob.side==='BUY'?'OB COMPRA':'OB VENTA')+' · M1 · '+(ob.structureType||'M10')+'</b>';
   overlay.appendChild(el);return{el,ob};
  });
  const t=[...trades].reverse().find(x=>x.result==='PENDIENTE')||[...setups].reverse()[0]||trades[trades.length-1];
@@ -334,11 +337,12 @@ function showLatest(calc,trades,c,raw=state.rawCandles){
  $('rsiLegend').textContent='Valor actual: '+fmt(rv);
 }
 function renderHistory(trades){
- const rows=trades.slice(-150).reverse();
- $('historyCount').textContent=trades.length+' operaciones · +'+fmt(trades.filter(t=>t.result==='GANADA'&&Number.isFinite(t.points)).reduce((a,t)=>a+Math.max(0,t.points),0))+' / -'+fmt(trades.filter(t=>t.result==='PERDIDA'&&Number.isFinite(t.points)).reduce((a,t)=>a+Math.abs(Math.min(0,t.points)),0))+' pts';
- $('historyBody').innerHTML=rows.length?rows.map(t=>'<tr><td>'+new Date(t.time*1000).toLocaleTimeString('es-PA',{hour:'2-digit',minute:'2-digit'})+'</td><td style="color:'+(t.side==='BUY'?'#20d69a':'#ff6876')+'">'+(t.side==='BUY'?'COMPRA':'VENTA')+'</td><td>'+fmt(t.entry)+'</td><td>'+fmt(t.sl)+'</td><td>'+fmt(t.tp1)+'</td><td>'+fmt(t.tp2)+'</td><td>'+t.result+'</td><td style="color:'+(t.points==null?'#8b9bb0':t.points>=0?'#20d69a':'#ff6876')+'">'+(t.points==null?'—':(t.points>0?'+':'')+fmt(t.points)+' pts')+'</td></tr>').join(''):'<tr><td colspan="8" class="empty-cell">No hay operaciones detectadas en este período.</td></tr>';
- const closed=trades.filter(t=>t.result==='GANADA'||t.result==='PERDIDA');
- $('wins').textContent=closed.filter(t=>t.result==='GANADA').length;$('losses').textContent=closed.filter(t=>t.result==='PERDIDA').length;$('pending').textContent=trades.filter(t=>t.result==='PENDIENTE').length;$('expired').textContent=trades.filter(t=>t.result==='CANCELADA').length;
+ const source=state.marketBacktests.length?state.marketBacktests:trades;
+ const rows=source.slice(-150).reverse();
+ $('historyCount').textContent=source.length+' operaciones · +'+fmt(source.filter(t=>t.result==='GANADA'&&Number.isFinite(t.points)).reduce((a,t)=>a+Math.max(0,t.points),0))+' / -'+fmt(source.filter(t=>t.result==='PERDIDA'&&Number.isFinite(t.points)).reduce((a,t)=>a+Math.abs(Math.min(0,t.points)),0))+' pts';
+ $('historyBody').innerHTML=rows.length?rows.map(t=>'<tr><td>'+new Date(t.time*1000).toLocaleTimeString('es-PA',{hour:'2-digit',minute:'2-digit'})+'</td><td>'+esc(state.symbols.find(x=>x.symbol===t.symbol)?.name||t.symbol||state.selected)+'</td><td style="color:'+(t.side==='BUY'?'#20d69a':'#ff6876')+'">'+(t.side==='BUY'?'COMPRA':'VENTA')+'</td><td>'+fmt(t.entry)+'</td><td>'+fmt(t.sl)+'</td><td>'+fmt(t.tp1)+'</td><td>'+fmt(t.tp2)+'</td><td>'+t.result+'</td><td style="color:'+(t.points==null?'#8b9bb0':t.points>=0?'#20d69a':'#ff6876')+'">'+(t.points==null?'—':(t.points>0?'+':'')+fmt(t.points)+' pts')+'</td></tr>').join(''):'<tr><td colspan="9" class="empty-cell">No hay operaciones detectadas en este período.</td></tr>';
+ const closed=source.filter(t=>t.result==='GANADA'||t.result==='PERDIDA');
+ $('wins').textContent=closed.filter(t=>t.result==='GANADA').length;$('losses').textContent=closed.filter(t=>t.result==='PERDIDA').length;$('pending').textContent=source.filter(t=>t.result==='PENDIENTE').length;$('expired').textContent=source.filter(t=>t.result==='CANCELADA').length;
 }
 async function runUniverseBacktest(refresh=false){
  if(!state.rawCandles.length)$('dataStatus').textContent='Preparando análisis de 24 horas…';
@@ -348,8 +352,9 @@ async function runUniverseBacktest(refresh=false){
  });
  await Promise.all(workers);
  const allTrades=[],shortHistory=[];
- for(const item of state.symbols){const source=state.rawBySymbol.get(item.symbol)||[];if(!source.length)continue;const cutoff=Math.floor(Date.now()/1000)-86400;const raw=source.filter(v=>v.time>=cutoff);if(raw.length<HISTORY_CANDLES)shortHistory.push(item.name+' ('+raw.length+' velas/24h)');const candles=aggregate(raw,2);if(candles.length<70)continue;const hourly=getHourlyBias(raw),obCandles=aggregate(raw,state.obTf),pivotCandles=aggregate(raw,state.pivotTf),calc=buildSetups(candles,obCandles,pivotCandles,pivotCandles,hourly.side,raw),setups=hourly.side?calc.setups.filter(x=>x.side===hourly.side):[],trades=simulate(candles,setups);allTrades.push(...trades.map(t=>({...t,symbol:item.symbol})));}
+ for(const item of state.symbols){const source=state.rawBySymbol.get(item.symbol)||[];if(!source.length)continue;const cutoff=Math.floor(Date.now()/1000)-86400;const raw=source.filter(v=>v.time>=cutoff);if(raw.length<HISTORY_CANDLES)shortHistory.push(item.name+' ('+raw.length+' velas/24h)');const candles=aggregate(raw,2);if(candles.length<70)continue;const hourly=getHourlyBias(raw),obCandles=raw,pivotCandles=aggregate(raw,state.pivotTf),calc=buildSetups(candles,obCandles,pivotCandles,pivotCandles,hourly.side,raw),setups=hourly.side?calc.setups.filter(x=>x.side===hourly.side):[],trades=simulate(candles,setups);allTrades.push(...trades.map(t=>({...t,symbol:item.symbol})));}
  state.marketBacktests=allTrades;
+ renderHistory(allTrades);
  const closed=allTrades.filter(t=>t.result==='GANADA'||t.result==='PERDIDA');
  $('wins').textContent=closed.filter(t=>t.result==='GANADA').length;$('losses').textContent=closed.filter(t=>t.result==='PERDIDA').length;
  $('pending').textContent=allTrades.filter(t=>t.result==='PENDIENTE').length;$('expired').textContent=allTrades.filter(t=>t.result==='CANCELADA').length;
@@ -358,7 +363,7 @@ async function runUniverseBacktest(refresh=false){
 async function analyze(){
  if(state.busy){state.analyzeQueued=true;return;}state.busy=true;$('dataStatus').textContent='Cargando gráfico…';
  try{const raw=state.rawBySymbol.get(state.selected)||await getCandles(state.selected,1440);if(!raw.length)throw new Error('No llegaron velas para '+state.selected);state.rawBySymbol.set(state.selected,raw);
- state.rawCandles=raw;state.lastRecalcBucket=Math.floor(raw.at(-1).time/120);const c=aggregate(raw,state.tf);state.candles=c;const signalCandles=aggregate(raw,2);const obCandles=aggregate(raw,state.obTf);const pivotCandles=aggregate(raw,state.pivotTf);
+ state.rawCandles=raw;state.lastRecalcBucket=Math.floor(raw.at(-1).time/120);const c=aggregate(raw,state.tf);state.candles=c;const signalCandles=aggregate(raw,2);const obCandles=raw;const pivotCandles=aggregate(raw,state.pivotTf);
  const hourly=getHourlyBias(raw),activeSide=hourly.side;const signalCalc=buildSetups(signalCandles,obCandles,pivotCandles,pivotCandles,activeSide,raw);const chartCalc=buildSetups(c,obCandles,pivotCandles,pivotCandles,activeSide,raw);
  // Una sola dirección gobierna las señales y los OB visibles: la tendencia H1.
  const alignedSetups=activeSide?signalCalc.setups.filter(setup=>setup.side===activeSide):[];
@@ -421,7 +426,7 @@ function bindOBControls(){
  const save=()=>{try{localStorage.setItem('botder-ob-settings',JSON.stringify({obTf:state.obTf,pivotTf:state.pivotTf,tpTfs:state.tpTfs,slTfs:state.slTfs}));}catch{}};
  const sync=(root,attr,value)=>{if(!root)return;root.querySelectorAll('button['+attr+']').forEach(b=>{const active=Number(b.getAttribute(attr))===value;b.classList.toggle('active',active);b.setAttribute('aria-pressed',String(active));});};
  const syncMulti=(root,attr,values)=>{if(!root)return;root.querySelectorAll('button['+attr+']').forEach(b=>{const active=values.includes(Number(b.getAttribute(attr)));b.classList.toggle('active',active);b.setAttribute('aria-pressed',String(active));});};
- if(obRoot){sync(obRoot,'data-ob-tf',state.obTf);obRoot.addEventListener('click',e=>{const b=e.target.closest('button[data-ob-tf]');if(!b)return;state.obTf=Number(b.dataset.obTf);save();sync(obRoot,'data-ob-tf',state.obTf);analyze();});}
+ if(obRoot){state.obTf=1;sync(obRoot,'data-ob-tf',1);}
  if(pivotRoot){sync(pivotRoot,'data-pivot-structure-tf',state.pivotTf);pivotRoot.addEventListener('click',e=>{const b=e.target.closest('button[data-pivot-structure-tf]');if(!b)return;state.pivotTf=Number(b.dataset.pivotStructureTf);save();sync(pivotRoot,'data-pivot-structure-tf',state.pivotTf);analyze();});}
  const bindMulti=(root,attr,key)=>{if(!root)return;syncMulti(root,attr,state[key]);root.addEventListener('click',e=>{const b=e.target.closest('button['+attr+']');if(!b)return;const tf=Number(b.getAttribute(attr)),set=new Set(state[key]);if(set.has(tf)){if(set.size===1)return;set.delete(tf);}else set.add(tf);state[key]=[1,3,5,10,15,30].filter(v=>set.has(v));save();syncMulti(root,attr,state[key]);analyze();});};
  bindMulti(tpRoot,'data-tp-tf','tpTfs');bindMulti(slRoot,'data-sl-tf','slTfs');
