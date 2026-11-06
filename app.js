@@ -73,14 +73,9 @@ function optimizerConfigs(){
  const mask=EMA_PAIRS.reduce((m,x,i)=>m+($(x[2]).checked?1<<i:0),0);
  const out=[{zigTf:base.tf,zigDepth:base.depth,zigDeviation:base.deviation,zigSeparation:base.separation,rsiTf,rsiPeriod,emaMask:mask}];
  for(let i=1;i<500;i++){
-  let n=i;const cfg={emaMask:n%32};n=Math.floor(n/32);
-  cfg.zigTf=zt[n%5];n=Math.floor(n/5);
-  cfg.zigDepth=depth[n%5];n=Math.floor(n/5);
-  cfg.zigDeviation=dev[n%5];n=Math.floor(n/5);
-  cfg.zigSeparation=sep[n%4];n=Math.floor(n/4);
-  cfg.rsiTf=rt[n%4];n=Math.floor(n/4);
-  cfg.rsiPeriod=rp[n%5];
-  out.push(cfg);
+  let n=Math.imul(i,2654435761)>>>0;
+  const pick=len=>{n=(Math.imul(n,1664525)+1013904223)>>>0;return n%len;};
+  out.push({zigTf:zt[pick(5)],zigDepth:depth[pick(5)],zigDeviation:dev[pick(5)],zigSeparation:sep[pick(4)],rsiTf:rt[pick(4)],rsiPeriod:rp[pick(5)],emaMask:pick(32)});
  }
  return out;
 }
@@ -111,10 +106,10 @@ function optimizerConfigLabel(c){
  return 'ZZ M'+c.zigTf+' · P'+c.zigDepth+' D'+c.zigDeviation+' S'+c.zigSeparation+' · RSI M'+c.rsiTf+'/'+c.rsiPeriod+' · '+ema;
 }
 function renderOptimizerResults(result){
- const fmt=list=>list.slice(0,10).map((x,i)=>'<div class="optimizer-row"><b>#'+(i+1)+' '+optimizerConfigLabel(x.cfg)+'</b><span>Validación '+(x.valClosed>=5?x.valRate.toFixed(1):x.rate.toFixed(1))+'% · '+x.wins+'G/'+x.losses+'P · '+x.closed+' cerradas · '+x.open+' abiertas</span><small>Validación: '+x.valW+'G/'+x.valL+'P ('+x.valClosed+') · Entrenamiento: '+x.trainW+'G/'+x.trainL+'P · PF '+x.pf.toFixed(2)+'</small><button type="button" data-apply-optimizer="'+x.cfg.index+'">APLICAR ESTA CONFIGURACIÓN</button></div>').join('');
- const overall=list(result.overall);
+ const fmt=(list,showPF=true)=>list.slice(0,10).map((x,i)=>'<div class="optimizer-row"><b>#'+(i+1)+' '+optimizerConfigLabel(x.cfg)+'</b><span>Validación '+(x.valClosed>=5?x.valRate.toFixed(1):x.rate.toFixed(1))+'% · '+x.wins+'G/'+x.losses+'P · '+x.closed+' cerradas · '+x.open+' abiertas</span><small>Validación: '+x.valW+'G/'+x.valL+'P ('+x.valClosed+') · Entrenamiento: '+x.trainW+'G/'+x.trainL+'P'+(showPF?' · PF '+x.pf.toFixed(2):'')+'</small><button type="button" data-apply-optimizer="'+x.cfg.index+'">APLICAR ESTA CONFIGURACIÓN</button></div>').join('');
+ const overall=fmt(result.overall,false);
  let out='<h4>TOP 10 GENERAL · '+result.overall.length+' configuraciones</h4>'+overall;
- for(const item of result.perInstrument){out+='<h4>'+item.name+' · TOP 10</h4>'+list(item.rows);}
+ for(const item of result.perInstrument){out+='<h4>'+item.name+' · TOP 10</h4>'+fmt(item.rows,true);}
  $('optimizerResults').innerHTML=out||'No se encontraron resultados.';
  $('optimizerResults').querySelectorAll('[data-apply-optimizer]').forEach(btn=>btn.addEventListener('click',()=>{const c=result.configs[+btn.dataset.applyOptimizer];applyOptimizerConfig(c);saveSettings();S.backtestCache=null;S.lastBacktestScan=0;S.activeCache=[];S.lastActiveScan=0;render();$('optimizerStatus').textContent='Configuración aplicada manualmente. Revisa el backtest antes de usarla.';}));
 }
