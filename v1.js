@@ -403,7 +403,7 @@ function updateLiveTick(tick){
   if(rv[i]!=null)S.rsiLine.update({time,value:rv[i]});
   $('rsiValue').textContent=rv[i]==null?'—':rv[i].toFixed(1);
   $('chartName').textContent=S.symbol+' · M1 · '+price;
-  if(time>last.time){S.trades=backtest48h(S.raw);renderHistory()}
+  if(time>last.time){S.trades=backtest48h(S.raw);drawOverlay(obZones(aggregate(S.raw,15)));renderHistory()}
   const current=S.raw.at(-1);processMarketSignal(S.symbol,S.raw,price,+tick.epoch);$('chart')._updateTradeOverlay?.();const candidates=signalsFor(S.raw,false).filter(x=>x.time===current.time+60);
   const liveSignal=candidates.at(-1)||null;
   renderSignalMarkers(liveSignal);
