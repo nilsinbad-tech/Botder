@@ -2,6 +2,8 @@
 const $=id=>document.getElementById(id),API='wss://api.derivws.com/trading/v1/options/ws/public',DAY=86400,COUNT=7000;
 const S={ws:null,req:0,pending:new Map(),symbols:[],symbol:'',raw:[],candles:[],chart:null,rsiChart:null,price:null,ema9:null,ema45:null,rsiLine:null,markerApi:null,obSeries:[],markers:[],trades:[],point:0,settings:{},scanTimer:null,reconnectTimer:null,reconnectDelay:1000,heartbeatTimer:null,connecting:false,tickCount:0,lastTickAt:0,currentPriceLine:null,liveSymbol:'',markets:new Map(),marketSubs:new Map(),activeSignals:new Map(),liveHistory:[],globalScanStarted:false};
 const STORE='botder-scalping-m1-v1';
+function restoreLiveHistory(){try{const saved=JSON.parse(localStorage.getItem(STORE+'-live-history')||'[]');if(Array.isArray(saved))S.liveHistory=saved.filter(x=>x&&x.symbol&&x.side&&Number.isFinite(+x.time)).slice(-2000)}catch{S.liveHistory=[]}}
+function persistLiveHistory(){try{localStorage.setItem(STORE+'-live-history',JSON.stringify(S.liveHistory.slice(-2000)))}catch(e){console.warn('No se pudo guardar el historial live',e)}}
 function status(t,ok=false){$('connection').textContent=t;$('connection').style.color=ok?'#20d18b':'#ffb95c'}
 function send(p){return new Promise((resolve,reject)=>{if(!S.ws||S.ws.readyState!==1)return reject(Error('Deriv desconectada'));const id=++S.req,t=setTimeout(()=>{S.pending.delete(id);reject(Error('Tiempo de espera de Deriv'))},20000);S.pending.set(id,{resolve:x=>{clearTimeout(t);resolve(x)},reject:e=>{clearTimeout(t);reject(e)}});S.ws.send(JSON.stringify({...p,req_id:id}))})}
 function stopHeartbeat(){if(S.heartbeatTimer){clearInterval(S.heartbeatTimer);S.heartbeatTimer=null}}
@@ -157,7 +159,7 @@ function updateSelectedSignalView(){
 }
 function updateMarketTrade(signal,price,time){
  if(signal.result!=='OPEN')return false;const hitSL=signal.side==='BUY'?price<=signal.sl:price>=signal.sl,hitTP=signal.side==='BUY'?price>=signal.tp:price<=signal.tp;
- if(hitSL||hitTP){signal.result=hitTP?'WIN':'LOSS';signal.exitTime=time;S.liveHistory.push({...signal,candles:undefined});if(S.liveHistory.length>1000)S.liveHistory.shift();notifySignalResult(signal,signal.result);S.activeSignals.delete(signal.key);return true}return false;
+ if(hitSL||hitTP){signal.result=hitTP?'WIN':'LOSS';signal.exitTime=time;S.liveHistory.push({...signal,candles:undefined});if(S.liveHistory.length>2000)S.liveHistory.shift();persistLiveHistory();notifySignalResult(signal,signal.result);S.activeSignals.delete(signal.key);return true}return false;
 }
 function processMarketSignal(symbol,candles,price,time){
  if(!candles||!candles.length)return;let changed=false;
@@ -182,9 +184,16 @@ async function loadGlobalMarket(symbol){
 async function ensureGlobalSubscription(symbol){
  if(S.marketSubs.has(symbol))return;await loadGlobalMarket(symbol);const r=await send({ticks:symbol,subscribe:1});S.marketSubs.set(symbol,r.subscription?.id||true);if(r.tick)updateMarketTick(r.tick);
 }
+async function scanMissingMarkets(){
+ for(const item of S.symbols){if(S.marketSubs.has(item.code))continue;try{await ensureGlobalSubscription(item.code)}catch(e){console.warn('Reintento escáner '+item.name+': '+e.message)}}
+ renderActiveSignals();
+}
 async function startGlobalScanner(){
- if(S.globalScanStarted)return;S.globalScanStarted=true;if(!S.markets.has(S.symbol))S.markets.set(S.symbol,{name:S.symbols.find(x=>x.code===S.symbol)?.name||S.symbol,candles:S.raw});
- for(const item of S.symbols){if(item.code===S.symbol)continue;try{await ensureGlobalSubscription(item.code)}catch(e){console.warn('Escáner no disponible para '+item.name+': '+e.message)}}renderActiveSignals();
+ if(S.globalScanStarted)return;S.globalScanStarted=true;
+ if(!S.markets.has(S.symbol))S.markets.set(S.symbol,{name:S.symbols.find(x=>x.code===S.symbol)?.name||S.symbol,candles:S.raw});
+ await scanMissingMarkets();
+ if(S.scanTimer)clearInterval(S.scanTimer);
+ S.scanTimer=setInterval(()=>{if(S.ws?.readyState===1)scanMissingMarkets().catch(e=>console.warn('Revisión escáner global',e))},15000);
 }
 function notifyNewSignal(signal){
  if(!signal)return;
@@ -251,11 +260,11 @@ async function subscribeLive(){
  const r=await send({ticks:S.symbol,subscribe:1});S.marketSubs.set(S.symbol,r.subscription?.id||true);if(r.tick)updateLiveTick(r.tick);
  if(!r.tick)$('liveFeed').textContent='SUSCRIPCIÓN ACEPTADA · esperando primer tick de '+S.symbol;
 }
-function renderHistory(){const merged=new Map();for(const x of S.trades)merged.set((x.symbol||S.symbol)+'|'+x.side+'|'+x.time,x);for(const x of S.liveHistory.filter(x=>x.symbol===S.symbol))merged.set((x.symbol||S.symbol)+'|'+x.side+'|'+x.time,x);const rows=[...merged.values()].sort((a,b)=>a.time-b.time),w=rows.filter(x=>x.result==='WIN').length,l=rows.filter(x=>x.result==='LOSS').length,o=rows.filter(x=>x.result==='OPEN').length,neutral=rows.filter(x=>x.result==='CLOSED').length,closed=w+l;$('wins').textContent=w;$('losses').textContent=l;$('open').textContent=o;$('rate').textContent=(closed?100*w/closed:0).toFixed(1)+'%';$('history').innerHTML=rows.slice().reverse().map(x=>'<div class="history-row"><span>'+new Date(x.time*1000).toLocaleString('es-PA',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'})+'</span><b class="'+(x.side==='BUY'?'win':'loss')+'">'+(x.side==='BUY'?'COMPRA':'VENTA')+'</b><span>TP '+formatPrice(x.symbol||S.symbol,x.tp,x.candles||S.raw)+' · SL '+formatPrice(x.symbol||S.symbol,x.sl,x.candles||S.raw)+'</span><span class="'+(x.result==='WIN'?'win':x.result==='LOSS'?'loss':'')+'">'+x.result+'</span></div>').join('')||'No se encontraron operaciones con todos los filtros';const to=Math.floor(Date.now()/1000),from=to-48*3600,windowBars=S.raw.filter(x=>x.time>=from&&x.time<=to).length;$('coverage').textContent='VENTANA 48H · '+windowBars.toLocaleString('es-PA')+' velas M1';$('backtestStatus').textContent='PRUEBA HISTÓRICA: '+new Date(from*1000).toLocaleString('es-PA')+' — '+new Date(to*1000).toLocaleString('es-PA')+' · '+rows.length+' entradas ('+w+' ganadas, '+l+' perdidas, '+neutral+' cerradas, '+o+' abiertas) · '+windowBars+' velas M1 en ventana; '+S.raw.length+' velas recibidas para cálculos. Huecos M1 detectados: '+(S.dataQuality?.gaps??'—')+'.'}
+function renderHistory(){const merged=new Map();for(const x of S.trades)merged.set((x.symbol||S.symbol)+'|'+x.side+'|'+x.time,x);for(const x of S.liveHistory.filter(x=>x.symbol===S.symbol))merged.set((x.symbol||S.symbol)+'|'+x.side+'|'+x.time,x);for(const x of S.activeSignals.values())if(x.symbol===S.symbol)merged.set(x.symbol+'|'+x.side+'|'+x.time,x);const rows=[...merged.values()].sort((a,b)=>a.time-b.time),w=rows.filter(x=>x.result==='WIN').length,l=rows.filter(x=>x.result==='LOSS').length,o=rows.filter(x=>x.result==='OPEN').length,neutral=rows.filter(x=>x.result==='CLOSED').length,closed=w+l;$('wins').textContent=w;$('losses').textContent=l;$('open').textContent=o;$('rate').textContent=(closed?100*w/closed:0).toFixed(1)+'%';$('history').innerHTML=rows.slice().reverse().map(x=>'<div class="history-row"><span>'+new Date(x.time*1000).toLocaleString('es-PA',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'})+'</span><b class="'+(x.side==='BUY'?'win':'loss')+'">'+(x.side==='BUY'?'COMPRA':'VENTA')+'</b><span>TP '+formatPrice(x.symbol||S.symbol,x.tp,x.candles||S.raw)+' · SL '+formatPrice(x.symbol||S.symbol,x.sl,x.candles||S.raw)+'</span><span class="'+(x.result==='WIN'?'win':x.result==='LOSS'?'loss':'')+'">'+x.result+'</span></div>').join('')||'No se encontraron operaciones con todos los filtros';const to=Math.floor(Date.now()/1000),from=to-48*3600,windowBars=S.raw.filter(x=>x.time>=from&&x.time<=to).length;$('coverage').textContent='VENTANA 48H · '+windowBars.toLocaleString('es-PA')+' velas M1';$('backtestStatus').textContent='PRUEBA HISTÓRICA: '+new Date(from*1000).toLocaleString('es-PA')+' — '+new Date(to*1000).toLocaleString('es-PA')+' · '+rows.length+' entradas ('+w+' ganadas, '+l+' perdidas, '+neutral+' cerradas, '+o+' abiertas) · '+windowBars+' velas M1 en ventana; '+S.raw.length+' velas recibidas para cálculos. Huecos M1 detectados: '+(S.dataQuality?.gaps??'—')+'.'}
 
 async function loadCurrent(){S.symbol=$('symbol').value;localStorage.setItem('botder-current-symbol',S.symbol);status('Descargando '+S.symbol+'…');$('chartName').textContent=S.symbol+' · M1';S.raw=await history(S.symbol);S.markets.set(S.symbol,{name:S.symbols.find(x=>x.code===S.symbol)?.name||S.symbol,candles:S.raw});if(!S.raw.length)throw Error('No hay velas M1 disponibles');const cfg=config(S.symbol);$('tpPoints').value=cfg.tp;$('slPoints').value=cfg.sl;$('settingsStatus').textContent='Configuración de '+S.symbol;const span=S.raw.at(-1).time-S.raw[0].time;if(S.raw.length<COUNT)console.warn('Deriv devolvió '+S.raw.length+' de '+COUNT+' velas solicitadas');S.trades=backtest48h(S.raw);initCharts();drawChart();renderHistory();await subscribeLive();await startGlobalScanner();status('Deriv conectada · escáner global activo · '+S.symbol,true)}
 async function recalc(){saveConfig();S.trades=backtest48h(S.raw);drawChart();renderHistory()}
 $('symbol').addEventListener('change',()=>loadCurrent().catch(e=>status(e.message)));$('reload').addEventListener('click',()=>loadCurrent().catch(e=>status(e.message)));$('applyRisk').addEventListener('click',recalc);
-async function start(){try{await connect();await loadSymbols();const saved=localStorage.getItem('botder-current-symbol');if(saved&&S.symbols.some(x=>x.code===saved))$('symbol').value=saved;await loadCurrent()}catch(e){status(e.message);scheduleReconnect()}}
+async function start(){restoreLiveHistory();try{await connect();await loadSymbols();const saved=localStorage.getItem('botder-current-symbol');if(saved&&S.symbols.some(x=>x.code===saved))$('symbol').value=saved;await loadCurrent()}catch(e){status(e.message);scheduleReconnect()}}
 start();
 })();
