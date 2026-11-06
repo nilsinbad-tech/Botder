@@ -2,3 +2,5 @@
 .tp-tag{position:absolute;z-index:9;padding:1px 3px;border:1px solid #f5b942;border-radius:2px;background:#080d16;color:#f5b942;font-size:7px;line-height:9px;font-weight:900;white-space:nowrap;pointer-events:none}
 
 .tp-line{position:absolute;height:0;border-top:1px dashed #f5b942;opacity:.9;pointer-events:none;z-index:6}
+
+.tp-line{height:0;border-top:2px solid #f5b942;opacity:1;pointer-events:none;z-index:7}.tp-tag{padding:2px 4px;font-size:8px;border-color:#f5b942;color:#ffe08a}
