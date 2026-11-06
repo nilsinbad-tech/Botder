@@ -31,15 +31,51 @@ function detectOB(tf,side){const c=completed(aggregate(S.raw,tf),tf*60),zones=[]
 function detectPivots(c,span=3,tf=1){const hi=[],lo=[];for(let i=span;i<c.length-span;i++){let a=true,b=true;for(let j=1;j<=span;j++){if(c[i].high<=c[i-j].high||c[i].high<=c[i+j].high)a=false;if(c[i].low>=c[i-j].low||c[i].low>=c[i+j].low)b=false}if(a)hi.push({time:c[i].time,price:c[i].high,side:'R',tf});if(b)lo.push({time:c[i].time,price:c[i].low,side:'S',tf})}return{hi,lo};}
 function clearLines(){for(const x of S.lines){try{S.candle.removePriceLine(x)}catch{}}S.lines=[];}
 function drawPivots(signals=[]){clearLines();if(!S.candle)return;const palette={SL:'#ff5968',TP1:'#24d18b',TP2:'#5bb7ff'},used=[];const active=(signals||[]).filter(sig=>!signalResult(sig)).slice(-3);for(const sig of active){const sl=stopLossTarget(sig),targets=[...liquidityTargets(sig),...(sl?[sl]:[])];for(const target of targets){if(!Number.isFinite(target.price)||used.some(x=>x.name===target.name&&Math.abs(x.price-target.price)<=Math.max(Math.abs(target.price)*0.00001,0.000001)))continue;used.push(target);S.lines.push(S.candle.createPriceLine({price:target.price,color:palette[target.name]||'#8b9cff',lineWidth:1,lineStyle:0,axisLabelVisible:true,title:target.name}));}}}
-function selectImportantPivot(candidates,opposites,side,after){const valid=candidates.filter(x=>side==='BUY'?x.price>after:x.price<after);if(!valid.length)return null;const tol=Math.max(Math.abs(after)*0.0002,0.00001),ranked=valid.map(p=>{const cluster=valid.filter(q=>Math.abs(q.price-p.price)<=tol),touches=cluster.length;const before=opposites.filter(q=>q.time<p.time),afterOpp=opposites.filter(q=>q.time>p.time);const prev=before.at(-1),next=afterOpp[0];const prominence=Math.max(prev?Math.abs(p.price-prev.price):0,next?Math.abs(p.price-next.price):0);const distance=Math.abs(p.price-after);const score=touches*4+(prominence/Math.max(Math.abs(p.price),0.00001))*1000-distance/Math.max(Math.abs(after),0.00001)*0.05;return{p,score}});ranked.sort((a,b)=>b.score-a.score||Math.abs(a.p.price-after)-Math.abs(b.p.price-after));return ranked[0].p;}
-function dojiAfterSignal(sig,tf){const z=zigzagSettings(),period=tf||z.tf,c=completed(aggregate(S.raw,period),period*60).filter(x=>x.time>=sig.time);return c.find(x=>{const range=x.high-x.low;return range>0&&Math.abs(x.close-x.open)/range<=0.10})||null;}
+function structuralLevels(sig,tf){
+const c=completed(aggregate(S.raw,tf),tf*60),p=detectPivots(c,3,tf),levels=[],ranges=c.slice(-80).map(x=>x.high-x.low).filter(x=>x>0).sort((a,b)=>a-b),avgRange=ranges.length?ranges[Math.floor(ranges.length/2)]:Math.abs(sig.price)*0.0002,tolerance=Math.max(avgRange*0.45,Math.abs(sig.price)*0.00008,0.000001);
+const confirmed=p=>p.time+3*tf*60<=sig.time;
+for(const side of ['S','R']){
+const candidates=(side==='S'?p.lo:p.hi).filter(confirmed);
+for(const point of candidates){
+const idx=c.findIndex(x=>x.time===point.time);
+if(idx<0)continue;
+const reaction=c.slice(idx+3,Math.min(idx+9,c.length)).filter(x=>x.time+tf*60<=sig.time);
+if(reaction.length<2)continue;
+const move=side==='S'?Math.max(...reaction.map(x=>x.high))-point.price:point.price-Math.min(...reaction.map(x=>x.low));
+if(move<avgRange*1.15)continue;
+levels.push({price:point.price,side,tf,time:point.time,strength:move/Math.max(avgRange,0.000001)});
+}}
+const clusters=[];
+for(const level of levels.sort((a,b)=>a.price-b.price)){
+let group=clusters.find(x=>x.side===level.side&&Math.abs(x.price-level.price)<=tolerance);
+if(!group){clusters.push({...level,touches:1,prices:[level.price]});continue;}
+group.prices.push(level.price);group.touches++;group.price=group.prices.reduce((a,b)=>a+b,0)/group.prices.length;group.strength=Math.max(group.strength,level.strength);group.time=Math.max(group.time,level.time);
+}
+return clusters.map(x=>({...x,score:x.strength+Math.max(0,x.touches-1)*0.75}));
+}
+function structuralTargets(sig){
+const m15=structuralLevels(sig,15),m30=structuralLevels(sig,30),all=[...m15,...m30],buy=sig.side==='BUY',support=all.filter(x=>x.side==='S'&&(buy?x.price<sig.price:x.price>sig.price)),resistance=all.filter(x=>x.side==='R'&&(buy?x.price>sig.price:x.price<sig.price));
+const stopPool=support.sort((a,b)=>Math.abs(sig.price-a.price)-Math.abs(sig.price-b.price));
+const slLevel=stopPool[0];
+const targetPool=resistance.sort((a,b)=>Math.abs(a.price-sig.price)-Math.abs(b.price-sig.price));
+const tp1Level=targetPool[0];
+const targets=[];
+if(tp1Level)targets.push({name:'TP1',price:tp1Level.price,time:sig.time,tf:tp1Level.tf});
+if(tp1Level){
+const second=m30.filter(x=>x.side=== (buy?'R':'S')&&(buy?x.price>tp1Level.price:x.price<tp1Level.price)).sort((a,b)=>buy?a.price-b.price:b.price-a.price)[0];
+if(second)targets.push({name:'TP2',price:second.price,time:sig.time,tf:30});
+}
+if(slLevel)targets.push({name:'SL',price:slLevel.price,time:sig.time,tf:slLevel.tf});
+return targets;
+}
+function stopLossTarget(sig){return structuralTargets(sig).find(x=>x.name==='SL')||null;}
 function targetHitInfo(sig,target){const after=completed(S.raw,60).filter(x=>x.time>sig.time&&(target.name!=='TP2'||x.time>target.time));const bar=after.find(x=>target.name==='SL'?(sig.side==='BUY'?x.low<=target.price:x.high>=target.price):(sig.side==='BUY'?x.high>=target.price:x.low<=target.price));return bar?{time:bar.time+60,bar,price:target.price}:null;}
 function stopLossTarget(sig){const tf=Math.max(1,Math.min(60,+$('slTf')?.value||5)),c=aggregate(S.raw,tf),p=detectPivots(c,3,tf),confirmed=p=>p.time+3*tf*60<=sig.time,buy=sig.side==='BUY',levels=(buy?p.lo:p.hi).filter(p=>confirmed(p)&&(buy?p.price<sig.price:p.price>sig.price)).sort((a,b)=>buy?b.price-a.price:a.price-b.price);return levels.length?{name:'SL',price:levels[0].price,time:sig.time,tf:tf===60?'H1':'M'+tf}:null;}
 function signalResult(sig){const tp1=liquidityTargets(sig).find(x=>x.name==='TP1'),sl=stopLossTarget(sig),hits=[];if(tp1){const hit=targetHitInfo(sig,tp1);if(hit)hits.push({target:tp1,hit});}if(sl){const hit=targetHitInfo(sig,sl);if(hit)hits.push({target:sl,hit});}return hits.sort((a,b)=>a.hit.time-b.hit.time||(a.target.name==='SL'?-1:1))[0]||null;}
 function targetReached(sig,target){return !!targetHitInfo(sig,target);}
 function signalWon(sig){const result=signalResult(sig);return !!result&&result.target.name==='TP1';}
 function tp2Reached(sig,target){const after=completed(S.raw,60).filter(x=>x.time>target.time);return after.some(x=>sig.side==='BUY'?x.high>=target.price:x.low<=target.price);}
-function liquidityTargets(sig){const tf=Math.max(1,Math.min(60,+$('tpTf')?.value||5)),z=zigzagSettings(),doji=dojiAfterSignal(sig,tf),targets=[];const pts=zigzag(S.raw,z.depth,z.deviation,z.separation,tf).filter(p=>p.confirmed<=sig.time);const buy=sig.side==='BUY',levels=buy?pts.filter(p=>p.type==='HIGH'):pts.filter(p=>p.type==='LOW');const tp1=selectImportantPivot(levels,pts.filter(p=>p.type!==(buy?'HIGH':'LOW')),sig.side,sig.price);if(tp1&&(buy?tp1.price>sig.price:tp1.price<sig.price))targets.push({name:'TP1',price:tp1.price,time:sig.time});if(doji&&(buy?doji.close>sig.price:doji.close<sig.price))targets.push({name:'TP2',price:doji.close,time:doji.time});return targets;}
+function liquidityTargets(sig){return structuralTargets(sig).filter(x=>x.name==='TP1'||x.name==='TP2');}
 function hasM5ObstacleBeforeTP1(sig){const targets=liquidityTargets(sig),tp1=targets.find(x=>x.name==='TP1');if(!tp1)return true;const c5=aggregate(S.raw,5),p=detectPivots(c5,3,5),confirmed=x=>x.time+15*60<=sig.time,buy=sig.side==='BUY',obstacles=(buy?p.hi:p.lo).filter(x=>confirmed(x)&&(buy?x.price>sig.price&&x.price<tp1.price:x.price<sig.price&&x.price>tp1.price));return obstacles.length>0;}
 function signalsByZone(signals,zones){const out=[];for(const sig of signals||[]){const z=zones.find(q=>q.side===sig.side&&sig.price>=q.low&&sig.price<=q.high);if(z){const key=z.side+'|'+z.tf+'|'+z.time;const old=out.find(x=>x._zoneKey===key);if(!old)out.push({...sig,_zoneKey:key});else if(sig.time>old.time)Object.assign(old,sig);continue;}const tol=Math.max(Math.abs(sig.price)*0.00015,0.00001);const old=out.find(x=>!x._zoneKey&&x.side===sig.side&&Math.abs(x.price-sig.price)<=tol);if(!old)out.push({...sig});else if(sig.time>old.time)Object.assign(old,sig);}return out.sort((a,b)=>a.time-b.time);}
 function getActiveOperations(){if(Date.now()-S.lastActiveScan<15000)return S.activeCache;const savedRaw=S.raw,savedSymbol=S.symbol,items=[],currentStatuses=new Map();try{for(const item of S.symbols.filter(x=>x.active)){const data=S.marketData.get(item.code);if(!data||data.length<80)continue;S.raw=data;S.symbol=item.code;const signals=findSignals();for(const sig of signals.slice(-10)){const sl=stopLossTarget(sig);const result=signalResult(sig),targets=[...liquidityTargets(sig)],status=result?(result.target.name==='SL'?'LOSS':'WIN'):'VIGENTE',id=item.code+'|'+sig.time+'|'+sig.side;if(sl)targets.push(sl);currentStatuses.set(id,status);items.push({symbol:item.name,code:item.code,...sig,targets,result,status,id});}}}finally{S.raw=savedRaw;S.symbol=savedSymbol;}for(const op of items){const previous=S.signalStatuses.get(op.id);if(S.signalScanInitialized&&!previous)showSignalToast(op,'NEW');else if(previous==='VIGENTE'&&(op.status==='WIN'||op.status==='LOSS'))showSignalToast(op,'RESULT');}S.signalStatuses=currentStatuses;S.signalScanInitialized=true;S.activeCache=items.sort((a,b)=>b.time-a.time).slice(0,30);S.lastActiveScan=Date.now();return S.activeCache;}
