@@ -18,7 +18,7 @@
 <section class="settings">
  <h3>TP / SL GENERAL · TODOS LOS INSTRUMENTOS</h3>
  <div class="inputs"><label>TP · puntos<input id="tpPoints" type="number" min="1" step="1" value="12"></label><label>SL · puntos<input id="slPoints" type="number" min="1" step="1" value="12"></label><button id="applyRisk">APLICAR Y RECALCULAR</button></div>
- <small>TP y SL se escalan proporcionalmente al precio de entrada: factor = precio del instrumento ÷ 9592.00 (referencia Volatility 10 1s). Los precios se muestran con los decimales propios de cada instrumento.</small>
+ <small>TP y SL se calculan primero en una escala normalizada a 9592.00 y luego se convierten al precio REAL del instrumento. La entrada, las velas y todos los precios del gráfico permanecen reales; la normalización solo se usa internamente para TP/SL.</small>
 </section>
 <section class="stats">
  <h3>BACKTEST · ÚLTIMAS 48 HORAS</h3><div class="statgrid"><article><small>GANADAS</small><b id="wins">0</b></article><article><small>PERDIDAS</small><b id="losses">0</b></article><article><small>ABIERTAS</small><b id="open">0</b></article><article><small>ACIERTO</small><b id="rate">0%</b></article></div>
