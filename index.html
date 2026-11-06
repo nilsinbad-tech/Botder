@@ -34,7 +34,7 @@
 <span class="rule-note">Compra: soporte · Venta: resistencia</span></section>
 <section class="settings"><div class="setting-head"><strong>TAKE PROFIT</strong><button type="button" class="reset-setting" data-reset="tp">Restablecer</button></div>
 <label>Temporalidad<select id="tpTf"><option value="1">M1</option><option value="2">M2</option><option value="3">M3</option><option value="4">M4</option><option value="5" selected>M5</option><option value="10">M10</option><option value="15">M15</option><option value="30">M30</option><option value="60">H1</option></select></label>
-<label>Relación riesgo/beneficio<select id="riskReward"><option value="2">1:2</option><option value="3" selected>1:3</option><option value="4">1:4</option><option value="5">1:5</option><option value="6">1:6</option><option value="7">1:7</option><option value="8">1:8</option><option value="9">1:9</option></select></label>
+
 <span class="rule-note">El SL respeta la estructura y añade un margen automático según la volatilidad del instrumento. El TP se calcula con la relación elegida.</span></section>
 </details>
 <details class="setting-group"><summary>RSI</summary>
@@ -62,4 +62,4 @@
 <details class="backtest-drawer"><summary>BACKTEST</summary><section class="history-card"><div class="history-head"><div><b>RESULTADOS DEL INSTRUMENTO ACTUAL</b><small>Solo el instrumento que tienes seleccionado · 3 días completos de velas M1.</small></div><button type="button" id="backtestBtn" class="reset-setting">RECALCULAR</button></div><div class="history-stats"><article><small>GANADAS</small><strong id="selectedBacktestWins">0</strong></article><article><small>PERDIDAS</small><strong id="selectedBacktestLosses">0</strong></article><article><small>ABIERTAS</small><strong id="selectedBacktestOpen">0</strong></article></div><div class="history-head"><div><b>RESULTADO GENERAL · TODOS LOS INSTRUMENTOS</b><small>Conteo conjunto de todos los instrumentos con historial cargado de 3 días.</small></div></div><div class="history-stats"><article><small>GANADAS</small><strong id="backtestWins">0</strong></article><article><small>PERDIDAS</small><strong id="backtestLosses">0</strong></article><article><small>ABIERTAS</small><strong id="backtestOpen">0</strong></article></div><div class="history-head"><div><b>SEÑALES Y OPERACIONES HISTÓRICAS</b><small>Se muestran todos los resultados calculados, sin recortar la lista a 18 o 50 operaciones.</small></div></div><div id="historyRows" class="history-rows"><div class="active-empty">Calculando backtesting de los instrumentos…</div></div><small id="backtestStatus" class="history-note">Las operaciones abiertas permanecen vigentes hasta alcanzar TP o SL.</small></section></details>
 
 
-</main><script src="app.js?v=rr-volatility-1a3-v80"></script></body></html>
+</main><script src="app.js?v=trend-strength-structural-1"></script></body></html>
