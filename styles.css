@@ -26,3 +26,12 @@
 .tp-level-line.sl{border-top-color:#ff5968!important;}
 .tp-level-label.sl{border-color:#ff5968!important;color:#ff9ba4!important;}
 .tp-level-label{font-size:7px!important;line-height:9px!important;padding:1px 3px!important;}
+
+/* Recorrido de cada operación: zonas TP/SL translúcidas, sin líneas horizontales */
+.operation-area{position:absolute;pointer-events:none;z-index:3;border-radius:2px;box-sizing:border-box;}
+.operation-area.tp{background:rgba(36,209,139,.13);border:1px solid rgba(36,209,139,.25);}
+.operation-area.sl{background:rgba(255,89,104,.13);border:1px solid rgba(255,89,104,.25);}
+.operation-area-label{position:absolute;z-index:5;pointer-events:none;font-size:7px;line-height:9px;padding:1px 3px;border-radius:3px;background:rgba(12,16,22,.72);white-space:nowrap;}
+.operation-area-label.tp{color:#70f0b5;border:1px solid rgba(36,209,139,.45);}
+.operation-area-label.sl{color:#ff9ba4;border:1px solid rgba(255,89,104,.45);}
+.tp-level-line,.tp-level-label{display:none!important;}
