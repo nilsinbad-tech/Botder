@@ -17,7 +17,7 @@
 <section class="chartcard"><div class="charttitle"><b id="chartName">Gráfico M1</b><span id="coverage">Cargando ventana de 48 horas…</span></div><div id="chart"></div><div class="charttitle"><b>RSI (14)</b><span id="rsiCaption">Compra 50–75 · Venta 25–50</span></div><div id="rsiChart"></div></section>
 <section class="settings">
  <h3>TP / SL POR INSTRUMENTO</h3>
- <div class="inputs"><label>TP · puntos<input id="tpPoints" type="number" min="1" step="1" value="12"></label><label>SL · puntos<input id="slPoints" type="number" min="1" step="1" value="12"></label><button id="applyRisk">GUARDAR</button><small id="settingsStatus">La configuración se guarda por instrumento en este dispositivo.</small></div>
+ <div class="inputs"><label>TP · puntos<input id="tpPoints" type="number" min="1" step="1" value="12"></label><label>SL · puntos<input id="slPoints" type="number" min="1" step="1" value="12"></label><button id="applyRisk">GUARDAR</button><small id="settingsStatus">Cada instrumento conserva su propio TP y SL. Pulsa GUARDAR antes de cambiar de instrumento.</small></div>
  <small>TP y SL se calculan primero en una escala normalizada a 9592.00 y luego se convierten al precio REAL del instrumento. La entrada, las velas y todos los precios del gráfico permanecen reales; la normalización solo se usa internamente para TP/SL.</small>
 </section>
 <section class="stats">
@@ -28,7 +28,7 @@
 <section class="rules">
  <h3>REGLAS ACTIVAS</h3>
  <p><b>Order Block M15:</b> última vela contraria antes de desplazamiento fuerte y ruptura de estructura. <b>M1:</b> el precio toca el OB y una vela confirma la reacción; EMA 9/20 deben tener dirección y separación, sin lateralidad.</p>
- <p><b>Order Blocks:</b> zonas basadas en el cuerpo de la vela, con fondo casi transparente. El backtesting evalúa las entradas y resultados de las últimas 48 horas del instrumento seleccionado.</p>
+ <p><b>Order Blocks:</b> zonas basadas en el cuerpo de la vela, con fondo casi transparente. El selector solo incluye Volatility normales y de 1 segundo entre 10 y 75, además de Crash 50/500 y Boom 50/500. Cada instrumento guarda su propio TP y SL en este dispositivo. El backtesting evalúa las últimas 48 horas del instrumento seleccionado.</p>
  <p>El gráfico dibuja únicamente señales del instrumento seleccionado. El historial y las estadísticas también pertenecen a ese instrumento.</p>
 </section>
-</main><script src="v1.js?v=6"></script></body></html>
+</main><script src="v1.js?v=7"></script></body></html>
