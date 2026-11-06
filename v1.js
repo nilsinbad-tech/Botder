@@ -148,7 +148,7 @@ function drawOverlay(zones){
  const areas=[];
  for(const t of selectedChartTrades()){
   if(!Number.isFinite(+t.time)||!Number.isFinite(+t.price)||!Number.isFinite(+t.tp)||!Number.isFinite(+t.sl))continue;
-  for(const kind of ['tp','sl']){
+  for(const kind of ['entry','tp','sl']){
    const el=document.createElement('div');el.className='trade-zone '+kind;
    const label=document.createElement('span');label.className='trade-label '+kind;
    tradeLayer.append(el,label);areas.push({el,label,t,kind});
@@ -188,16 +188,16 @@ function drawOverlay(zones){
    let x1=rawX1,x2=rawX2;
    if(x1==null)x1=(+a.t.time-60<=firstTime?0:(+a.t.time-60>lastTime?width:null));
    if(x2==null)x2=(tradeEnd>=lastTime?width:(tradeEnd<firstTime?0:null));
-   const level=a.kind==='tp'?+a.t.tp:+a.t.sl,y1=mapY(+a.t.price),y2=mapY(level);
+   const level=a.kind==='entry'?+a.t.price:a.kind==='tp'?+a.t.tp:+a.t.sl,y1=mapY(+a.t.price),y2=mapY(level);
    if(x1==null||x2==null||y1==null||y2==null||Math.max(x1,x2)<=0||Math.min(x1,x2)>=width){
     a.el.style.display='none';a.label.style.display='none';continue;
    }
    const left=Math.max(0,Math.min(x1,x2)),right=Math.min(width,Math.max(x1,x2));
    const top=Math.max(0,Math.min(y1,y2)),bottom=Math.min(height,Math.max(y1,y2));
-   if(right<=left||bottom<=top){a.el.style.display='none';a.label.style.display='none';continue}
+   if(right<=left||(a.kind!=='entry'&&bottom<=top)){a.el.style.display='none';a.label.style.display='none';continue}
    a.el.style.display='block';a.el.style.left=left+'px';a.el.style.width=(right-left)+'px';
-   a.el.style.top=top+'px';a.el.style.height=(bottom-top)+'px';
-   a.label.style.display='block';
+   a.el.style.top=(a.kind==='entry'?Math.max(0,Math.min(height-1,y1)):top)+'px';a.el.style.height=(a.kind==='entry'?'1px':Math.max(1,bottom-top)+'px');
+   a.label.style.display=a.kind==='entry'?'none':'block';
    const decimals=Number.isInteger(a.t.decimals)?a.t.decimals:symbolMeta(S.symbol,S.raw).decimals;
    a.label.textContent=(a.kind==='tp'?'TP ':'SL ')+level.toFixed(decimals);
    a.label.style.left=Math.max(0,Math.min(width-82,left))+'px';
@@ -222,7 +222,7 @@ function renderSignalMarkers(liveSignal=null){
  const chartTrades=selectedChartTrades();
  for(const s of chartTrades){
   const markerKey=s.symbol+'|'+s.side+'|'+s.time;if(seen.has(markerKey))continue;seen.add(markerKey);
-  markers.push({time:s.time-60,position:s.side==='BUY'?'belowBar':'aboveBar',color:s.side==='BUY'?'#35ffad':'#ff5268',shape:'circle',size:0.7,text:s.side==='BUY'?'B':'S'});
+  markers.push({time:s.time-60,position:s.side==='BUY'?'belowBar':'aboveBar',color:s.side==='BUY'?'#35ffad':'#ff5268',shape:'circle',size:0.7,text:s.result==='OPEN'?(s.side==='BUY'?'⭐ B':'⭐ S'):(s.side==='BUY'?'B':'S')});
   if(s.exitTime&&(s.result==='WIN'||s.result==='LOSS'||s.result==='CLOSED'))markers.push({time:s.exitTime-60,position:s.side==='BUY'?'aboveBar':'belowBar',color:s.result==='WIN'?'#20d18b':s.result==='LOSS'?'#ff5968':'#ffc45d',shape:'circle',size:0.5,text:s.result});
  }
  if(liveSignal){const markerKey=liveSignal.symbol+'|'+liveSignal.side+'|'+liveSignal.time;if(!seen.has(markerKey))markers.push({time:liveSignal.time-60,position:liveSignal.side==='BUY'?'belowBar':'aboveBar',color:liveSignal.side==='BUY'?'#72ffd0':'#ff8798',shape:'circle',size:0.8,text:liveSignal.side==='BUY'?'B':'S'});}
@@ -268,7 +268,7 @@ function updateSelectedSignalView(){
 }
 function updateMarketTrade(signal,price,time){
  if(signal.result!=='OPEN')return false;const hitSL=signal.side==='BUY'?price<=signal.sl:price>=signal.sl,hitTP=signal.side==='BUY'?price>=signal.tp:price<=signal.tp;
- if(hitSL||hitTP){signal.result=hitTP?'WIN':'LOSS';signal.exitTime=time;S.liveHistory.push({...signal,candles:undefined});if(S.liveHistory.length>2000)S.liveHistory.shift();persistLiveHistory();S.activeSignals.delete(signal.key);return true}return false;
+ if(hitSL||hitTP){signal.result=hitTP?'WIN':'LOSS';signal.exitTime=time;S.liveHistory.push({...signal,candles:undefined});if(S.liveHistory.length>2000)S.liveHistory.shift();persistLiveHistory();notifySignalResult(signal,signal.result);S.activeSignals.delete(signal.key);return true}return false;
 }
 function processMarketSignal(symbol,candles,price,time){
  if(!candles||!candles.length)return;let changed=false;
@@ -368,7 +368,7 @@ function notifyNewSignal(signal){
  host.hidden=false;
  const card=document.createElement('article');
  card.className='signal-notice '+(signal.side==='BUY'?'buy':'sell');
- const title=document.createElement('b');title.className='notice-title';title.textContent=(signal.side==='BUY'?'B · COMPRA':'S · VENTA')+'  '+signal.symbol;
+ const title=document.createElement('b');title.className='notice-title';title.textContent=(signal.side==='BUY'?'⭐ B · COMPRA':'⭐ S · VENTA')+'  '+signal.symbol;
  const details=document.createElement('div');details.className='notice-details';
  details.textContent='PRECIO ESPERADO '+formatPrice(signal.symbol,signal.price,signal.candles||S.raw)+'  ·  TP '+formatPrice(signal.symbol,signal.tp,signal.candles||S.raw)+'  ·  SL '+formatPrice(signal.symbol,signal.sl,signal.candles||S.raw);
  const timer=document.createElement('span');timer.className='notice-timer';timer.textContent='45 s';
@@ -407,11 +407,9 @@ function updateLiveTick(tick){
   $('rsiValue').textContent=rv[i]==null?'—':rv[i].toFixed(1);
   $('chartName').textContent=S.symbol+' · M1 · '+price;
   if(time>last.time){S.trades=backtest48h(S.raw);drawOverlay(obZones(aggregate(S.raw,15)));renderHistory()}
-  const current=S.raw.at(-1);processMarketSignal(S.symbol,S.raw,price,+tick.epoch);$('chart')._updateTradeOverlay?.();const candidates=signalsFor(S.raw,false).filter(x=>x.time===current.time+60);
-  const liveSignal=candidates.at(-1)||null;
-  renderSignalMarkers(liveSignal);
-  if(liveSignal)notifyNewSignal(liveSignal);
-  $('liveSignal').textContent=liveSignal?(liveSignal.side==='BUY'?'COMPRA':'VENTA')+' EN VIVO · VELA EN FORMACIÓN':'SIN SEÑAL EN VELA ACTUAL';
+  const current=S.raw.at(-1);processMarketSignal(S.symbol,S.raw,price,+tick.epoch);$('chart')._updateTradeOverlay?.();const liveSignal=[...S.activeSignals.values()].find(x=>x.symbol===S.symbol&&x.time===current.time+60)||null;
+  renderSignalMarkers();
+  $('liveSignal').textContent=liveSignal?(liveSignal.side==='BUY'?'⭐ B · COMPRA':'⭐ S · VENTA')+' REGISTRADA':'SIN SEÑAL EN VELA ACTUAL';
   $('liveSignal').style.color=liveSignal?(liveSignal.side==='BUY'?'#20d18b':'#ff5968'):'#9aabc0';
  }catch(e){console.error('Error actualizando vela M1 en vivo',e)}
 }
