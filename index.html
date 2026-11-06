@@ -2,7 +2,7 @@
 <html lang="es"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#080d16"><title>BOTDER · Gráfico Deriv</title>
-<link rel="stylesheet" href="styles.css?v=backtest-pivots-v21">
+<link rel="stylesheet" href="styles.css?v=compact-settings-v22">
 <script src="https://unpkg.com/lightweight-charts@5.0.8/dist/lightweight-charts.standalone.production.js" onerror="this.onerror=null;this.src='https://cdn.jsdelivr.net/npm/lightweight-charts@5.0.8/dist/lightweight-charts.standalone.production.js'"></script>
 </head><body>
 <header class="topbar"><div class="brand"><span class="brand-mark">B</span><div><b>BOTDER</b><small>GRÁFICO DERIV</small></div></div><div class="connection"><i id="connectionDot"></i><span id="connectionText">Conectando Deriv…</span></div><button id="refreshBtn" class="icon-btn">↻</button></header>
@@ -22,4 +22,4 @@
 <section class="legend"><span><i class="ema20"></i> EMA 20 M5</span><span><i class="ema50"></i> EMA 50 M5</span><span><i class="bull"></i> OB alcista</span><span><i class="bear"></i> OB bajista</span><span><i class="zig"></i> ZigZag M1</span><span><i class="pivot"></i> Pivotes</span></section>
 <section class="history-card"><div class="history-head"><div><b>BACKTEST / HISTORIAL</b><small>Backtest M1: hasta 5.000 velas del instrumento seleccionado (~3 días y 11 horas) y 900 del resto (~15 horas).</small></div><button type="button" id="backtestBtn" class="reset-setting">RECALCULAR</button></div><div class="history-stats"><article><small>GANADAS</small><strong id="backtestWins">0</strong></article><article><small>PERDIDAS</small><strong id="backtestLosses">0</strong></article><article><small>CERRADAS LATERAL</small><strong id="backtestLateral">0</strong></article><article><small>ABIERTAS</small><strong id="backtestOpen">0</strong></article></div><div id="historyRows" class="history-rows"><div class="active-empty">Calculando historial…</div></div><small id="backtestStatus" class="history-note">Los cierres por lateralidad se muestran aparte; no cuentan como ganadas ni perdidas.</small></section>
 <footer>BOTDER · Datos y análisis de Deriv. No envía órdenes.</footer>
-</main><script src="app.js?v=sl-timeframe-select-v42"></script></body></html>
+</main><script src="app.js?v=ob-merge-compact-v43"></script></body></html>
