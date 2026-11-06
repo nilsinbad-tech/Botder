@@ -53,22 +53,10 @@ group.prices.push(level.price);group.touches++;group.price=group.prices.reduce((
 }
 return clusters.map(x=>({...x,score:x.strength+Math.max(0,x.touches-1)*0.75}));
 }
-function structuralTargets(sig){
-const m15=structuralLevels(sig,15),m30=structuralLevels(sig,30),all=[...m15,...m30],buy=sig.side==='BUY',slSide=buy?'S':'R',tpSide=buy?'R':'S';
-const stopPool=all.filter(x=>x.side===slSide&&(buy?x.price<sig.price:x.price>sig.price)).sort((a,b)=>Math.abs(sig.price-a.price)-Math.abs(sig.price-b.price));
-const slLevel=stopPool[0];
-const targetPool=all.filter(x=>x.side===tpSide&&(buy?x.price>sig.price:x.price<sig.price)).sort((a,b)=>Math.abs(a.price-sig.price)-Math.abs(b.price-sig.price));
-const tp1Level=targetPool[0];
-const targets=[];
-if(tp1Level)targets.push({name:'TP1',price:tp1Level.price,time:sig.time,tf:tp1Level.tf});
-if(tp1Level){
-const second=m30.filter(x=>x.side===tpSide&&(buy?x.price>tp1Level.price:x.price<tp1Level.price)).sort((a,b)=>buy?a.price-b.price:b.price-a.price)[0];
-if(second)targets.push({name:'TP2',price:second.price,time:sig.time,tf:30});
-}
-if(slLevel)targets.push({name:'SL',price:slLevel.price,time:sig.time,tf:slLevel.tf});
-return targets;
-}
 function stopLossTarget(sig){return structuralTargets(sig).find(x=>x.name==='SL')||null;}
+function selectImportantPivot(candidates,opposites,side,after){const valid=candidates.filter(x=>side==='BUY'?x.price>after:x.price<after);if(!valid.length)return null;const tol=Math.max(Math.abs(after)*0.0002,0.00001),ranked=valid.map(p=>{const cluster=valid.filter(q=>Math.abs(q.price-p.price)<=tol),touches=cluster.length;const before=opposites.filter(q=>q.time<p.time),afterOpp=opposites.filter(q=>q.time>p.time);const prev=before.at(-1),next=afterOpp[0];const prominence=Math.max(prev?Math.abs(p.price-prev.price):0,next?Math.abs(p.price-next.price):0);const distance=Math.abs(p.price-after);const score=touches*4+(prominence/Math.max(Math.abs(p.price),0.00001))*1000-distance/Math.max(Math.abs(after),0.00001)*0.05;return{p,score}});ranked.sort((a,b)=>b.score-a.score||Math.abs(a.p.price-after)-Math.abs(b.p.price-after));return ranked[0].p;}
+function dojiAfterSignal(sig,tf){const z=zigzagSettings(),period=tf||z.tf,c=completed(aggregate(S.raw,period),period*60).filter(x=>x.time>=sig.time);return c.find(x=>{const range=x.high-x.low;return range>0&&Math.abs(x.close-x.open)/range<=0.10})||null;}
+function liquidityTargets(sig){const tf=Math.max(1,Math.min(60,+$('tpTf')?.value||5)),z=zigzagSettings(),doji=dojiAfterSignal(sig,tf),targets=[];const pts=zigzag(S.raw,z.depth,z.deviation,z.separation,tf).filter(p=>p.confirmed<=sig.time);const buy=sig.side==='BUY',levels=buy?pts.filter(p=>p.type==='HIGH'):pts.filter(p=>p.type==='LOW');const tp1=selectImportantPivot(levels,pts.filter(p=>p.type!==(buy?'HIGH':'LOW')),sig.side,sig.price);if(tp1&&(buy?tp1.price>sig.price:tp1.price<sig.price))targets.push({name:'TP1',price:tp1.price,time:sig.time,tf:tf===60?'H1':'M'+tf});if(doji&&(buy?doji.close>sig.price:doji.close<sig.price))targets.push({name:'TP2',price:doji.close,time:doji.time,tf:tf===60?'H1':'M'+tf});return targets;}
 function targetHitInfo(sig,target){const after=completed(S.raw,60).filter(x=>x.time>sig.time&&(target.name!=='TP2'||x.time>target.time));const bar=after.find(x=>target.name==='SL'?(sig.side==='BUY'?x.low<=target.price:x.high>=target.price):(sig.side==='BUY'?x.high>=target.price:x.low<=target.price));return bar?{time:bar.time+60,bar,price:target.price}:null;}
 function stopLossTarget(sig){const tf=Math.max(1,Math.min(60,+$('slTf')?.value||5)),c=aggregate(S.raw,tf),p=detectPivots(c,3,tf),confirmed=p=>p.time+3*tf*60<=sig.time,buy=sig.side==='BUY',levels=(buy?p.lo:p.hi).filter(p=>confirmed(p)&&(buy?p.price<sig.price:p.price>sig.price)).sort((a,b)=>buy?b.price-a.price:a.price-b.price);return levels.length?{name:'SL',price:levels[0].price,time:sig.time,tf:tf===60?'H1':'M'+tf}:null;}
 function signalResult(sig){const tp1=liquidityTargets(sig).find(x=>x.name==='TP1'),sl=stopLossTarget(sig),hits=[];if(tp1){const hit=targetHitInfo(sig,tp1);if(hit)hits.push({target:tp1,hit});}if(sl){const hit=targetHitInfo(sig,sl);if(hit)hits.push({target:sl,hit});}return hits.sort((a,b)=>a.hit.time-b.hit.time||(a.target.name==='SL'?-1:1))[0]||null;}
