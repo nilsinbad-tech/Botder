@@ -178,15 +178,21 @@ function updateMarketTick(tick){
  processMarketSignal(symbol,market.candles,price,+tick.epoch);
 }
 async function loadGlobalMarket(symbol){
- if(S.markets.has(symbol))return;const meta=S.symbols.find(x=>x.code===symbol);if(!meta)return;const r=await send({ticks_history:symbol,adjust_start_time:1,count:1000,end:'latest',granularity:60,style:'candles'});
- const candles=(r.candles||[]).map(x=>({time:+x.epoch,open:+x.open,high:+x.high,low:+x.low,close:+x.close})).filter(x=>Number.isFinite(x.time)&&Number.isFinite(x.open)&&Number.isFinite(x.high)&&Number.isFinite(x.low)&&Number.isFinite(x.close));if(candles.length)S.markets.set(symbol,{name:meta.name,candles});
+ const existing=S.markets.get(symbol);
+ if(existing?.candles?.length)return existing;
+ const meta=S.symbols.find(x=>x.code===symbol);if(!meta)throw Error('Instrumento no encontrado: '+symbol);
+ const r=await send({ticks_history:symbol,adjust_start_time:1,count:1000,end:'latest',granularity:60,style:'candles'});
+ const candles=(r.candles||[]).map(x=>({time:+x.epoch,open:+x.open,high:+x.high,low:+x.low,close:+x.close})).filter(x=>Number.isFinite(x.time)&&Number.isFinite(x.open)&&Number.isFinite(x.high)&&Number.isFinite(x.low)&&Number.isFinite(x.close));
+ if(!candles.length)throw Error('Deriv no entregó velas M1 para '+symbol+'; se reintentará');
+ const market={name:meta.name,candles};S.markets.set(symbol,market);return market;
 }
 async function ensureGlobalSubscription(symbol){
  if(S.marketSubs.has(symbol))return;
- await loadGlobalMarket(symbol);
+ const market=await loadGlobalMarket(symbol);
+ if(!market?.candles?.length)throw Error('Mercado sin velas M1: '+symbol);
  const r=await send({ticks:symbol,subscribe:1});
  const subscriptionId=r.subscription?.id;
- if(!subscriptionId)throw Error('Deriv no confirmó la suscripción de ticks');
+ if(!subscriptionId)throw Error('Deriv no confirmó la suscripción de ticks: '+symbol);
  S.marketSubs.set(symbol,subscriptionId);
  S.marketLastTick.set(symbol,Date.now());
  if(r.tick)updateMarketTick(r.tick);
