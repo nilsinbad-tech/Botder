@@ -167,3 +167,8 @@
 .op-status.win{color:var(--green)!important}.op-status.loss{color:var(--red)!important}.op-status.vigente{color:#e7c27b!important}
 .history-rows{max-height:116px!important;overflow-y:auto!important;overscroll-behavior:contain}
 @media(max-width:600px){.recent-signals-card{padding:7px}.recent-signals-list{grid-template-columns:repeat(2,minmax(0,1fr));gap:4px}.recent-signals-list .active-op{padding:5px}.recent-signals-list .active-op-values{grid-template-columns:repeat(2,minmax(0,1fr))}.history-rows{max-height:116px!important}.summary-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.summary-grid article{min-height:50px}}
+
+/* Tres operaciones visibles al abrir el backtest y más altura para el gráfico principal */
+.history-rows{max-height:92px!important;overflow-y:auto!important}
+.main-chart{height:520px}
+@media(max-width:600px){.history-rows{max-height:92px!important}.main-chart{height:clamp(360px,58vh,460px)}}
