@@ -1,6 +1,6 @@
 (()=>{'use strict';
 const $=id=>document.getElementById(id),API='wss://api.derivws.com/trading/v1/options/ws/public',DAY=86400,COUNT=7000;
-const S={ws:null,req:0,pending:new Map(),symbols:[],symbol:'',raw:[],candles:[],chart:null,rsiChart:null,price:null,ema9:null,ema45:null,rsiLine:null,markerApi:null,obSeries:[],markers:[],trades:[],point:0,settings:{},scanTimer:null,reconnectTimer:null,reconnectDelay:1000,heartbeatTimer:null,connecting:false,tickCount:0,lastTickAt:0,currentPriceLine:null,liveSymbol:'',markets:new Map(),marketSubs:new Map(),activeSignals:new Map(),liveHistory:[],globalScanStarted:false};
+const S={ws:null,req:0,pending:new Map(),symbols:[],symbol:'',raw:[],candles:[],chart:null,rsiChart:null,price:null,ema9:null,ema45:null,rsiLine:null,markerApi:null,obSeries:[],markers:[],trades:[],point:0,settings:{},scanTimer:null,reconnectTimer:null,reconnectDelay:1000,heartbeatTimer:null,connecting:false,tickCount:0,lastTickAt:0,currentPriceLine:null,liveSymbol:'',markets:new Map(),marketSubs:new Map(),activeSignals:new Map(),liveHistory:[],globalScanStarted:false,scanBusy:false};
 const STORE='botder-scalping-m1-v1';
 function restoreLiveHistory(){try{const saved=JSON.parse(localStorage.getItem(STORE+'-live-history')||'[]');if(Array.isArray(saved))S.liveHistory=saved.filter(x=>x&&x.symbol&&x.side&&Number.isFinite(+x.time)).slice(-2000)}catch{S.liveHistory=[]}}
 function persistLiveHistory(){try{localStorage.setItem(STORE+'-live-history',JSON.stringify(S.liveHistory.slice(-2000)))}catch(e){console.warn('No se pudo guardar el historial live',e)}}
@@ -185,8 +185,9 @@ async function ensureGlobalSubscription(symbol){
  if(S.marketSubs.has(symbol))return;await loadGlobalMarket(symbol);const r=await send({ticks:symbol,subscribe:1});S.marketSubs.set(symbol,r.subscription?.id||true);if(r.tick)updateMarketTick(r.tick);
 }
 async function scanMissingMarkets(){
- for(const item of S.symbols){if(S.marketSubs.has(item.code))continue;try{await ensureGlobalSubscription(item.code)}catch(e){console.warn('Reintento escáner '+item.name+': '+e.message)}}
- renderActiveSignals();
+ if(S.scanBusy)return;S.scanBusy=true;
+ try{for(const item of S.symbols){if(S.marketSubs.has(item.code))continue;try{await ensureGlobalSubscription(item.code)}catch(e){console.warn('Reintento escáner '+item.name+': '+e.message)}}renderActiveSignals()}
+ finally{S.scanBusy=false}
 }
 async function startGlobalScanner(){
  if(S.globalScanStarted)return;S.globalScanStarted=true;
