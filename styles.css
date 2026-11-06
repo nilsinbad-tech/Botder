@@ -172,3 +172,8 @@
 .history-rows{max-height:92px!important;overflow-y:auto!important}
 .main-chart{height:520px}
 @media(max-width:600px){.history-rows{max-height:92px!important}.main-chart{height:clamp(360px,58vh,460px)}}
+
+/* Una sola lista de operaciones: abiertas arriba y resultados cerrados debajo */
+.signal-toast{position:fixed;z-index:1000;top:58px;left:50%;transform:translate(-50%,-12px);opacity:0;pointer-events:none;padding:9px 14px;border:1px solid #52647b;border-radius:8px;background:#101c2b;color:#eaf2fb;font-size:11px;font-weight:900;box-shadow:0 5px 20px #0008;transition:opacity .18s,transform .18s;white-space:nowrap;max-width:calc(100vw - 24px);overflow:hidden;text-overflow:ellipsis}
+.signal-toast.show{opacity:1;transform:translate(-50%,0)}.signal-toast.win{border-color:#19c99a;color:#70f0b5}.signal-toast.loss{border-color:#ff5968;color:#ff9ba4}
+.recent-signals-card{width:100%}
