@@ -163,8 +163,11 @@ function drawOverlay(zones){
   const mapY=p=>{
    const direct=S.price.priceToCoordinate(p);
    if(Number.isFinite(direct))return direct;
-   if(range&&Number.isFinite(range.from)&&Number.isFinite(range.to)&&range.to!==range.from)
-    return height*(range.to-p)/(range.to-range.from);
+   // Lightweight Charts devuelve minValue/maxValue, no from/to.
+   // Usarlos permite calcular y recortar niveles TP/SL fuera del rango visible.
+   const min=range?.minValue,max=range?.maxValue;
+   if(Number.isFinite(min)&&Number.isFinite(max)&&max>min)
+    return height*(max-p)/(max-min);
    return null;
   };
   for(const z of allZones){
