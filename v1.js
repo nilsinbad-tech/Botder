@@ -52,6 +52,16 @@ function obZones(m15){
 function config(){let cfg={};try{cfg=JSON.parse(localStorage.getItem(STORE)||'{}')}catch{}return cfg.global||{tp:12,sl:12}}
 function saveConfig(){let all={};try{all=JSON.parse(localStorage.getItem(STORE)||'{}')}catch{}all.global={tp:Math.max(1,+$('tpPoints').value||12),sl:Math.max(1,+$('slPoints').value||12)};localStorage.setItem(STORE,JSON.stringify(all))}
 const TP_SL_REFERENCE_PRICE=9592.00;
+// Calcula en el espacio de referencia y devuelve TP/SL convertidos al precio REAL.
+function calculateTpSl(realEntry,side,point,cfg){
+ const factor=realEntry/TP_SL_REFERENCE_PRICE;
+ if(!Number.isFinite(factor)||factor<=0)throw Error('Precio inválido para normalizar TP/SL');
+ const normalizedEntry=realEntry/factor; // equivale a 9592.00
+ const direction=side==='BUY'?1:-1;
+ const normalizedTp=normalizedEntry+direction*(cfg.tp*point);
+ const normalizedSl=normalizedEntry-direction*(cfg.sl*point);
+ return {tp:normalizedTp*factor,sl:normalizedSl*factor,scale:factor,normalizedEntry};
+}
 function symbolMeta(symbol=S.symbol,c=S.raw){const sym=S.symbols.find(x=>x.code===symbol),prices=(c||[]).slice(-100).map(x=>String(x.close)),digits=Math.max(0,...prices.map(x=>(x.split('.')[1]||'').length));const pip=Number(sym?.pip)||0;const point=pip>0?pip:Math.pow(10,-Math.min(8,digits||2));const decimals=Math.max(0,Math.min(8,pip>0?Math.max(0,Math.ceil(-Math.log10(pip)-1e-9)):digits));return{point,decimals}}
 function getPoint(){return symbolMeta(S.symbol,S.raw).point}
 function formatPrice(symbol,price,c){return Number(price).toFixed(symbolMeta(symbol,c).decimals)}
@@ -74,9 +84,8 @@ function signalsFor(c,asOfEnd=true,symbol=S.symbol){
   const candidates=zones.filter(z=>z.side===side&&z.confirmedAt<=bar.time&&!used.has(z.time+':'+z.side)&&bar.low<=z.high&&bar.high>=z.low);
   if(!candidates.length)continue;
   const zone=candidates.at(-1),entry=candle.close,cfg=config();
-  const scale=entry/TP_SL_REFERENCE_PRICE,tpDistance=cfg.tp*point*scale,slDistance=cfg.sl*point*scale;
-  const tp=entry+(side==='BUY'?1:-1)*tpDistance,sl=entry+(side==='BUY'?-1:1)*slDistance;
-  out.push({symbol,side,time:closeTime,price:entry,tp,sl,point,decimals:meta.decimals,scale,rsi:rv[i],trend15:side,trend5:side,obTime:zone.time,obLow:zone.low,obHigh:zone.high});
+  const levels=calculateTpSl(entry,side,point,cfg);
+  out.push({symbol,side,time:closeTime,price:entry,tp:levels.tp,sl:levels.sl,point,decimals:meta.decimals,scale:levels.scale,normalizedEntry:levels.normalizedEntry,rsi:rv[i],trend15:side,trend5:side,obTime:zone.time,obLow:zone.low,obHigh:zone.high});
   used.add(zone.time+':'+zone.side);lastEntryTime=closeTime;
  }
  return out;
