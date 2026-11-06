@@ -108,16 +108,27 @@ function optimizerConfigLabel(c){
  const ema=EMA_PAIRS.filter((x,i)=>c.emaMask&(1<<i)).map(x=>'EMA '+x[0]+'/'+x[1]).join(', ')||'Sin EMA extra';
  return 'ZZ M'+c.zigTf+' · P'+c.zigDepth+' D'+c.zigDeviation+' S'+c.zigSeparation+' · RSI M'+c.rsiTf+'/'+c.rsiPeriod+' · '+ema;
 }
+const OPTIMIZER_RESULT_KEY='botder-optimizer-saved-result-v1';
+function saveOptimizerResult(result,total,instrumentCount){
+ const saved={savedAt:Date.now(),total,instrumentCount,configs:result.configs,overall:result.overall.slice(0,10),perInstrument:result.perInstrument.map(x=>({name:x.name,rows:x.rows.slice(0,10)}))};
+ try{localStorage.setItem(OPTIMIZER_RESULT_KEY,JSON.stringify(saved));return saved}catch(e){$('optimizerStatus').textContent='No se pudo guardar el resultado en el teléfono: '+e.message;return null;}
+}
+function readOptimizerResult(){try{const raw=localStorage.getItem(OPTIMIZER_RESULT_KEY);return raw?JSON.parse(raw):null}catch{return null}}
 function renderOptimizerResults(result){
- const fmt=(list,showPF=true)=>list.slice(0,10).map((x,i)=>'<div class="optimizer-row"><b>#'+(i+1)+' '+optimizerConfigLabel(x.cfg)+'</b><span>Validación '+(x.valClosed>=5?x.valRate.toFixed(1):x.rate.toFixed(1))+'% · '+x.wins+'G/'+x.losses+'P · '+x.closed+' cerradas · '+x.open+' abiertas</span><small>Validación: '+x.valW+'G/'+x.valL+'P ('+x.valClosed+') · Entrenamiento: '+x.trainW+'G/'+x.trainL+'P'+(showPF?' · PF '+x.pf.toFixed(2):'')+'</small><button type="button" data-apply-optimizer="'+x.cfg.index+'">APLICAR ESTA CONFIGURACIÓN</button></div>').join('');
+ const fmt=(list,showPF=true)=>list.map((x,i)=>'<div class="optimizer-row"><b>#'+(i+1)+' '+optimizerConfigLabel(x.cfg)+'</b><span>Validación '+(x.valClosed>=5?x.valRate.toFixed(1):x.rate.toFixed(1))+'% · '+x.wins+'G/'+x.losses+'P · '+x.closed+' cerradas · '+x.open+' abiertas</span><small>Validación: '+x.valW+'G/'+x.valL+'P ('+x.valClosed+') · Entrenamiento: '+x.trainW+'G/'+x.trainL+'P'+(showPF?' · PF '+x.pf.toFixed(2):'')+'</small><button type="button" data-apply-optimizer="'+x.cfg.index+'">APLICAR ESTA CONFIGURACIÓN</button></div>').join('');
  const overall=fmt(result.overall,false);
- let out='<h4>TOP 10 GENERAL · '+result.overall.length+' configuraciones</h4>'+overall;
- for(const item of result.perInstrument){out+='<h4>'+item.name+' · TOP 10</h4>'+fmt(item.rows,true);}
- $('optimizerResults').innerHTML=out||'No se encontraron resultados.';
- $('optimizerResults').querySelectorAll('[data-apply-optimizer]').forEach(btn=>btn.addEventListener('click',()=>{const c=result.configs[+btn.dataset.applyOptimizer];applyOptimizerConfig(c);saveSettings();S.backtestCache=null;S.lastBacktestScan=0;S.activeCache=[];S.lastActiveScan=0;render();$('optimizerStatus').textContent='Configuración aplicada manualmente. Revisa el backtest antes de usarla.';}));
+ const individual=result.perInstrument.map(item=>{const best=item.rows[0];return '<div class="optimizer-instrument"><b>'+item.name+'</b>'+(best?fmt([best],true):'<small>Sin operaciones cerradas</small>')+'</div>';}).join('');
+ const stamp=result.savedAt?new Date(result.savedAt).toLocaleString('es-PA'):'Resultado guardado';
+ $('optimizerResults').innerHTML='<details class="optimizer-folder" open><summary>🏆 MEJORES RESULTADOS GENERALES</summary><div class="optimizer-folder-content">'+(overall||'Sin resultados')+'</div></details><details class="optimizer-folder"><summary>📊 MEJOR RESULTADO INDIVIDUAL POR INSTRUMENTO ('+result.perInstrument.length+')</summary><div class="optimizer-folder-content">'+(individual||'Sin resultados')+'</div></details><details class="optimizer-folder"><summary>📁 RESUMEN DE LA PRUEBA</summary><div class="optimizer-folder-content"><div class="optimizer-summary"><b>'+Number(result.total||0).toLocaleString('es-PA')+' pruebas calculadas</b><span>'+Number(result.instrumentCount||result.perInstrument.length).toLocaleString('es-PA')+' instrumentos analizados</span><small>Guardado: '+stamp+'</small><small>Resultados almacenados en este dispositivo. Consultarlos no vuelve a ejecutar el optimizador.</small></div></div></details>';
+ $('optimizerResults').querySelectorAll('[data-apply-optimizer]').forEach(btn=>btn.addEventListener('click',()=>{const cfg=result.configs[+btn.dataset.applyOptimizer];if(!cfg)return;applyOptimizerConfig(cfg);saveSettings();S.backtestCache=null;S.lastBacktestScan=0;S.activeCache=[];S.lastActiveScan=0;render();$('optimizerStatus').textContent='Configuración aplicada manualmente. Los resultados guardados no se modificaron.';}));
+}
+function loadSavedOptimizerResults(){
+ const saved=readOptimizerResult();
+ if(saved){renderOptimizerResults(saved);$('optimizerStatus').textContent='Resultados guardados disponibles · no se volverán a calcular.';$('optimizerBtn').disabled=true;$('optimizerBtn').textContent='PRUEBAS YA GUARDADAS';}
 }
 async function startOptimizer(){
  if(S.optimizerRunning)return;
+ const previous=readOptimizerResult();if(previous){renderOptimizerResults(previous);$('optimizerStatus').textContent='Ya existe una prueba guardada. No se inició otro cálculo.';return;}
  const button=$('optimizerBtn'),status=$('optimizerStatus'),results=$('optimizerResults');
  const original={settings:{},symbol:S.symbol,raw:S.raw,exit:{...zigzagSettings()}};
  for(const id of Object.keys(SETTINGS_DEFAULTS)){if($(id))original.settings[id]=$(id).type==='checkbox'?$(id).checked:$(id).value;}
@@ -151,7 +162,8 @@ async function startOptimizer(){
     if(done<total){requestAnimationFrame(step);return;}
     overall.forEach(x=>{x.rate=x.closed?100*x.wins/x.closed:0;x.valRate=x.valClosed?100*x.valW/x.valClosed:0;x.pf=x.lossMove?x.winMove/x.lossMove:(x.winMove?99:0);});
     const final={configs,overall:overall.slice().sort(optimizerRank),perInstrument};
-    restore();renderOptimizerResults(final);
+    const stored=saveOptimizerResult(final,total,items.length);
+    restore();renderOptimizerResults(stored||final);if(stored){button.disabled=true;button.textContent='PRUEBAS YA GUARDADAS';}
     const best=final.overall[0];status.textContent='Finalizado: '+total.toLocaleString('es-PA')+' pruebas. Mejor general: '+(best?(best.valClosed>=5?best.valRate:best.rate).toFixed(1)+'% de acierto, '+best.wins+' ganadas y '+best.losses+' perdidas.':'sin operaciones cerradas');
     resolve();
    }catch(e){restore();status.textContent='Error en optimización: '+e.message;resolve();}
@@ -183,7 +195,7 @@ function resetSettingsGroup(group){const groups={ob:['obTf','obPrevious','obTf2'
 function resetAllSettings(){applySettings(SETTINGS_DEFAULTS);S.symbol='';S.didFit=false;const sel=$('symbolSelect');if(sel&&sel.options.length)S.symbol=sel.options[0].value;saveSettings();if(sel&&S.symbol)sel.value=S.symbol;render();if(S.symbol)reload().catch(e=>$('dataStatus').textContent=e.message);}
 function restoreSavedSettings(){const saved=readSettings();applySettings(saved);S._savedSymbol=saved.symbol||'';}
 
-function bind(){ $('symbolSelect').addEventListener('change',async e=>{S.symbol=e.target.value;S.didFit=false;saveSettings();await reload()});document.querySelectorAll('[data-tf]').forEach(b=>b.addEventListener('click',()=>{S.tf=+b.dataset.tf;document.querySelectorAll('[data-tf]').forEach(x=>x.classList.toggle('active',x===b));S.didFit=false;saveSettings();render()}));$('refreshBtn').addEventListener('click',()=>reconnectNow().catch(err=>console.warn('Reconexión manual fallida:',err)));['obTf','obTf2','obPrevious','rsiTf','rsiPeriod','zigTf','zigDepth','zigDeviation','zigSeparation','ema50100','ema2575','ema1030','ema1050','ema1070'].forEach(id=>$(id).addEventListener('change',()=>{saveSettings();if(['rsiTf','rsiPeriod','zigTf','zigDepth','zigDeviation','zigSeparation','ema50100','ema2575','ema1030','ema1050','ema1070'].includes(id)){S.backtestCache=null;S.lastBacktestScan=0;S.activeCache=[];S.lastActiveScan=0;}render()}));document.querySelectorAll('[data-reset]').forEach(b=>b.addEventListener('click',()=>resetSettingsGroup(b.dataset.reset)));$('resetAllSettings').addEventListener('click',resetAllSettings);$('backtestBtn').addEventListener('click',()=>{S.activeCache=[];S.lastActiveScan=0;S.backtestCache=null;S.lastBacktestScan=0;render();$('backtestStatus').textContent='Backtest recalculado con '+S.raw.length+' velas M1 de '+S.symbol+'.'});$('optimizerBtn').addEventListener('click',startOptimizer);}
+function bind(){ $('symbolSelect').addEventListener('change',async e=>{S.symbol=e.target.value;S.didFit=false;saveSettings();await reload()});document.querySelectorAll('[data-tf]').forEach(b=>b.addEventListener('click',()=>{S.tf=+b.dataset.tf;document.querySelectorAll('[data-tf]').forEach(x=>x.classList.toggle('active',x===b));S.didFit=false;saveSettings();render()}));$('refreshBtn').addEventListener('click',()=>reconnectNow().catch(err=>console.warn('Reconexión manual fallida:',err)));['obTf','obTf2','obPrevious','rsiTf','rsiPeriod','zigTf','zigDepth','zigDeviation','zigSeparation','ema50100','ema2575','ema1030','ema1050','ema1070'].forEach(id=>$(id).addEventListener('change',()=>{saveSettings();if(['rsiTf','rsiPeriod','zigTf','zigDepth','zigDeviation','zigSeparation','ema50100','ema2575','ema1030','ema1050','ema1070'].includes(id)){S.backtestCache=null;S.lastBacktestScan=0;S.activeCache=[];S.lastActiveScan=0;}render()}));document.querySelectorAll('[data-reset]').forEach(b=>b.addEventListener('click',()=>resetSettingsGroup(b.dataset.reset)));$('resetAllSettings').addEventListener('click',resetAllSettings);$('backtestBtn').addEventListener('click',()=>{S.activeCache=[];S.lastActiveScan=0;S.backtestCache=null;S.lastBacktestScan=0;render();$('backtestStatus').textContent='Backtest recalculado con '+S.raw.length+' velas M1 de '+S.symbol+'.'});$('optimizerBtn').addEventListener('click',startOptimizer);loadSavedOptimizerResults();}
 async function start(){bind();restoreSavedSettings();try{await connect();await loadSymbols();if(S._savedSymbol&&[...$('symbolSelect').options].some(o=>o.value===S._savedSymbol))S.symbol=S._savedSymbol;$('symbolSelect').value=S.symbol;await reload();S.reconnectAttempts=0}catch(e){connection(false,'Error: '+e.message);$('dataStatus').textContent=e.message;scheduleReconnect(e.message)}}
 start();
 })();
