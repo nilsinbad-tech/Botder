@@ -56,7 +56,7 @@ group.prices.push(level.price);group.touches++;group.price=group.prices.reduce((
 }
 return clusters.map(x=>({...x,score:x.strength+Math.max(0,x.touches-1)*0.75}));
 }
-function exitZigzagPoints(sig){const z=S.optimizerExitSettings||zigzagSettings(),pts=zigzag(S.raw,z.depth,z.deviation,z.separation,5).filter(p=>p.time<sig.time&&p.confirmed<=sig.time);return pts;}
+function exitZigzagPoints(sig){const z=S.optimizerExitSettings||readOptimizerResult()?.exitSettings||zigzagSettings(),pts=zigzag(S.raw,z.depth,z.deviation,z.separation,5).filter(p=>p.time<sig.time&&p.confirmed<=sig.time);return pts;}
 function stopLossTarget(sig){const pts=exitZigzagPoints(sig),buy=sig.side==='BUY',levels=pts.filter(p=>buy?p.type==='LOW'&&p.price<sig.price:p.type==='HIGH'&&p.price>sig.price).sort((a,b)=>b.time-a.time);return levels.length?{name:'SL',price:levels[0].price,time:sig.time,pivotTime:levels[0].time,tf:'M5'}:null;}
 function selectImportantPivot(candidates,opposites,side,after){const valid=candidates.filter(x=>side==='BUY'?x.price>after:x.price<after);if(!valid.length)return null;const tol=Math.max(Math.abs(after)*0.0002,0.00001),ranked=valid.map(p=>{const cluster=valid.filter(q=>Math.abs(q.price-p.price)<=tol),touches=cluster.length;const before=opposites.filter(q=>q.time<p.time),afterOpp=opposites.filter(q=>q.time>p.time);const prev=before.at(-1),next=afterOpp[0];const prominence=Math.max(prev?Math.abs(p.price-prev.price):0,next?Math.abs(p.price-next.price):0);const distance=Math.abs(p.price-after);const score=touches*4+(prominence/Math.max(Math.abs(p.price),0.00001))*1000-distance/Math.max(Math.abs(after),0.00001)*0.05;return{p,score}});ranked.sort((a,b)=>b.score-a.score||Math.abs(a.p.price-after)-Math.abs(b.p.price-after));return ranked[0].p;}
 function dojiAfterSignal(sig,tf){const z=zigzagSettings(),period=tf||z.tf,c=completed(aggregate(S.raw,period),period*60).filter(x=>x.time>=sig.time);return c.find(x=>{const range=x.high-x.low;return range>0&&Math.abs(x.close-x.open)/range<=0.10})||null;}
@@ -196,7 +196,7 @@ function lineFromM5(c,values){const src=emaM5(),out=[];let j=0,last=null;for(con
 function rsiForChart(){const src=rsiSource(),out=[];for(let i=0;i<src.c.length;i++)if(Number.isFinite(src.v[i]))out.push({time:src.c[i].time,value:src.v[i]});return out;}
 function render(){
  if(!S.raw.length||!window.LightweightCharts)return;
- const c=chartData(),L=LightweightCharts,now=S.raw.at(-1),chartKey=S.symbol+'|'+S.tf+'|'+c.length+'|'+(c.at(-2)?.time||c.at(-1)?.time||0),newBar=chartKey!==S.chartDataKey;
+ const c=chartData().slice(-1200),L=LightweightCharts,now=S.raw.at(-1),chartKey=S.symbol+'|'+S.tf+'|'+c.length+'|'+(c.at(-2)?.time||c.at(-1)?.time||0),newBar=chartKey!==S.chartDataKey;
  const trendKey=S.symbol+'|'+(completed(aggregate(S.raw,5),300).at(-1)?.time||0);if(!S.trendCache||S.trendCache.key!==trendKey)S.trendCache={key:trendKey,value:emaDirection()};
  const dir=S.trendCache.value,signals=findInstrumentSignals(S.symbol),latest=signals.at(-1),latestResult=latest?signalResult(latest):null,zcfg=zigzagSettings();
  $('trendValue').textContent=dir.lateral||dir.blocked?'LATERAL · ENTRADAS BLOQUEADAS':dir.side==='BUY'?'TENDENCIA ALCISTA':dir.side==='SELL'?'TENDENCIA BAJISTA':'ESPERANDO';$('trendValue').style.color=dir.lateral||dir.blocked?'#f5b942':dir.side==='BUY'?'#19c99a':dir.side==='SELL'?'#ff5968':'#fff';$('priceValue').textContent=now.close.toFixed(4);
