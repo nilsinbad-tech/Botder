@@ -7,7 +7,30 @@ function send(p){return new Promise((resolve,reject)=>{if(!S.ws||S.ws.readyState
 function stopHeartbeat(){if(S.heartbeatTimer){clearInterval(S.heartbeatTimer);S.heartbeatTimer=null}}
 function scheduleReconnect(){if(S.reconnectTimer)return;const wait=S.reconnectDelay;status('Deriv desconectada · reconectando…');S.reconnectTimer=setTimeout(async()=>{S.reconnectTimer=null;try{await connect();S.reconnectDelay=1000;await loadSymbols();if(S.symbol&&S.symbols.some(x=>x.code===S.symbol))$('symbol').value=S.symbol;await loadCurrent()}catch(e){status('Reintentando conexión…');S.reconnectDelay=Math.min(30000,S.reconnectDelay*2);scheduleReconnect()}},wait)}
 function connect(){if(S.connecting)return Promise.reject(Error('Conexión en curso'));S.connecting=true;return new Promise((resolve,reject)=>{const ws=new WebSocket(API);S.ws=ws;let settled=false;const timer=setTimeout(()=>{if(!settled){settled=true;S.connecting=false;try{ws.close()}catch{}reject(Error('Tiempo de espera conectando Deriv'))}},12000);ws.onopen=()=>{if(ws!==S.ws){ws.close();return}clearTimeout(timer);settled=true;S.connecting=false;S.reconnectDelay=1000;status('Deriv conectada',true);stopHeartbeat();S.heartbeatTimer=setInterval(()=>{if(S.ws===ws&&ws.readyState===1)send({ping:1}).catch(()=>{try{ws.close()}catch{}})},30000);resolve()};ws.onerror=()=>{clearTimeout(timer);if(!settled){settled=true;S.connecting=false;reject(Error('Error de conexión Deriv'))}};ws.onclose=()=>{if(ws!==S.ws)return;clearTimeout(timer);S.connecting=false;stopHeartbeat();status('Deriv desconectada');for(const p of S.pending.values())p.reject(Error('Conexión cerrada'));S.pending.clear();scheduleReconnect()};ws.onmessage=e=>{let m;try{m=JSON.parse(e.data)}catch{return}if(m.req_id&&S.pending.has(m.req_id)){const p=S.pending.get(m.req_id);S.pending.delete(m.req_id);m.error?p.reject(Error(m.error.message)):p.resolve(m)}}})}
-async function loadSymbols(){const r=await send({active_symbols:'brief'});S.symbols=(r.active_symbols||[]).filter(x=>!Number(x.is_trading_suspended)).map(x=>({code:x.underlying_symbol||x.symbol,name:x.display_name||x.underlying_symbol_name||x.symbol,pip:Number(x.pip)||0})).filter(x=>x.code).slice(0,80);$('symbol').innerHTML=S.symbols.map(x=>'<option value="'+x.code+'">'+x.name+'</option>').join('');if(!S.symbols.length)throw Error('Deriv no devolvió instrumentos activos')}
+async function loadSymbols(){
+ const r=await send({active_symbols:'brief'});
+ const allowed=(r.active_symbols||[]).filter(x=>!Number(x.is_trading_suspended)).map(x=>{
+  const name=String(x.display_name||x.underlying_symbol_name||x.symbol||'').trim();
+  const code=x.underlying_symbol||x.symbol;
+  return{code,name,pip:Number(x.pip)||0};
+ }).filter(x=>{
+  if(!x.code||!x.name)return false;
+  const n=x.name.replace(/\\s+/g,' ').trim();
+  if(/^(?:Crash|Boom)\\s+(?:50|500)\\s+Index$/i.test(n))return true;
+  const v=n.match(/^Volatility\\s+(\\d+)(?:\\s*\\(1s\\))?\\s+Index$/i);
+  return !!v&&Number(v[1])>=10&&Number(v[1])<=75;
+ });
+ const unique=new Map();for(const x of allowed)if(!unique.has(x.code))unique.set(x.code,x);
+ S.symbols=[...unique.values()].sort((a,b)=>{
+  const group=x=>/^Volatility/i.test(x.name)?0:/^Crash/i.test(x.name)?1:2;
+  const ga=group(a),gb=group(b);if(ga!==gb)return ga-gb;
+  const num=x=>Number((x.name.match(/\\d+/)||[])[0]||0);
+  if(num(a)!==num(b))return num(a)-num(b);
+  return a.name.localeCompare(b.name);
+ });
+ $('symbol').innerHTML=S.symbols.map(x=>'<option value="'+x.code+'">'+x.name+'</option>').join('');
+ if(!S.symbols.length)throw Error('Deriv no devolvió instrumentos permitidos (Volatility 10–75, Crash/Boom 50/500)');
+}
 async function history(symbol){
  const target=COUNT,chunk=4000,all=[];let receivedRaw=0,invalid=0;
  const first=await send({ticks_history:symbol,adjust_start_time:1,count:chunk,end:'latest',granularity:60,style:'candles'});
