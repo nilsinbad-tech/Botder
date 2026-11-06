@@ -19,3 +19,10 @@
 .tp-level-line{opacity:.72!important;border-top-width:1px!important;}
 .tp-level-line.sl{border-top-width:1px!important;}
 .tp-level-label{min-width:0!important;padding:1px 3px!important;font-size:7px!important;line-height:10px!important;border-radius:2px!important;opacity:.92!important;}
+
+/* TP en verde y SL en rojo; precio pequeño al extremo de cada nivel */
+.tp-level-line:not(.sl){border-top-color:#24d18b!important;}
+.tp-level-label:not(.sl){border-color:#24d18b!important;color:#70f0b5!important;}
+.tp-level-line.sl{border-top-color:#ff5968!important;}
+.tp-level-label.sl{border-color:#ff5968!important;color:#ff9ba4!important;}
+.tp-level-label{font-size:7px!important;line-height:9px!important;padding:1px 3px!important;}
