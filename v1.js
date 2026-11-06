@@ -135,10 +135,10 @@ function drawOverlay(zones){const host=$('chart');host.querySelectorAll('.v1-ove
 function renderSignalMarkers(liveSignal=null){
  const markers=[];
  for(const s of S.trades){
-  markers.push({time:s.time-60,position:s.side==='BUY'?'belowBar':'aboveBar',color:s.side==='BUY'?'#20d18b':'#ff5968',shape:s.side==='BUY'?'arrowUp':'arrowDown',text:s.side==='BUY'?'COMPRA':'VENTA'});
-  if(s.exitTime&&(s.result==='WIN'||s.result==='LOSS'||s.result==='CLOSED'))markers.push({time:s.exitTime-60,position:s.side==='BUY'?'aboveBar':'belowBar',color:s.result==='WIN'?'#20d18b':s.result==='LOSS'?'#ff5968':'#ffc45d',shape:'circle',text:s.result});
+  markers.push({time:s.time-60,position:s.side==='BUY'?'belowBar':'aboveBar',color:s.side==='BUY'?'#35ffad':'#ff5268',shape:'circle',size:0.7,text:s.side==='BUY'?'B':'S'});
+  if(s.exitTime&&(s.result==='WIN'||s.result==='LOSS'||s.result==='CLOSED'))markers.push({time:s.exitTime-60,position:s.side==='BUY'?'aboveBar':'belowBar',color:s.result==='WIN'?'#20d18b':s.result==='LOSS'?'#ff5968':'#ffc45d',shape:'circle',size:0.5,text:s.result});
  }
- if(liveSignal)markers.push({time:liveSignal.time-60,position:liveSignal.side==='BUY'?'belowBar':'aboveBar',color:liveSignal.side==='BUY'?'#68f0b5':'#ff8792',shape:'arrow',text:(liveSignal.side==='BUY'?'COMPRA':'VENTA')+' EN VIVO'});
+ if(liveSignal)markers.push({time:liveSignal.time-60,position:liveSignal.side==='BUY'?'belowBar':'aboveBar',color:liveSignal.side==='BUY'?'#72ffd0':'#ff8798',shape:'circle',size:0.8,text:liveSignal.side==='BUY'?'B':'S'});
  try{if(S.markerApi)S.markerApi.setMarkers(markers);else if(S.price.setMarkers)S.price.setMarkers(markers)}catch(e){console.error('No se pudieron actualizar las señales del gráfico',e)}
 }
 function updatePriceLine(price){
