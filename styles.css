@@ -236,3 +236,8 @@
 .recent-signals-list .active-op-values{grid-template-columns:repeat(6,minmax(0,1fr))!important;gap:3px!important}
 .recent-signals-list .active-op-values .reward-risk{grid-column:span 1;min-width:0}
 .recent-signals-list .active-op-values .reward-risk b{color:#19c99a!important;white-space:normal!important}
+
+
+/* Resultados WIN/LOSS separados debajo del gráfico */
+.closed-signals-card{margin-top:10px}
+.closed-signals-card .recent-signals-list{max-height:280px;overflow-y:auto;overscroll-behavior:contain}
