@@ -133,7 +133,80 @@ function backtest48h(c){const now=Math.floor(Date.now()/1000),cutoff=now-48*3600
 function initCharts(){if(!window.LightweightCharts)throw Error('No cargó el gráfico');const L=LightweightCharts;$('chart').innerHTML='';$('rsiChart').innerHTML='';S.chart=L.createChart($('chart'),{autoSize:true,layout:{background:{type:'solid',color:'#0a1320'},textColor:'#aab9ca'},grid:{vertLines:{color:'#1b2a3d'},horzLines:{color:'#1b2a3d'}},timeScale:{timeVisible:true,borderColor:'#34445a'},rightPriceScale:{borderColor:'#34445a'},handleScroll:{mouseWheel:true,pressedMouseMove:true,horzTouchDrag:true},handleScale:{mouseWheel:true,pinch:true}});S.price=S.chart.addSeries(L.CandlestickSeries,{upColor:'#20d18b',downColor:'#ff5968',wickUpColor:'#20d18b',wickDownColor:'#ff5968',borderVisible:false,lastValueVisible:true,priceLineVisible:false});S.markerApi=L.createSeriesMarkers?L.createSeriesMarkers(S.price,[]):null;S.ema9=S.chart.addSeries(L.LineSeries,{color:'#318bff',lineWidth:2,priceLineVisible:false,title:'EMA 9'});S.ema20=S.chart.addSeries(L.LineSeries,{color:'#ff9d28',lineWidth:2,priceLineVisible:false,title:'EMA 20'});S.rsiChart=L.createChart($('rsiChart'),{autoSize:true,layout:{background:{type:'solid',color:'#0a1320'},textColor:'#aab9ca'},grid:{vertLines:{color:'#1b2a3d'},horzLines:{color:'#1b2a3d'}},timeScale:{visible:false},rightPriceScale:{borderColor:'#34445a'}});S.rsiLine=S.rsiChart.addSeries(L.LineSeries,{color:'#b36bff',lineWidth:2,priceLineVisible:false});[25,50,75].forEach((level,i)=>S.rsiLine.createPriceLine({price:level,color:i===1?'#8796aa':i===0?'#ff5968':'#20d18b',lineWidth:1,lineStyle:2,axisLabelVisible:true,title:String(level)}));}
 function drawChart(){const c=S.raw,m9=ema(c,9),m45=ema(c,20),rv=rsi(c),signals=S.trades;S.price.setData(c);updatePriceLine(c.at(-1)?.close);S.ema9.setData(c.map((x,i)=>({time:x.time,value:m9[i]})));S.ema20.setData(c.map((x,i)=>({time:x.time,value:m45[i]})));S.rsiLine.setData(c.map((x,i)=>rv[i]==null?null:{time:x.time,value:rv[i]}).filter(Boolean));renderSignalMarkers();const to=Math.floor(Date.now()/1000),from=to-48*3600;try{S.chart.timeScale().setVisibleRange({from,to});S.rsiChart.timeScale().setVisibleRange({from,to})}catch{}drawOverlay(obZones(aggregate(S.raw,15)));const last=rv.at(-1),d15=trend(aggregate(S.raw,15)),d5=trend(aggregate(S.raw,5));$('trend15').textContent=d15==='BUY'?'ALCISTA':d15==='SELL'?'BAJISTA':'LATERAL';$('trend5').textContent=d5==='BUY'?'ALCISTA':d5==='SELL'?'BAJISTA':'LATERAL';$('trend15').style.color=d15==='BUY'?'var(--green)':d15==='SELL'?'var(--red)':'#ffc45d';$('trend5').style.color=d5==='BUY'?'var(--green)':d5==='SELL'?'var(--red)':'#ffc45d';$('rsiValue').textContent=last==null?'—':last.toFixed(1);const rs=last>=50&&last<=75?'RSI COMPRA':last>=25&&last<50?'RSI VENTA':'RSI NEUTRAL';$('rsiState').textContent=rs;$('rsiState').style.color=rs.includes('COMPRA')?'var(--green)':rs.includes('VENTA')?'var(--red)':'#ffc45d';const latest=selectedChartTrades().at(-1);$('signalState').textContent=latest?(latest.side==='BUY'?'COMPRA':'VENTA')+' · '+(latest.result==='WIN'?'GANADA':latest.result==='LOSS'?'PERDIDA':latest.result==='OPEN'?'ABIERTA':'CERRADA'):'SIN OPERACIÓN';$('chartName').textContent=S.symbol+' · M1';const m15=aggregate(S.raw,15),zones=obZones(m15).slice(-4);$('rsiCaption').textContent='RSI '+(last==null?'—':last.toFixed(1))+' · '+rs+' · M15 '+$('trend15').textContent+' / M5 '+$('trend5').textContent;return zones}
 
-function drawOverlay(zones){const host=$('chart');host.querySelectorAll('.v1-overlay,.trade-overlay').forEach(x=>x.remove());const layer=document.createElement('div');layer.className='v1-overlay';host.insertBefore(layer,host.firstChild);const tradeLayer=document.createElement('div');tradeLayer.className='trade-overlay';host.appendChild(tradeLayer);const end=Math.floor(Date.now()/1000);const cutoff=end-48*3600;const allZones=(zones||[]).filter(z=>z.time>=cutoff).slice(-4);for(let i=0;i<allZones.length;i++){const z=allZones[i],recent=false,el=document.createElement('div');el.className='obbox '+(z.side==='BUY'?'buy':'sell');el.textContent=z.side==='BUY'?'OB ALCISTA M15':'OB BAJISTA M15';el.style.color=z.side==='BUY'?'#20d18b':'#ff5968';layer.appendChild(el);z._el=el;z._extend=false;z._end=z.time+900}const areas=[];for(const t of selectedChartTrades()){const xEnd=t.exitTime||end+60;for(const kind of ['tp','sl']){const el=document.createElement('div');el.className='trade-zone '+kind;const label=document.createElement('span');label.className='trade-label '+kind;label.textContent=kind.toUpperCase();tradeLayer.append(el,label);areas.push({el,label,t,kind,xEnd})}}const update=()=>{const ts=S.chart.timeScale(),width=host.clientWidth,height=host.clientHeight,now=Math.floor(Date.now()/1000);for(const z of allZones){const rawX1=ts.timeToCoordinate(z.time),x2=z._extend?width:ts.timeToCoordinate(z._end),y1=S.price.priceToCoordinate(z.high),y2=S.price.priceToCoordinate(z.low);if((rawX1==null&&x2==null)||y1==null||y2==null){z._el.style.display='none';continue}const x1=rawX1==null?0:rawX1,right=x2==null?width:x2;if(right<0||x1>width){z._el.style.display='none';continue}z._el.style.display='block';z._el.style.left=Math.max(0,x1)+'px';z._el.style.width=Math.max(2,Math.min(width,right)-Math.max(0,x1))+'px';z._el.style.top=Math.max(0,Math.min(y1,y2))+'px';z._el.style.height=Math.max(3,Math.abs(y2-y1))+'px'}for(const a of areas){const rawX1=ts.timeToCoordinate(a.t.time-60),rawX2=ts.timeToCoordinate(a.t.exitTime||now+60),firstTime=S.raw[0]?.time??0,lastTime=S.raw.at(-1)?.time??now;const x1=rawX1==null?(a.t.time-60<=firstTime?0:width):rawX1,x2=rawX2==null?(a.xEnd>=lastTime?width:(a.xEnd<firstTime?0:null)):rawX2,level=a.kind==='tp'?a.t.tp:a.t.sl,range=S.price.priceScale().getVisiblePriceRange?.(),mapY=p=>{const direct=S.price.priceToCoordinate(p);if(direct!=null)return direct;if(range&&range.to!==range.from)return height*(range.to-p)/(range.to-range.from);return null},y1=mapY(a.t.price),y2=mapY(level);if(x2==null||y1==null||y2==null){a.el.style.display='none';a.label.style.display='none';continue}const left=Math.max(0,Math.min(x1,x2)),right=Math.min(width,Math.max(x1,x2)),top=Math.max(0,Math.min(y1,y2)),bottom=Math.min(height,Math.max(y1,y2));a.el.style.display='block';a.el.style.left=left+'px';a.el.style.width=Math.max(2,right-left)+'px';a.el.style.top=top+'px';a.el.style.height=Math.max(2,bottom-top)+'px';a.label.style.display='block';const decimals=Number.isInteger(a.t.decimals)?a.t.decimals:symbolMeta(S.symbol,S.raw).decimals;a.label.textContent=(a.kind==='tp'?'TP ':'SL ')+Number(level).toFixed(decimals);a.label.style.left=Math.max(0,Math.min(width-72,left))+'px';const labelY=a.kind==='tp'?top-15:bottom+2;a.label.style.top=Math.max(0,Math.min(height-12,labelY))+'px'}};host._updateTradeOverlay=update;S.chart.timeScale().subscribeVisibleLogicalRangeChange(update);requestAnimationFrame(update)}
+function drawOverlay(zones){
+ const host=$('chart');
+ host.querySelectorAll('.v1-overlay,.trade-overlay').forEach(x=>x.remove());
+ const layer=document.createElement('div');layer.className='v1-overlay';host.insertBefore(layer,host.firstChild);
+ const tradeLayer=document.createElement('div');tradeLayer.className='trade-overlay';host.appendChild(tradeLayer);
+ const end=Math.floor(Date.now()/1000),cutoff=end-48*3600;
+ const allZones=(zones||[]).filter(z=>z.time>=cutoff).slice(-4);
+ for(const z of allZones){
+  const el=document.createElement('div');el.className='obbox '+(z.side==='BUY'?'buy':'sell');
+  el.textContent=z.side==='BUY'?'OB ALCISTA M15':'OB BAJISTA M15';el.style.color=z.side==='BUY'?'#20d18b':'#ff5968';
+  layer.appendChild(el);z._el=el;z._end=z.time+900;
+ }
+ const areas=[];
+ for(const t of selectedChartTrades()){
+  if(!Number.isFinite(+t.time)||!Number.isFinite(+t.price)||!Number.isFinite(+t.tp)||!Number.isFinite(+t.sl))continue;
+  for(const kind of ['tp','sl']){
+   const el=document.createElement('div');el.className='trade-zone '+kind;
+   const label=document.createElement('span');label.className='trade-label '+kind;
+   tradeLayer.append(el,label);areas.push({el,label,t,kind});
+  }
+ }
+ const update=()=>{
+  if(!S.chart||!S.price||!host.isConnected)return;
+  const ts=S.chart.timeScale(),width=host.clientWidth,height=host.clientHeight,now=Math.floor(Date.now()/1000);
+  const firstTime=S.raw[0]?.time??0,lastTime=S.raw.at(-1)?.time??now;
+  const scale=S.price.priceScale();
+  let range=null;try{range=scale.getVisiblePriceRange?.()||null}catch{}
+  const mapY=p=>{
+   const direct=S.price.priceToCoordinate(p);
+   if(Number.isFinite(direct))return direct;
+   if(range&&Number.isFinite(range.from)&&Number.isFinite(range.to)&&range.to!==range.from)
+    return height*(range.to-p)/(range.to-range.from);
+   return null;
+  };
+  for(const z of allZones){
+   const rawX1=ts.timeToCoordinate(z.time),rawX2=ts.timeToCoordinate(z._end);
+   const y1=mapY(z.high),y2=mapY(z.low);
+   if(y1==null||y2==null){z._el.style.display='none';continue}
+   const x1=rawX1==null?(z.time<=firstTime?0:width):rawX1;
+   const right=rawX2==null?(z._end>=lastTime?width:(z._end<firstTime?0:null)):rawX2;
+   if(right==null||right<0||x1>width||right<=0){z._el.style.display='none';continue}
+   const left=Math.max(0,x1),endX=Math.min(width,right),top=Math.max(0,Math.min(y1,y2)),bottom=Math.min(height,Math.max(y1,y2));
+   if(endX<=left||bottom<=top){z._el.style.display='none';continue}
+   z._el.style.display='block';z._el.style.left=left+'px';z._el.style.width=(endX-left)+'px';
+   z._el.style.top=top+'px';z._el.style.height=(bottom-top)+'px';
+  }
+  for(const a of areas){
+   const tradeEnd=Number.isFinite(+a.t.exitTime)?+a.t.exitTime:now+60;
+   const rawX1=ts.timeToCoordinate(+a.t.time-60),rawX2=ts.timeToCoordinate(tradeEnd);
+   let x1=rawX1,x2=rawX2;
+   if(x1==null)x1=(+a.t.time-60<=firstTime?0:(+a.t.time-60>lastTime?width:null));
+   if(x2==null)x2=(tradeEnd>=lastTime?width:(tradeEnd<firstTime?0:null));
+   const level=a.kind==='tp'?+a.t.tp:+a.t.sl,y1=mapY(+a.t.price),y2=mapY(level);
+   if(x1==null||x2==null||y1==null||y2==null||Math.max(x1,x2)<=0||Math.min(x1,x2)>=width){
+    a.el.style.display='none';a.label.style.display='none';continue;
+   }
+   const left=Math.max(0,Math.min(x1,x2)),right=Math.min(width,Math.max(x1,x2));
+   const top=Math.max(0,Math.min(y1,y2)),bottom=Math.min(height,Math.max(y1,y2));
+   if(right<=left||bottom<=top){a.el.style.display='none';a.label.style.display='none';continue}
+   a.el.style.display='block';a.el.style.left=left+'px';a.el.style.width=(right-left)+'px';
+   a.el.style.top=top+'px';a.el.style.height=(bottom-top)+'px';
+   a.label.style.display='block';
+   const decimals=Number.isInteger(a.t.decimals)?a.t.decimals:symbolMeta(S.symbol,S.raw).decimals;
+   a.label.textContent=(a.kind==='tp'?'TP ':'SL ')+level.toFixed(decimals);
+   a.label.style.left=Math.max(0,Math.min(width-82,left))+'px';
+   a.label.style.top=Math.max(0,Math.min(height-13,a.kind==='tp'?top-15:bottom+2))+'px';
+  }
+ };
+ host._updateTradeOverlay=update;
+ if(host._tradeOverlayRangeHandler)try{S.chart.timeScale().unsubscribeVisibleLogicalRangeChange(host._tradeOverlayRangeHandler)}catch{}
+ host._tradeOverlayRangeHandler=update;
+ S.chart.timeScale().subscribeVisibleLogicalRangeChange(update);
+ requestAnimationFrame(update);
+}
 function selectedChartTrades(){
  const merged=new Map();
  for(const x of S.trades)merged.set((x.symbol||S.symbol)+'|'+x.side+'|'+x.time,x);
