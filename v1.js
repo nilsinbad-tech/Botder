@@ -247,7 +247,7 @@ function updatePriceLine(price){
 function updateLiveTick(tick){
  if(!tick||!Number.isFinite(+tick.epoch)||!Number.isFinite(+tick.quote))return;
  if(tick.symbol&&tick.symbol!==S.symbol){updateMarketTick(tick);return;}
- S.tickCount++;S.lastTickAt=Date.now();S.liveSymbol=tick.symbol||S.symbol;
+ S.tickCount++;S.lastTickAt=Date.now();S.liveSymbol=tick.symbol||S.symbol;if(tick.symbol)S.marketLastTick.set(tick.symbol,Date.now());
  $('liveFeed').textContent='EN VIVO · '+S.tickCount.toLocaleString('es-PA')+' ticks · '+new Date(S.lastTickAt).toLocaleTimeString('es-PA')+' · '+(+tick.quote).toFixed(symbolMeta(S.symbol,S.raw).decimals);
  const time=Math.floor(+tick.epoch/60)*60,price=+tick.quote,last=S.raw.at(-1);
  if(!last)return;
