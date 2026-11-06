@@ -165,7 +165,16 @@ function renderActiveSignals(){
  const host=$('activeSignals');if(!host)return;
  const items=[...S.activeSignals.values()].sort((a,b)=>b.time-a.time);
  host.replaceChildren();host.hidden=!items.length;
- for(const s of items){const card=document.createElement('article');card.className='active-signal '+(s.side==='BUY'?'buy':'sell');const head=document.createElement('b');head.textContent=(s.side==='BUY'?'B · COMPRA':'S · VENTA')+' · '+s.name;const prices=document.createElement('span');prices.textContent='Entrada '+formatPrice(s.symbol,s.price,s.candles)+' · TP '+formatPrice(s.symbol,s.tp,s.candles)+' · SL '+formatPrice(s.symbol,s.sl,s.candles);const state=document.createElement('strong');state.textContent='VIGENTE';card.append(head,prices,state);host.append(card)}
+ for(const s of items){
+  const card=document.createElement('article');card.className='active-signal '+(s.side==='BUY'?'buy':'sell');
+  const head=document.createElement('b');head.textContent=(s.side==='BUY'?'COMPRAR':'VENDER')+' · '+s.name;
+  const prices=document.createElement('div');prices.className='active-signal-prices';
+  for(const [label,value] of [['ENTRADA',s.price],['TP',s.tp],['SL',s.sl]]){
+   const cell=document.createElement('span');cell.textContent=label+' '+formatPrice(s.symbol,value,s.candles);prices.append(cell);
+  }
+  const state=document.createElement('strong');state.textContent='VIGENTE · '+new Date(s.time*1000).toLocaleTimeString('es-PA',{hour:'2-digit',minute:'2-digit'});
+  card.append(head,prices,state);host.append(card);
+ }
 }
 function notifySignalResult(signal,result){
  const host=$('signalNotices');if(!host)return;host.hidden=false;const card=document.createElement('article');card.className='signal-notice '+(result==='WIN'?'buy':'sell');const title=document.createElement('b');title.className='notice-title';title.textContent=(result==='WIN'?'✓ GANADA':'✕ PERDIDA')+' · '+signal.name;const details=document.createElement('div');details.className='notice-details';details.textContent=(signal.side==='BUY'?'COMPRA':'VENTA')+' · '+result;card.append(title,details);host.prepend(card);while(host.children.length>4)host.lastElementChild.remove();setTimeout(()=>{card.remove();if(!host.children.length)host.hidden=true},8000);
@@ -195,7 +204,7 @@ function updateMarketTick(tick){
 }
 async function loadGlobalMarket(symbol){
  const existing=S.markets.get(symbol);
- if(existing?.candles?.length>=COUNT)return existing;
+ if(existing?.candles?.length>=30)return existing;
  const meta=S.symbols.find(x=>x.code===symbol);if(!meta)throw Error('Instrumento no encontrado: '+symbol);
  // Todos los mercados usan el mismo histórico M1 (7,000 velas) que el gráfico.
  const candles=await history(symbol);
@@ -215,7 +224,7 @@ async function ensureGlobalSubscription(symbol){
  if(r.tick)updateMarketTick(r.tick);
 }
 async function preloadGlobalMarkets(){
- const queue=S.symbols.filter(x=>(S.markets.get(x.code)?.candles?.length||0)<COUNT);
+ const queue=S.symbols.filter(x=>(S.markets.get(x.code)?.candles?.length||0)<30);
  let next=0;
  const workers=Array.from({length:Math.min(3,queue.length)},async()=>{
   while(next<queue.length){
@@ -228,7 +237,7 @@ async function preloadGlobalMarkets(){
  // cuando terminó la carga inicial de datos disponible.
  for(const item of S.symbols){
   const market=S.markets.get(item.code);
-  if(market?.candles?.length>=COUNT)restoreOpenSignals(item.code,market.candles);
+  if(market?.candles?.length>=30)restoreOpenSignals(item.code,market.candles);
  }
  renderActiveSignals();
 }
