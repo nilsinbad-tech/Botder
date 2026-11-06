@@ -217,16 +217,16 @@ function selectedChartTrades(){
  for(const x of S.activeSignals.values())if(x.symbol===S.symbol)merged.set(x.symbol+'|'+x.side+'|'+x.time,x);
  return [...merged.values()].sort((a,b)=>a.time-b.time);
 }
-function renderSignalMarkers(liveSignal=null){
+function renderSignalMarkers(){
  const markers=[],seen=new Set();
- const chartTrades=selectedChartTrades();
- for(const s of chartTrades){
-  const markerKey=s.symbol+'|'+s.side+'|'+s.time;if(seen.has(markerKey))continue;seen.add(markerKey);
-  markers.push({time:s.time-60,position:s.side==='BUY'?'belowBar':'aboveBar',color:s.side==='BUY'?'#35ffad':'#ff5268',shape:'circle',size:0.7,text:s.result==='OPEN'?(s.side==='BUY'?'⭐ B':'⭐ S'):(s.side==='BUY'?'B':'S')});
-  if(s.exitTime&&(s.result==='WIN'||s.result==='LOSS'||s.result==='CLOSED'))markers.push({time:s.exitTime-60,position:s.side==='BUY'?'aboveBar':'belowBar',color:s.result==='WIN'?'#20d18b':s.result==='LOSS'?'#ff5968':'#ffc45d',shape:'circle',size:0.5,text:s.result});
+ // Solo un punto discreto en la vela de entrada: sin B/S, WIN, LOSS ni puntos de salida.
+ for(const s of selectedChartTrades()){
+  const markerKey=s.symbol+'|'+s.side+'|'+s.time;
+  if(seen.has(markerKey))continue;
+  seen.add(markerKey);
+  markers.push({time:s.time-60,position:s.side==='BUY'?'belowBar':'aboveBar',color:s.side==='BUY'?'#35ffad':'#ff5268',shape:'circle',size:0.55});
  }
- if(liveSignal){const markerKey=liveSignal.symbol+'|'+liveSignal.side+'|'+liveSignal.time;if(!seen.has(markerKey))markers.push({time:liveSignal.time-60,position:liveSignal.side==='BUY'?'belowBar':'aboveBar',color:liveSignal.side==='BUY'?'#72ffd0':'#ff8798',shape:'circle',size:0.8,text:liveSignal.side==='BUY'?'B':'S'});}
- try{if(S.markerApi)S.markerApi.setMarkers(markers);else if(S.price.setMarkers)S.price.setMarkers(markers)}catch(e){console.error('No se pudieron actualizar las señales del gráfico',e)}
+ try{if(S.markerApi)S.markerApi.setMarkers(markers);else if(S.price.setMarkers)S.price.setMarkers(markers)}catch(e){console.error('No se pudieron actualizar los puntos de entrada',e)}
 }
 function restoreOpenSignals(symbol,candles){
  if(!Array.isArray(candles)||candles.length<30)return 0;
