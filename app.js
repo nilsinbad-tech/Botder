@@ -65,7 +65,16 @@ function adxDmi(c,p=14){const n=c.length,tr=Array(n).fill(null),pd=Array(n).fill
 function targetReached(sig,target){return !!targetHitInfo(sig,target);}
 function signalWon(sig){const result=signalResult(sig);return !!result&&result.target.name==='TP1';}
 function tp2Reached(sig,target){const after=completed(S.raw,60).filter(x=>x.time>target.time);return after.some(x=>sig.side==='BUY'?x.high>=target.price:x.low<=target.price);}
-function liquidityTargets(sig){const pts=exitZigzagPoints(sig),buy=sig.side==='BUY',levels=pts.filter(p=>buy?p.type==='HIGH'&&p.price>sig.price:p.type==='LOW'&&p.price<sig.price).sort((a,b)=>buy?a.price-b.price:b.price-a.price),targets=[];if(levels[0])targets.push({name:'TP1',price:levels[0].price,time:sig.time,pivotTime:levels[0].time,tf:'M5'});if(levels[1])targets.push({name:'TP2',price:levels[1].price,time:sig.time,pivotTime:levels[1].time,tf:'M5'});return targets;}
+function liquidityTargets(sig){
+ const buy=sig.side==='BUY',c5=completed(aggregate(S.raw,5),300),confirmed=p=>p.time+15*60<=sig.time;
+ const zz=exitZigzagPoints(sig).filter(p=>buy?p.type==='HIGH'&&p.price>sig.price:p.type==='LOW'&&p.price<sig.price).map(p=>({price:p.price,time:p.time,source:'ZIGZAG'}));
+ const piv=detectPivots(c5,3,5),historical=(buy?piv.hi:piv.lo).filter(p=>confirmed(p)&&(buy?p.price>sig.price:p.price<sig.price)).map(p=>({price:p.price,time:p.time,source:'PIVOTE'}));
+ const unique=new Map();for(const p of [...zz,...historical]){const key=p.time+'|'+p.price.toFixed(10);if(!unique.has(key))unique.set(key,p);}
+ const levels=[...unique.values()].sort((a,b)=>(buy?a.price-b.price:b.price-a.price)||b.time-a.time),targets=[];
+ if(levels[0])targets.push({name:'TP1',price:levels[0].price,time:sig.time,pivotTime:levels[0].time,tf:'M5',source:levels[0].source});
+ if(levels[1])targets.push({name:'TP2',price:levels[1].price,time:sig.time,pivotTime:levels[1].time,tf:'M5',source:levels[1].source});
+ return targets;
+}
 function hasM5ObstacleBeforeTP1(sig){const targets=liquidityTargets(sig),tp1=targets.find(x=>x.name==='TP1');if(!tp1)return true;const c5=aggregate(S.raw,5),p=detectPivots(c5,3,5),confirmed=x=>x.time+15*60<=sig.time,buy=sig.side==='BUY',obstacles=(buy?p.hi:p.lo).filter(x=>confirmed(x)&&(buy?x.price>sig.price&&x.price<tp1.price:x.price<sig.price&&x.price>tp1.price));return obstacles.length>0;}
 function signalsByZone(signals,zones){const out=[];for(const sig of signals||[]){const z=zones.find(q=>q.side===sig.side&&sig.price>=q.low&&sig.price<=q.high);if(z){const key=z.side+'|'+z.tf+'|'+z.time;const old=out.find(x=>x._zoneKey===key);if(!old)out.push({...sig,_zoneKey:key});else if(sig.time>old.time)Object.assign(old,sig);continue;}const tol=Math.max(Math.abs(sig.price)*0.00015,0.00001);const old=out.find(x=>!x._zoneKey&&x.side===sig.side&&Math.abs(x.price-sig.price)<=tol);if(!old)out.push({...sig});else if(sig.time>old.time)Object.assign(old,sig);}return out.sort((a,b)=>a.time-b.time);}
 
