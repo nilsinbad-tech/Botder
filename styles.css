@@ -231,3 +231,8 @@
  .recent-signals-list .active-op-values b{font-size:9px!important;line-height:1.2!important;overflow-wrap:anywhere!important}
  .recent-signals-list .active-op-values .sl-distance b{font-size:9px!important}
 }
+
+/* Relación TP1/SL: recompensa potencial frente al riesgo */
+.recent-signals-list .active-op-values{grid-template-columns:repeat(6,minmax(0,1fr))!important;gap:3px!important}
+.recent-signals-list .active-op-values .reward-risk{grid-column:span 1;min-width:0}
+.recent-signals-list .active-op-values .reward-risk b{color:#19c99a!important;white-space:normal!important}
