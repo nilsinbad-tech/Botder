@@ -162,13 +162,10 @@ function updateMarketTrade(signal,price,time){
 function processMarketSignal(symbol,candles,price,time){
  if(!candles||!candles.length)return;let changed=false;
  for(const s of [...S.activeSignals.values()])if(s.symbol===symbol)changed=updateMarketTrade(s,price,time)||changed;
- const alreadyActive=[...S.activeSignals.values()].some(s=>s.symbol===symbol&&s.result==='OPEN');
- if(!alreadyActive){
-  const last=candles.at(-1),candidate=signalsFor(candles,false,symbol).find(x=>x.time===last.time+60);
-  if(candidate){
-   const samePoint=[...S.liveHistory,...S.activeSignals.values()].some(x=>x.symbol===symbol&&x.side===candidate.side&&x.obTime===candidate.obTime);
-   if(!samePoint){const key=symbol+'|'+candidate.side+'|'+candidate.time,market=S.markets.get(symbol),item={...candidate,key,name:market?.name||symbol,result:'OPEN',candles:candles.slice()};S.activeSignals.set(key,item);notifyNewSignal(item);changed=true}
-  }
+ const last=candles.at(-1),candidate=signalsFor(candles,false,symbol).find(x=>x.time===last.time+60);
+ if(candidate){
+  const samePoint=[...S.liveHistory,...S.activeSignals.values()].some(x=>x.symbol===symbol&&x.side===candidate.side&&x.obTime===candidate.obTime);
+  if(!samePoint){const key=symbol+'|'+candidate.side+'|'+candidate.time,market=S.markets.get(symbol),item={...candidate,key,name:market?.name||symbol,result:'OPEN',candles:candles.slice()};S.activeSignals.set(key,item);notifyNewSignal(item);changed=true}
  }
  renderActiveSignals();if(changed&&symbol===S.symbol)updateSelectedSignalView();
 }
