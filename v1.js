@@ -110,9 +110,7 @@ function signalsFor(c,asOfEnd=true,symbol=S.symbol){
   const gap=Math.abs(fast[i]-slow[i]),avgRange=c.slice(Math.max(1,i-14),i+1).reduce((s,x)=>s+(x.high-x.low),0)/Math.min(15,i);
   const lateral=gap<=Math.max(point*2,avgRange*0.08);
   const rising=fast[i]>fast[i-2]&&slow[i]>slow[i-2],falling=fast[i]<fast[i-2]&&slow[i]<slow[i-2];
-  const prior=c.slice(Math.max(0,i-14),i),avgRangePrior=prior.length?prior.reduce((s,x)=>s+(x.high-x.low),0)/prior.length:0,avgBodyPrior=prior.length?prior.reduce((s,x)=>s+Math.abs(x.close-x.open),0)/prior.length:0,rangeNow=bar.high-bar.low,bodyNow=Math.abs(bar.close-bar.open);
-  const oversized=(avgRangePrior>0&&rangeNow>avgRangePrior*1.8)||(avgBodyPrior>0&&bodyNow>avgBodyPrior*1.8),extended=avgRangePrior>0&&Math.abs(bar.close-fast[i])>Math.max(avgRangePrior*.65,point*3);
-  if(lateral||oversized||extended||closeTime<=lastEntryTime)continue;
+  if(lateral||closeTime<=lastEntryTime)continue;
   let side=null;
   if(fast[i]>slow[i]&&rising)side='BUY';
   else if(fast[i]<slow[i]&&falling)side='SELL';
