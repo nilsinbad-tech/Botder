@@ -195,10 +195,10 @@ function updateMarketTick(tick){
 }
 async function loadGlobalMarket(symbol){
  const existing=S.markets.get(symbol);
- if(existing?.candles?.length)return existing;
+ if(existing?.candles?.length>=COUNT)return existing;
  const meta=S.symbols.find(x=>x.code===symbol);if(!meta)throw Error('Instrumento no encontrado: '+symbol);
- const r=await send({ticks_history:symbol,adjust_start_time:1,count:1000,end:'latest',granularity:60,style:'candles'});
- const candles=(r.candles||[]).map(x=>({time:+x.epoch,open:+x.open,high:+x.high,low:+x.low,close:+x.close})).filter(x=>Number.isFinite(x.time)&&Number.isFinite(x.open)&&Number.isFinite(x.high)&&Number.isFinite(x.low)&&Number.isFinite(x.close));
+ // Todos los mercados usan el mismo histórico M1 (7,000 velas) que el gráfico.
+ const candles=await history(symbol);
  if(!candles.length)throw Error('Deriv no entregó velas M1 para '+symbol+'; se reintentará');
  const market={name:meta.name,candles};S.markets.set(symbol,market);return market;
 }
@@ -215,7 +215,7 @@ async function ensureGlobalSubscription(symbol){
  if(r.tick)updateMarketTick(r.tick);
 }
 async function preloadGlobalMarkets(){
- const queue=S.symbols.filter(x=>!S.markets.get(x.code)?.candles?.length);
+ const queue=S.symbols.filter(x=>(S.markets.get(x.code)?.candles?.length||0)<COUNT);
  let next=0;
  const workers=Array.from({length:Math.min(3,queue.length)},async()=>{
   while(next<queue.length){
@@ -228,7 +228,7 @@ async function preloadGlobalMarkets(){
  // cuando terminó la carga inicial de datos disponible.
  for(const item of S.symbols){
   const market=S.markets.get(item.code);
-  if(market?.candles?.length)restoreOpenSignals(item.code,market.candles);
+  if(market?.candles?.length>=COUNT)restoreOpenSignals(item.code,market.candles);
  }
  renderActiveSignals();
 }
