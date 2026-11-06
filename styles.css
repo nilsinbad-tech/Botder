@@ -177,3 +177,5 @@
 .signal-toast{position:fixed;z-index:1000;top:58px;left:50%;transform:translate(-50%,-12px);opacity:0;pointer-events:none;padding:9px 14px;border:1px solid #52647b;border-radius:8px;background:#101c2b;color:#eaf2fb;font-size:11px;font-weight:900;box-shadow:0 5px 20px #0008;transition:opacity .18s,transform .18s;white-space:nowrap;max-width:calc(100vw - 24px);overflow:hidden;text-overflow:ellipsis}
 .signal-toast.show{opacity:1;transform:translate(-50%,0)}.signal-toast.win{border-color:#19c99a;color:#70f0b5}.signal-toast.loss{border-color:#ff5968;color:#ff9ba4}
 .recent-signals-card{width:100%}
+
+.signal-toast.new{border-color:#4ca7ff;color:#b8dcff;background:#10243a;white-space:normal;text-align:center;line-height:1.45;min-width:min(340px,calc(100vw - 24px))}.active-op-values .sl-distance{grid-column:1/-1;border-top:1px solid var(--line);padding-top:5px;margin-top:2px}.active-op-values .sl-distance b{color:#ff9ba4;font-size:12px}
