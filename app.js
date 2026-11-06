@@ -70,11 +70,18 @@ function signalsByZone(signals,zones){const out=[];for(const sig of signals||[])
 function optimizerConfigs(){
  const base=zigzagSettings(),rsiTf=+$('rsiTf').value||5,rsiPeriod=+$('rsiPeriod').value||14;
  const zt=[1,2,3,4,5],depth=[5,8,10,12,15],dev=[2,3,5,7,10],sep=[2,3,4,5],rt=[1,2,3,5],rp=[7,10,14,20,21];
- const out=[{zigTf:base.tf,zigDepth:base.depth,zigDeviation:base.deviation,zigSeparation:base.separation,rsiTf,rsiPeriod,emaMask:EMA_PAIRS.reduce((m,x,i)=>m+($(x[2]).checked?1<<i:0),0)}];
+ const mask=EMA_PAIRS.reduce((m,x,i)=>m+($(x[2]).checked?1<<i:0),0);
+ const out=[{zigTf:base.tf,zigDepth:base.depth,zigDeviation:base.deviation,zigSeparation:base.separation,rsiTf,rsiPeriod,emaMask:mask}];
  for(let i=1;i<500;i++){
-  const cfg={zigTf:zt[(i*3)%zt.length],zigDepth:depth[(i*2+1)%depth.length],zigDeviation:dev[(i*3+2)%dev.length],zigSeparation:sep[(i*3+1)%sep.length],rsiTf:rt[(i*3+1)%rt.length],rsiPeriod:rp[(i*2+2)%rp.length],emaMask:(i*13)%32};
-  const key=x=>[x.zigTf,x.zigDepth,x.zigDeviation,x.zigSeparation,x.rsiTf,x.rsiPeriod,x.emaMask].join('|');
-  if(!out.some(x=>key(x)===key(cfg)))out.push(cfg);else i--;
+  let n=i;
+  const cfg={zigTf:zt[n%5]};n=Math.floor(n/5);
+  cfg.zigDepth=depth[n%5];n=Math.floor(n/5);
+  cfg.zigDeviation=dev[n%5];n=Math.floor(n/5);
+  cfg.zigSeparation=sep[n%4];n=Math.floor(n/4);
+  cfg.rsiTf=rt[n%4];n=Math.floor(n/4);
+  cfg.rsiPeriod=rp[n%5];n=Math.floor(n/5);
+  cfg.emaMask=n%32;
+  out.push(cfg);
  }
  return out;
 }
@@ -94,7 +101,7 @@ function optimizerEvaluate(data,signals){
   else{losses++;lossMove+=Math.abs(result.target.price-sig.price);if(train)trainL++;else valL++;}
  }
  const closed=wins+losses,valClosed=valW+valL,trainClosed=trainW+trainL;
- return{wins,losses,open,closed,rate:closed?100*wins/closed:0,valW,valL,valClosed,valRate:valClosed?100*valW/valClosed:0,trainW,trainL,trainClosed,pf:lossMove?winMove/lossMove:(winMove?99:0)};
+ return{wins,losses,open,closed,rate:closed?100*wins/closed:0,valW,valL,valClosed,valRate:valClosed?100*valW/valClosed:0,trainW,trainL,trainClosed,winMove,lossMove,pf:lossMove?winMove/lossMove:(winMove?99:0)};
 }
 function optimizerRank(a,b){
  const av=a.valClosed>=5?a.valRate:a.rate,bv=b.valClosed>=5?b.valRate:b.rate;
@@ -138,13 +145,13 @@ async function startOptimizer(){
      const signals=findSignals(),m=optimizerEvaluate(data,signals),g=overall[configIndex];
      for(const k of ['wins','losses','open','closed','valW','valL','valClosed','trainW','trainL','trainClosed'])g[k]+=m[k];
      if(!currentRows[configIndex])currentRows[configIndex]={cfg:g.cfg,...m};
-     else for(const k of ['wins','losses','open','closed','valW','valL','valClosed','trainW','trainL','trainClosed'])currentRows[configIndex][k]+=m[k];
+     else for(const k of ['wins','losses','open','closed','valW','valL','valClosed','trainW','trainL','trainClosed','winMove','lossMove'])currentRows[configIndex][k]+=m[k];
      done++;configIndex++;
-     if(configIndex>=configs.length){currentRows.forEach(x=>{x.rate=x.closed?100*x.wins/x.closed:0;x.valRate=x.valClosed?100*x.valW/x.valClosed:0;x.pf=0;});perInstrument.push({name:item.name,rows:currentRows.slice().sort(optimizerRank)});currentRows=[];configIndex=0;activeIndex++;}
+     if(configIndex>=configs.length){currentRows.forEach(x=>{x.rate=x.closed?100*x.wins/x.closed:0;x.valRate=x.valClosed?100*x.valW/x.valClosed:0;x.pf=x.lossMove?x.winMove/x.lossMove:(x.winMove?99:0);});perInstrument.push({name:item.name,rows:currentRows.slice().sort(optimizerRank)});currentRows=[];configIndex=0;activeIndex++;}
     }
     status.textContent='Probando '+done.toLocaleString('es-PA')+'/'+total.toLocaleString('es-PA')+' combinaciones ('+Math.floor(done/total*100)+'%).';
     if(done<total){requestAnimationFrame(step);return;}
-    overall.forEach(x=>{x.rate=x.closed?100*x.wins/x.closed:0;x.valRate=x.valClosed?100*x.valW/x.valClosed:0;x.pf=0;});
+    overall.forEach(x=>{x.rate=x.closed?100*x.wins/x.closed:0;x.valRate=x.valClosed?100*x.valW/x.valClosed:0;x.pf=x.lossMove?x.winMove/x.lossMove:(x.winMove?99:0);});
     const final={configs,overall:overall.slice().sort(optimizerRank),perInstrument};
     restore();renderOptimizerResults(final);
     const best=final.overall[0];status.textContent='Finalizado: '+total.toLocaleString('es-PA')+' pruebas. Mejor general: '+(best?(best.valClosed>=5?best.valRate:best.rate).toFixed(1)+'% de acierto, '+best.wins+' ganadas y '+best.losses+' perdidas.':'sin operaciones cerradas');
