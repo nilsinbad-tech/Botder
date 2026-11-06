@@ -2,7 +2,7 @@
 <html lang="es"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#080d16"><title>BOTDER · Gráfico Deriv</title>
-<link rel="stylesheet" href="styles.css?v=active-five-closed-results-v72">
+<link rel="stylesheet" href="styles.css?v=only-strategy-levels-v73">
 <script src="https://unpkg.com/lightweight-charts@5.0.8/dist/lightweight-charts.standalone.production.js" onerror="this.onerror=null;this.src='https://cdn.jsdelivr.net/npm/lightweight-charts@5.0.8/dist/lightweight-charts.standalone.production.js'"></script>
 </head><body>
 <header class="topbar"><div class="brand"><span class="brand-mark">B</span><div><b>BOTDER</b></div></div><div class="connection"><i id="connectionDot"></i><span id="connectionText">Conectando Deriv…</span></div><button id="refreshBtn" class="icon-btn">↻</button></header>
@@ -12,7 +12,7 @@
 <section class="chart-card"><div class="chart-head"><div><b id="chartTitle">Gráfico Deriv</b><small id="chartSubtitle">Velas M1 · historial disponible</small></div><small id="chartStatus">Cargando…</small></div><div id="mainChart" class="main-chart"><div class="chart-placeholder">Esperando velas de Deriv…</div></div><div class="chart-foot"><span>Arrastra para moverte · pellizca para ampliar</span><span id="chartRange">M1</span></div></section>
 <section class="recent-signals-card closed-signals-card"><div class="recent-signals-title"><b>RESULTADOS · WIN / LOSS</b><span>OPERACIONES CERRADAS</span></div><div id="closedSignals" class="recent-signals-list"><div class="active-empty">Esperando resultados…</div></div></section>
 
-<section class="legend"><span><i class="ema20"></i> EMA 20 M5</span><span><i class="ema50"></i> EMA 50 M5</span><span><i class="bull"></i> OB alcista</span><span><i class="bear"></i> OB bajista</span><span><i class="zig"></i> ZigZag</span><span><i class="pivot"></i> Pivotes</span></section>
+<section class="legend"><span><i class="ema20"></i> EMA 20 M5</span><span><i class="ema50"></i> EMA 50 M5</span><span><i class="bull"></i> OB alcista</span><span><i class="bear"></i> OB bajista</span><span><i class="zig"></i> ZigZag</span></section>
 <details class="settings-drawer">
 <summary>⚙ AJUSTES</summary>
 <div class="settings-top"><span>Configura los indicadores y filtros</span><button type="button" id="resetAllSettings" class="reset-setting reset-all">Restablecer todo</button></div>
@@ -22,12 +22,7 @@
 <label class="check"><input id="obPrevious" type="checkbox"> Mostrar OB de otra temporalidad</label>
 <label>OB secundario<select id="obTf2"><option value="1">M1</option><option value="2">M2</option><option value="3">M3</option><option value="4">M4</option><option value="5">M5</option><option value="10">M10</option><option value="15">M15</option><option value="30" selected>M30</option><option value="60">H1</option></select></label></section>
 </details>
-<details class="setting-group"><summary>Pivotes y niveles</summary>
-<section class="settings"><div class="setting-head"><strong>PIVOTES</strong><button type="button" class="reset-setting" data-reset="pivots">Restablecer</button></div>
-<label class="check"><input id="showPivots" type="checkbox" checked> Mostrar pivotes</label>
-<label class="check"><input id="showSupports" type="checkbox" checked> Soportes</label><label class="check"><input id="showResistances" type="checkbox" checked> Resistencias</label>
-<div class="setting-wide"><span class="setting-label">Temporalidades</span><div id="pivotTfs" class="tf-picks"><label class="check"><input type="checkbox" value="1">M1</label><label class="check"><input type="checkbox" value="2">M2</label><label class="check"><input type="checkbox" value="3">M3</label><label class="check"><input type="checkbox" value="4">M4</label><label class="check"><input type="checkbox" value="5" checked>M5</label><label class="check"><input type="checkbox" value="10">M10</label><label class="check"><input type="checkbox" value="15">M15</label><label class="check"><input type="checkbox" value="30">M30</label><label class="check"><input type="checkbox" value="60">H1</label></div></div></section>
-</details>
+<details class="setting-group"><summary>Niveles de SL y TP</summary><section class="settings"><div class="setting-wide">El gráfico muestra únicamente los niveles estructurales utilizados por las señales vigentes: SL, TP1 y TP2. Los demás pivotes quedan ocultos.</div></section></details>
 <details class="setting-group"><summary>Stop Loss y Take Profit</summary>
 <section class="settings"><div class="setting-head"><strong>STOP LOSS</strong><button type="button" class="reset-setting" data-reset="sl">Restablecer</button></div>
 <label>Temporalidad<select id="slTf"><option value="1">M1</option><option value="2">M2</option><option value="3">M3</option><option value="4">M4</option><option value="5" selected>M5</option><option value="6">M6</option><option value="7">M7</option><option value="8">M8</option><option value="9">M9</option><option value="10">M10</option><option value="15">M15</option><option value="30">M30</option><option value="60">H1</option></select></label>
@@ -61,4 +56,4 @@
 <details class="backtest-drawer"><summary>BACKTEST</summary><section class="history-card"><div class="history-head"><div><b>RESULTADOS DEL INSTRUMENTO ACTUAL</b><small>Solo el instrumento que tienes seleccionado · 3 días completos de velas M1.</small></div><button type="button" id="backtestBtn" class="reset-setting">RECALCULAR</button></div><div class="history-stats"><article><small>GANADAS</small><strong id="selectedBacktestWins">0</strong></article><article><small>PERDIDAS</small><strong id="selectedBacktestLosses">0</strong></article><article><small>ABIERTAS</small><strong id="selectedBacktestOpen">0</strong></article></div><div class="history-head"><div><b>RESULTADO GENERAL · TODOS LOS INSTRUMENTOS</b><small>Conteo conjunto de todos los instrumentos con historial cargado de 3 días.</small></div></div><div class="history-stats"><article><small>GANADAS</small><strong id="backtestWins">0</strong></article><article><small>PERDIDAS</small><strong id="backtestLosses">0</strong></article><article><small>ABIERTAS</small><strong id="backtestOpen">0</strong></article></div><div class="history-head"><div><b>SEÑALES Y OPERACIONES HISTÓRICAS</b><small>Se muestran todos los resultados calculados, sin recortar la lista a 18 o 50 operaciones.</small></div></div><div id="historyRows" class="history-rows"><div class="active-empty">Calculando backtesting de los instrumentos…</div></div><small id="backtestStatus" class="history-note">Las operaciones abiertas permanecen vigentes hasta alcanzar TP o SL.</small></section></details>
 
 
-</main><script src="app.js?v=active-five-closed-results-v72"></script></body></html>
+</main><script src="app.js?v=only-strategy-levels-v73"></script></body></html>
