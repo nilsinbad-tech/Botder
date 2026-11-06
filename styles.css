@@ -129,3 +129,27 @@
  .legend{font-size:8px;gap:7px}
  .backtest-drawer>summary{font-size:9px;padding:10px}
 }
+
+
+/* Orden visual: controles, resumen, gráfico, operaciones y ajustes */
+.app{display:flex;flex-direction:column}
+.toolbar{order:1}
+.summary-grid{order:2}
+.chart-card{order:3}
+.active-operations-card{order:4}
+.legend{order:5}
+.settings-drawer{order:6}
+.backtest-drawer{order:7}
+.chart-card{width:100%}
+.active-operations-card{width:100%}
+@media(max-width:600px){
+ .toolbar{gap:7px}
+ .summary-grid article{min-height:58px}
+ .chart-card{order:3}
+ .main-chart{height:clamp(300px,52vh,430px)}
+ .rsi-chart{height:92px}
+ .active-operations-list{grid-template-columns:1fr}
+ .active-op-values{grid-template-columns:repeat(4,minmax(0,1fr))}
+ .settings-top{flex-wrap:wrap}
+ .settings-top .reset-all{padding:5px 7px;font-size:8px}
+}
