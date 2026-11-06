@@ -179,3 +179,5 @@
 .recent-signals-card{width:100%}
 
 .signal-toast.new{border-color:#4ca7ff;color:#b8dcff;background:#10243a;white-space:normal;text-align:center;line-height:1.45;min-width:min(340px,calc(100vw - 24px))}.active-op-values .sl-distance{grid-column:1/-1;border-top:1px solid var(--line);padding-top:5px;margin-top:2px}.active-op-values .sl-distance b{color:#ff9ba4;font-size:12px}
+
+#maxSlPoints{width:110px!important}.settings .rule-note{max-width:100%;}
