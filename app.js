@@ -53,7 +53,7 @@ group.prices.push(level.price);group.touches++;group.price=group.prices.reduce((
 }
 return clusters.map(x=>({...x,score:x.strength+Math.max(0,x.touches-1)*0.75}));
 }
-function exitZigzagPoints(sig){const z=zigzagSettings(),pts=zigzag(S.raw,z.depth,z.deviation,z.separation,5).filter(p=>p.time<sig.time&&p.confirmed<=sig.time);return pts;}
+function exitZigzagPoints(sig){const z=S.optimizerExitSettings||zigzagSettings(),pts=zigzag(S.raw,z.depth,z.deviation,z.separation,5).filter(p=>p.time<sig.time&&p.confirmed<=sig.time);return pts;}
 function stopLossTarget(sig){const pts=exitZigzagPoints(sig),buy=sig.side==='BUY',levels=pts.filter(p=>buy?p.type==='LOW'&&p.price<sig.price:p.type==='HIGH'&&p.price>sig.price).sort((a,b)=>b.time-a.time);return levels.length?{name:'SL',price:levels[0].price,time:sig.time,pivotTime:levels[0].time,tf:'M5'}:null;}
 function selectImportantPivot(candidates,opposites,side,after){const valid=candidates.filter(x=>side==='BUY'?x.price>after:x.price<after);if(!valid.length)return null;const tol=Math.max(Math.abs(after)*0.0002,0.00001),ranked=valid.map(p=>{const cluster=valid.filter(q=>Math.abs(q.price-p.price)<=tol),touches=cluster.length;const before=opposites.filter(q=>q.time<p.time),afterOpp=opposites.filter(q=>q.time>p.time);const prev=before.at(-1),next=afterOpp[0];const prominence=Math.max(prev?Math.abs(p.price-prev.price):0,next?Math.abs(p.price-next.price):0);const distance=Math.abs(p.price-after);const score=touches*4+(prominence/Math.max(Math.abs(p.price),0.00001))*1000-distance/Math.max(Math.abs(after),0.00001)*0.05;return{p,score}});ranked.sort((a,b)=>b.score-a.score||Math.abs(a.p.price-after)-Math.abs(b.p.price-after));return ranked[0].p;}
 function dojiAfterSignal(sig,tf){const z=zigzagSettings(),period=tf||z.tf,c=completed(aggregate(S.raw,period),period*60).filter(x=>x.time>=sig.time);return c.find(x=>{const range=x.high-x.low;return range>0&&Math.abs(x.close-x.open)/range<=0.10})||null;}
@@ -65,6 +65,96 @@ function tp2Reached(sig,target){const after=completed(S.raw,60).filter(x=>x.time
 function liquidityTargets(sig){const pts=exitZigzagPoints(sig),buy=sig.side==='BUY',levels=pts.filter(p=>buy?p.type==='HIGH'&&p.price>sig.price:p.type==='LOW'&&p.price<sig.price).sort((a,b)=>buy?a.price-b.price:b.price-a.price),targets=[];if(levels[0])targets.push({name:'TP1',price:levels[0].price,time:sig.time,pivotTime:levels[0].time,tf:'M5'});if(levels[1])targets.push({name:'TP2',price:levels[1].price,time:sig.time,pivotTime:levels[1].time,tf:'M5'});return targets;}
 function hasM5ObstacleBeforeTP1(sig){const targets=liquidityTargets(sig),tp1=targets.find(x=>x.name==='TP1');if(!tp1)return true;const c5=aggregate(S.raw,5),p=detectPivots(c5,3,5),confirmed=x=>x.time+15*60<=sig.time,buy=sig.side==='BUY',obstacles=(buy?p.hi:p.lo).filter(x=>confirmed(x)&&(buy?x.price>sig.price&&x.price<tp1.price:x.price<sig.price&&x.price>tp1.price));return obstacles.length>0;}
 function signalsByZone(signals,zones){const out=[];for(const sig of signals||[]){const z=zones.find(q=>q.side===sig.side&&sig.price>=q.low&&sig.price<=q.high);if(z){const key=z.side+'|'+z.tf+'|'+z.time;const old=out.find(x=>x._zoneKey===key);if(!old)out.push({...sig,_zoneKey:key});else if(sig.time>old.time)Object.assign(old,sig);continue;}const tol=Math.max(Math.abs(sig.price)*0.00015,0.00001);const old=out.find(x=>!x._zoneKey&&x.side===sig.side&&Math.abs(x.price-sig.price)<=tol);if(!old)out.push({...sig});else if(sig.time>old.time)Object.assign(old,sig);}return out.sort((a,b)=>a.time-b.time);}
+
+// OPTIMIZADOR: 500 configuraciones por instrumento, sin alterar la estrategia activa.
+function optimizerConfigs(){
+ const base=zigzagSettings(),rsiTf=+$('rsiTf').value||5,rsiPeriod=+$('rsiPeriod').value||14;
+ const zt=[1,2,3,4,5],depth=[5,8,10,12,15],dev=[2,3,5,7,10],sep=[2,3,4,5],rt=[1,2,3,5],rp=[7,10,14,20,21];
+ const out=[{zigTf:base.tf,zigDepth:base.depth,zigDeviation:base.deviation,zigSeparation:base.separation,rsiTf,rsiPeriod,emaMask:EMA_PAIRS.reduce((m,x,i)=>m+($(x[2]).checked?1<<i:0),0)}];
+ for(let i=1;i<500;i++){
+  const cfg={zigTf:zt[(i*3)%zt.length],zigDepth:depth[(i*2+1)%depth.length],zigDeviation:dev[(i*3+2)%dev.length],zigSeparation:sep[(i*3+1)%sep.length],rsiTf:rt[(i*3+1)%rt.length],rsiPeriod:rp[(i*2+2)%rp.length],emaMask:(i*13)%32};
+  const key=x=>[x.zigTf,x.zigDepth,x.zigDeviation,x.zigSeparation,x.rsiTf,x.rsiPeriod,x.emaMask].join('|');
+  if(!out.some(x=>key(x)===key(cfg)))out.push(cfg);else i--;
+ }
+ return out;
+}
+function applyOptimizerConfig(c){
+ $('zigTf').value=String(c.zigTf);$('zigDepth').value=String(c.zigDepth);$('zigDeviation').value=String(c.zigDeviation);$('zigSeparation').value=String(c.zigSeparation);
+ $('rsiTf').value=String(c.rsiTf);$('rsiPeriod').value=String(c.rsiPeriod);
+ EMA_PAIRS.forEach((x,i)=>{$(x[2]).checked=!!(c.emaMask&(1<<i));});
+}
+function optimizerEvaluate(data,signals){
+ const split=data[0].time+(data.at(-1).time-data[0].time)*.70;
+ let wins=0,losses=0,open=0,trainW=0,trainL=0,valW=0,valL=0,winMove=0,lossMove=0;
+ for(const sig of signals){
+  const result=signalResult(sig);
+  if(!result){open++;continue;}
+  const isWin=result.target.name!=='SL',train=sig.time<split;
+  if(isWin){wins++;winMove+=Math.abs(result.target.price-sig.price);if(train)trainW++;else valW++;}
+  else{losses++;lossMove+=Math.abs(result.target.price-sig.price);if(train)trainL++;else valL++;}
+ }
+ const closed=wins+losses,valClosed=valW+valL,trainClosed=trainW+trainL;
+ return{wins,losses,open,closed,rate:closed?100*wins/closed:0,valW,valL,valClosed,valRate:valClosed?100*valW/valClosed:0,trainW,trainL,trainClosed,pf:lossMove?winMove/lossMove:(winMove?99:0)};
+}
+function optimizerRank(a,b){
+ const av=a.valClosed>=5?a.valRate:a.rate,bv=b.valClosed>=5?b.valRate:b.rate;
+ return bv-av||b.closed-a.closed||b.wins-a.wins;
+}
+function optimizerConfigLabel(c){
+ const ema=EMA_PAIRS.filter((x,i)=>c.emaMask&(1<<i)).map(x=>'EMA '+x[0]+'/'+x[1]).join(', ')||'Sin EMA extra';
+ return 'ZZ M'+c.zigTf+' · P'+c.zigDepth+' D'+c.zigDeviation+' S'+c.zigSeparation+' · RSI M'+c.rsiTf+'/'+c.rsiPeriod+' · '+ema;
+}
+function renderOptimizerResults(result){
+ const fmt=list=>list.slice(0,10).map((x,i)=>'<div class="optimizer-row"><b>#'+(i+1)+' '+optimizerConfigLabel(x.cfg)+'</b><span>Validación '+(x.valClosed>=5?x.valRate.toFixed(1):x.rate.toFixed(1))+'% · '+x.wins+'G/'+x.losses+'P · '+x.closed+' cerradas · '+x.open+' abiertas</span><small>Validación: '+x.valW+'G/'+x.valL+'P ('+x.valClosed+') · Entrenamiento: '+x.trainW+'G/'+x.trainL+'P · PF '+x.pf.toFixed(2)+'</small><button type="button" data-apply-optimizer="'+x.cfg.index+'">APLICAR ESTA CONFIGURACIÓN</button></div>').join('');
+ const overall=list(result.overall);
+ let out='<h4>TOP 10 GENERAL · '+result.overall.length+' configuraciones</h4>'+overall;
+ for(const item of result.perInstrument){out+='<h4>'+item.name+' · TOP 10</h4>'+list(item.rows);}
+ $('optimizerResults').innerHTML=out||'No se encontraron resultados.';
+ $('optimizerResults').querySelectorAll('[data-apply-optimizer]').forEach(btn=>btn.addEventListener('click',()=>{const c=result.configs[+btn.dataset.applyOptimizer];applyOptimizerConfig(c);saveSettings();S.backtestCache=null;S.lastBacktestScan=0;S.activeCache=[];S.lastActiveScan=0;render();$('optimizerStatus').textContent='Configuración aplicada manualmente. Revisa el backtest antes de usarla.';}));
+}
+async function startOptimizer(){
+ if(S.optimizerRunning)return;
+ const button=$('optimizerBtn'),status=$('optimizerStatus'),results=$('optimizerResults');
+ const original={settings:{},symbol:S.symbol,raw:S.raw,exit:{...zigzagSettings()}};
+ for(const id of Object.keys(SETTINGS_DEFAULTS)){if($(id))original.settings[id]=$(id).type==='checkbox'?$(id).checked:$(id).value;}
+ const configs=optimizerConfigs(),items=S.symbols.filter(x=>x.active&&S.marketData.get(x.code)?.length>=300);
+ if(!items.length){status.textContent='No hay instrumentos con al menos 300 velas cargadas.';return;}
+ S.optimizerRunning=true;S.optimizerExitSettings={...original.exit};button.disabled=true;results.innerHTML='';
+ const perInstrument=[],overall=configs.map((cfg,index)=>({cfg:{...cfg,index},wins:0,losses:0,open:0,closed:0,valW:0,valL:0,valClosed:0,trainW:0,trainL:0,trainClosed:0}));
+ const total=items.length*configs.length;let done=0,activeIndex=0,configIndex=0,currentRows=[];
+ status.textContent='Preparando '+configs.length+' configuraciones × '+items.length+' instrumentos…';
+ function restore(){
+  for(const [id,v] of Object.entries(original.settings)){if($(id)){if($(id).type==='checkbox')$(id).checked=!!v;else $(id).value=String(v);}}
+  S.symbol=original.symbol;S.raw=original.raw;S.optimizerExitSettings=null;S.optimizerRunning=false;button.disabled=false;
+  S.activeCache=[];S.lastActiveScan=0;S.backtestCache=null;S.lastBacktestScan=0;render();
+ }
+ return new Promise(resolve=>{
+  const step=()=>{
+   try{
+    let budget=2;
+    while(budget-->0&&activeIndex<items.length){
+     const item=items[activeIndex],data=S.marketData.get(item.code);
+     S.symbol=item.code;S.raw=data;applyOptimizerConfig(configs[configIndex]);
+     const signals=findSignals(),m=optimizerEvaluate(data,signals),g=overall[configIndex];
+     for(const k of ['wins','losses','open','closed','valW','valL','valClosed','trainW','trainL','trainClosed'])g[k]+=m[k];
+     if(!currentRows[configIndex])currentRows[configIndex]={cfg:g.cfg,...m};
+     else for(const k of ['wins','losses','open','closed','valW','valL','valClosed','trainW','trainL','trainClosed'])currentRows[configIndex][k]+=m[k];
+     done++;configIndex++;
+     if(configIndex>=configs.length){currentRows.forEach(x=>{x.rate=x.closed?100*x.wins/x.closed:0;x.valRate=x.valClosed?100*x.valW/x.valClosed:0;x.pf=0;});perInstrument.push({name:item.name,rows:currentRows.slice().sort(optimizerRank)});currentRows=[];configIndex=0;activeIndex++;}
+    }
+    status.textContent='Probando '+done.toLocaleString('es-PA')+'/'+total.toLocaleString('es-PA')+' combinaciones ('+Math.floor(done/total*100)+'%).';
+    if(done<total){requestAnimationFrame(step);return;}
+    overall.forEach(x=>{x.rate=x.closed?100*x.wins/x.closed:0;x.valRate=x.valClosed?100*x.valW/x.valClosed:0;x.pf=0;});
+    const final={configs,overall:overall.slice().sort(optimizerRank),perInstrument};
+    restore();renderOptimizerResults(final);
+    const best=final.overall[0];status.textContent='Finalizado: '+total.toLocaleString('es-PA')+' pruebas. Mejor general: '+(best?(best.valClosed>=5?best.valRate:best.rate).toFixed(1)+'% de acierto, '+best.wins+' ganadas y '+best.losses+' perdidas.':'sin operaciones cerradas');
+    resolve();
+   }catch(e){restore();status.textContent='Error en optimización: '+e.message;resolve();}
+  };
+  requestAnimationFrame(step);
+ });
+}
+
 function getActiveOperations(){if(Date.now()-S.lastActiveScan<15000)return S.activeCache;const savedRaw=S.raw,savedSymbol=S.symbol,items=[],currentStatuses=new Map();try{for(const item of S.symbols.filter(x=>x.active)){const data=S.marketData.get(item.code);if(!data||data.length<80)continue;S.raw=data;S.symbol=item.code;const signals=findSignals();for(const sig of signals.slice(-10)){const sl=stopLossTarget(sig);const result=signalResult(sig),targets=[...liquidityTargets(sig)],status=result?(result.target.name==='SL'?'LOSS':'WIN'):'VIGENTE',id=item.code+'|'+sig.time+'|'+sig.side;if(sl)targets.push(sl);currentStatuses.set(id,status);items.push({symbol:item.name,code:item.code,...sig,targets,result,status,id,strength:classifySignalStrength(sig)});}}}finally{S.raw=savedRaw;S.symbol=savedSymbol;}for(const op of items){const previous=S.signalStatuses.get(op.id);if(S.signalScanInitialized&&!previous)showSignalToast(op,'NEW');else if(previous==='VIGENTE'&&(op.status==='WIN'||op.status==='LOSS'))showSignalToast(op,'RESULT');}S.signalStatuses=currentStatuses;S.signalScanInitialized=true;S.activeCache=items.sort((a,b)=>b.time-a.time).slice(0,30);S.lastActiveScan=Date.now();return S.activeCache;}
 function renderHistoryStats(signals){if(S.backtestCache&&Date.now()-S.lastBacktestScan<30000){const q=S.backtestCache;const put=(id,n)=>{const el=$(id);if(el)el.textContent=String(n)};for(const [id,key] of [['backtestWins','wins'],['backtestLosses','losses'],['backtestOpen','open'],['selectedBacktestWins','selectedWins'],['selectedBacktestLosses','selectedLosses'],['selectedBacktestOpen','selectedOpen']])put(id,q[key]);$('historyRows').innerHTML=q.html;return;}const savedRaw=S.raw,savedSymbol=S.symbol,rows=[];let wins=0,losses=0,open=0,selectedWins=0,selectedLosses=0,selectedOpen=0,loaded=0;try{for(const item of S.symbols.filter(x=>x.active)){const data=S.marketData.get(item.code);if(!data||data.length<80)continue;loaded++;S.raw=data;S.symbol=item.code;const list=item.code===savedSymbol?signals:findSignals();for(const sig of list){const result=signalResult(sig);let status;if(!result){open++;status='ABIERTA';}else if(result.target.name==='SL'){losses++;status='PERDIDA · SL';}else{wins++;status='GANADA · '+result.target.name;}if(item.code===savedSymbol){if(status.startsWith('GANADA'))selectedWins++;else if(status.startsWith('PERDIDA'))selectedLosses++;else selectedOpen++;}rows.push({sig,result,status,symbol:item.name,code:item.code});}}}finally{S.raw=savedRaw;S.symbol=savedSymbol;}rows.sort((a,b)=>b.sig.time-a.sig.time);const html=rows.map(x=>'<div class="history-row"><span>'+new Date(x.sig.time*1000).toLocaleString('es-PA',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'})+'</span><b class="'+(x.status.startsWith('GANADA')?'good':x.status.startsWith('PERDIDA')?'bad':x.status.startsWith('CERRADA')?'neutral':'pending')+'">'+x.status+'</b><span>'+x.symbol+' · '+(x.sig.side==='BUY'?'COMPRA':'VENTA')+' · '+x.sig.price.toFixed(4)+'</span></div>').join('')||'<div class="active-empty">No hay operaciones históricas con los datos disponibles.</div>';S.backtestCache={wins,losses,open,selectedWins,selectedLosses,selectedOpen,html};S.lastBacktestScan=Date.now();const z=zigzagSettings(),status='Backtest de 3 días · '+loaded+'/'+S.symbols.filter(x=>x.active).length+' instrumentos con historial · M1 · ZigZag M'+z.tf+' · SL/TP ZigZag M5 · RSI M'+$('rsiTf').value+'/'+$('rsiPeriod').value+'.';$('backtestStatus').textContent=status;const put=(id,n)=>{const el=$(id);if(el)el.textContent=String(n)};for(const [id,n] of [['backtestWins',wins],['backtestLosses',losses],['backtestOpen',open],['selectedBacktestWins',selectedWins],['selectedBacktestLosses',selectedLosses],['selectedBacktestOpen',selectedOpen]])put(id,n);$('historyRows').innerHTML=html;}
 function showSignalToast(op,type='RESULT'){const el=$('signalToast');if(!el)return;if(type==='NEW'){const sl=op.targets.find(x=>x.name==='SL'),diff=sl?Math.abs(op.price-sl.price):null;el.className='signal-toast new show';el.textContent='NUEVA SEÑAL · '+op.symbol+' · '+op.side+' · ENTRADA '+fmtSignalPrice(op.price)+' · SL '+(sl?fmtSignalPrice(sl.price):'NO DISPONIBLE')+' · DIF. '+(diff===null?'—':fmtSignalPrice(diff));}else{el.className='signal-toast '+op.status.toLowerCase()+' show';el.textContent=op.status==='WIN'?'WIN · OPERACIÓN GANADA · '+op.symbol:'LOSS · OPERACIÓN PERDIDA · '+op.symbol;}clearTimeout(S.toastTimer);S.toastTimer=setTimeout(()=>el.classList.remove('show'),type==='NEW'?60000:6000);}function fmtSignalPrice(v){return Number.isFinite(v)?Number(v.toFixed(8)).toString():'—';}
@@ -87,7 +177,7 @@ function resetSettingsGroup(group){const groups={ob:['obTf','obPrevious','obTf2'
 function resetAllSettings(){applySettings(SETTINGS_DEFAULTS);S.symbol='';S.didFit=false;const sel=$('symbolSelect');if(sel&&sel.options.length)S.symbol=sel.options[0].value;saveSettings();if(sel&&S.symbol)sel.value=S.symbol;render();if(S.symbol)reload().catch(e=>$('dataStatus').textContent=e.message);}
 function restoreSavedSettings(){const saved=readSettings();applySettings(saved);S._savedSymbol=saved.symbol||'';}
 
-function bind(){ $('symbolSelect').addEventListener('change',async e=>{S.symbol=e.target.value;S.didFit=false;saveSettings();await reload()});document.querySelectorAll('[data-tf]').forEach(b=>b.addEventListener('click',()=>{S.tf=+b.dataset.tf;document.querySelectorAll('[data-tf]').forEach(x=>x.classList.toggle('active',x===b));S.didFit=false;saveSettings();render()}));$('refreshBtn').addEventListener('click',()=>reload().catch(err=>$('dataStatus').textContent=err.message));['obTf','obTf2','obPrevious','rsiTf','rsiPeriod','zigTf','zigDepth','zigDeviation','zigSeparation','ema50100','ema2575','ema1030','ema1050','ema1070'].forEach(id=>$(id).addEventListener('change',()=>{saveSettings();if(['rsiTf','rsiPeriod','zigTf','zigDepth','zigDeviation','zigSeparation','ema50100','ema2575','ema1030','ema1050','ema1070'].includes(id)){S.backtestCache=null;S.lastBacktestScan=0;S.activeCache=[];S.lastActiveScan=0;}render()}));document.querySelectorAll('[data-reset]').forEach(b=>b.addEventListener('click',()=>resetSettingsGroup(b.dataset.reset)));$('resetAllSettings').addEventListener('click',resetAllSettings);$('backtestBtn').addEventListener('click',()=>{S.activeCache=[];S.lastActiveScan=0;S.backtestCache=null;S.lastBacktestScan=0;render();$('backtestStatus').textContent='Backtest recalculado con '+S.raw.length+' velas M1 de '+S.symbol+'.'});}
+function bind(){ $('symbolSelect').addEventListener('change',async e=>{S.symbol=e.target.value;S.didFit=false;saveSettings();await reload()});document.querySelectorAll('[data-tf]').forEach(b=>b.addEventListener('click',()=>{S.tf=+b.dataset.tf;document.querySelectorAll('[data-tf]').forEach(x=>x.classList.toggle('active',x===b));S.didFit=false;saveSettings();render()}));$('refreshBtn').addEventListener('click',()=>reload().catch(err=>$('dataStatus').textContent=err.message));['obTf','obTf2','obPrevious','rsiTf','rsiPeriod','zigTf','zigDepth','zigDeviation','zigSeparation','ema50100','ema2575','ema1030','ema1050','ema1070'].forEach(id=>$(id).addEventListener('change',()=>{saveSettings();if(['rsiTf','rsiPeriod','zigTf','zigDepth','zigDeviation','zigSeparation','ema50100','ema2575','ema1030','ema1050','ema1070'].includes(id)){S.backtestCache=null;S.lastBacktestScan=0;S.activeCache=[];S.lastActiveScan=0;}render()}));document.querySelectorAll('[data-reset]').forEach(b=>b.addEventListener('click',()=>resetSettingsGroup(b.dataset.reset)));$('resetAllSettings').addEventListener('click',resetAllSettings);$('backtestBtn').addEventListener('click',()=>{S.activeCache=[];S.lastActiveScan=0;S.backtestCache=null;S.lastBacktestScan=0;render();$('backtestStatus').textContent='Backtest recalculado con '+S.raw.length+' velas M1 de '+S.symbol+'.'});$('optimizerBtn').addEventListener('click',startOptimizer);}
 async function start(){bind();restoreSavedSettings();try{await connect();await loadSymbols();if(S._savedSymbol&&[...$('symbolSelect').options].some(o=>o.value===S._savedSymbol))S.symbol=S._savedSymbol;$('symbolSelect').value=S.symbol;await reload()}catch(e){connection(false,'Error: '+e.message);$('dataStatus').textContent=e.message;setTimeout(()=>start().catch(()=>{}),5000)}}
 start();
 })();
