@@ -9,9 +9,9 @@ function scheduleReconnect(){if(S.reconnectTimer)return;const wait=S.reconnectDe
 function connect(){if(S.connecting)return Promise.reject(Error('Conexión en curso'));S.connecting=true;return new Promise((resolve,reject)=>{const ws=new WebSocket(API);S.ws=ws;let settled=false;const timer=setTimeout(()=>{if(!settled){settled=true;S.connecting=false;try{ws.close()}catch{}reject(Error('Tiempo de espera conectando Deriv'))}},12000);ws.onopen=()=>{if(ws!==S.ws){ws.close();return}clearTimeout(timer);settled=true;S.connecting=false;S.reconnectDelay=1000;status('Deriv conectada',true);stopHeartbeat();S.heartbeatTimer=setInterval(()=>{if(S.ws===ws&&ws.readyState===1)send({ping:1}).catch(()=>{try{ws.close()}catch{}})},30000);resolve()};ws.onerror=()=>{clearTimeout(timer);if(!settled){settled=true;S.connecting=false;reject(Error('Error de conexión Deriv'))}};ws.onclose=()=>{if(ws!==S.ws)return;clearTimeout(timer);S.connecting=false;stopHeartbeat();status('Deriv desconectada');for(const p of S.pending.values())p.reject(Error('Conexión cerrada'));S.pending.clear();scheduleReconnect()};ws.onmessage=e=>{let m;try{m=JSON.parse(e.data)}catch{return}if(m.req_id&&S.pending.has(m.req_id)){const p=S.pending.get(m.req_id);S.pending.delete(m.req_id);m.error?p.reject(Error(m.error.message)):p.resolve(m)}}})}
 async function loadSymbols(){const r=await send({active_symbols:'brief'});S.symbols=(r.active_symbols||[]).filter(x=>!Number(x.is_trading_suspended)).map(x=>({code:x.underlying_symbol||x.symbol,name:x.display_name||x.underlying_symbol_name||x.symbol,pip:Number(x.pip)||0})).filter(x=>x.code).slice(0,80);$('symbol').innerHTML=S.symbols.map(x=>'<option value="'+x.code+'">'+x.name+'</option>').join('');if(!S.symbols.length)throw Error('Deriv no devolvió instrumentos activos')}
 async function history(symbol){
- const target=COUNT,chunk=4000,all=[];
+ const target=COUNT,chunk=4000,all=[];let receivedRaw=0,invalid=0;
  const first=await send({ticks_history:symbol,adjust_start_time:1,count:chunk,end:'latest',granularity:60,style:'candles'});
- const clean=r=>(r.candles||[]).map(x=>({time:+x.epoch,open:+x.open,high:+x.high,low:+x.low,close:+x.close})).filter(x=>Number.isFinite(x.time)&&Number.isFinite(x.open)&&Number.isFinite(x.high)&&Number.isFinite(x.low)&&Number.isFinite(x.close)&&x.high>=Math.max(x.open,x.close)&&x.low<=Math.min(x.open,x.close));
+ const clean=r=>{const rows=r.candles||[];receivedRaw+=rows.length;const valid=rows.map(x=>({time:+x.epoch,open:+x.open,high:+x.high,low:+x.low,close:+x.close})).filter(x=>Number.isFinite(x.time)&&Number.isFinite(x.open)&&Number.isFinite(x.high)&&Number.isFinite(x.low)&&Number.isFinite(x.close)&&x.high>=Math.max(x.open,x.close)&&x.low<=Math.min(x.open,x.close));invalid+=rows.length-valid.length;return valid};
  all.push(...clean(first));
  if(all.length<target&&all.length){
   const oldest=Math.min(...all.map(x=>x.time));
@@ -22,7 +22,8 @@ async function history(symbol){
  const sorted=[...unique.values()].sort((a,b)=>a.time-b.time);
  const lastClosed=Math.floor(Date.now()/60000)*60-60;
  const complete=sorted.filter(x=>x.time<=lastClosed);
- S.dataQuality={received:complete.length,requested:target,duplicates:all.length-sorted.length,invalid:((first.candles||[]).length+0)-clean(first).length,last:complete.at(-1)?.time||0,gaps:0};
+ if(!complete.length)throw Error('Deriv no entregó velas M1 válidas');
+ S.dataQuality={received:complete.length,requested:target,duplicates:all.length-sorted.length,invalid,last:complete.at(-1)?.time||0,gaps:0};
  for(let i=1;i<complete.length;i++)if(complete[i].time-complete[i-1].time>60)S.dataQuality.gaps+=Math.floor((complete[i].time-complete[i-1].time)/60)-1;
  return complete;
 }
