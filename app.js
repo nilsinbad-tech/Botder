@@ -122,26 +122,26 @@ function findInstrumentSignals(symbol){
  const merged=new Map();for(const sig of signals){const k=sig.side+'|'+sig.time,prev=merged.get(k);if(!prev)merged.set(k,{...sig,strategyRates:[sig.strategyRate],strategySlots:[sig.strategySlot]});else{if(!prev.strategyRates.includes(sig.strategyRate))prev.strategyRates.push(sig.strategyRate);if(!prev.strategySlots.includes(sig.strategySlot))prev.strategySlots.push(sig.strategySlot);}}
  const out=[...merged.values()].sort((a,b)=>a.time-b.time);S.signalCache.set(key,out);if(S.signalCache.size>24)S.signalCache.delete(S.signalCache.keys().next().value);return out;
 }
-const OPTIMIZER_RESULT_KEY='botder-optimizer-saved-result-v1';
+const OPTIMIZER_RESULT_KEY='botder-optimizer-saved-result-v1';let optimizerResultCleaned=false;
 function saveOptimizerResult(result,total,instrumentCount,exitSettings){
- const saved={savedAt:Date.now(),total,instrumentCount,exitSettings:{...exitSettings,tf:5},configs:result.configs,overall:[],perInstrument:result.perInstrument.map(x=>({name:x.name,code:x.code,rows:x.rows.slice(0,10)}))};
- try{localStorage.setItem(OPTIMIZER_RESULT_KEY,JSON.stringify(saved));return saved}catch(e){$('optimizerStatus').textContent='No se pudo guardar el resultado en el teléfono: '+e.message;return null;}
+ const saved={savedAt:Date.now(),total,instrumentCount,exitSettings:{...exitSettings,tf:5},configs:result.configs,overall:[],perInstrument:result.perInstrument.map(x=>({name:x.name,code:x.code,rows:x.rows.filter(row=>optimizerScore(row)>=90&&optimizerScore(row)<=100).slice(0,10)}))};
+ try{localStorage.setItem(OPTIMIZER_RESULT_KEY,JSON.stringify(saved));optimizerResultCleaned=true;return saved}catch(e){$('optimizerStatus').textContent='No se pudo guardar el resultado en el teléfono: '+e.message;return null;}
 }
 function readOptimizerResult(){
  try{
   const raw=localStorage.getItem(OPTIMIZER_RESULT_KEY);if(!raw)return null;
-  const saved=JSON.parse(raw);if(!saved||!Array.isArray(saved.perInstrument))return saved;
+  const saved=JSON.parse(raw);if(optimizerResultCleaned)return saved;if(!saved||!Array.isArray(saved.perInstrument))return saved;
   let removed=0;
   saved.perInstrument=saved.perInstrument.map(item=>{const rows=Array.isArray(item.rows)?item.rows:[],kept=rows.filter(x=>optimizerScore(x)>=90&&optimizerScore(x)<=100);removed+=rows.length-kept.length;return {...item,rows:kept};});
   saved.overall=[];saved.filteredBelow90=(saved.filteredBelow90||0)+removed;saved.filteredAt=Date.now();
-  localStorage.setItem(OPTIMIZER_RESULT_KEY,JSON.stringify(saved));return saved;
+  localStorage.setItem(OPTIMIZER_RESULT_KEY,JSON.stringify(saved));optimizerResultCleaned=true;return saved;
  }catch{return null}
 }
 function renderOptimizerResults(result){
  const fmt=(list,showPF=true)=>list.map((x,i)=>'<div class="optimizer-row"><b>#'+(i+1)+' '+optimizerConfigLabel(x.cfg)+'</b><span>Validación '+(x.valClosed>=5?x.valRate.toFixed(1):x.rate.toFixed(1))+'% · '+x.wins+'G/'+x.losses+'P · '+x.closed+' cerradas · '+x.open+' abiertas</span><small>Validación: '+x.valW+'G/'+x.valL+'P ('+x.valClosed+') · Entrenamiento: '+x.trainW+'G/'+x.trainL+'P'+(showPF?' · PF '+x.pf.toFixed(2):'')+'</small><button type="button" data-apply-optimizer="'+x.cfg.index+'">APLICAR ESTA CONFIGURACIÓN</button></div>').join('');
  const individual=result.perInstrument.map(item=>{const chosen=selectInstrumentStrategies(item);return '<div class="optimizer-instrument"><b>'+item.name+' · '+chosen.length+' estrategia(s) seleccionada(s)</b>'+(chosen.length?chosen.map((x,i)=>'<div class="optimizer-picked"><small>ESTRATEGIA '+(i+1)+' · '+optimizerScore(x).toFixed(1)+'% · '+x.wins+'G/'+x.losses+'P</small>'+fmt([x],true)+'</div>').join(''):'<small>Sin estrategias entre 90% y 100%. Este instrumento no generará entradas.</small>')+'</div>';}).join('');
  const stamp=result.savedAt?new Date(result.savedAt).toLocaleString('es-PA'):'Resultado guardado';
- $('optimizerResults').innerHTML='<details class="optimizer-folder"><summary>📊 ESTRATEGIAS OPTIMIZADAS POR INSTRUMENTO ('+result.perInstrument.length+')</summary><div class="optimizer-folder-content">'+(individual||'Sin resultados')+'</div></details><details class="optimizer-folder"><summary>📁 RESUMEN DE LA PRUEBA</summary><div class="optimizer-folder-content"><div class="optimizer-summary"><b>'+Number(result.total||0).toLocaleString('es-PA')+' pruebas calculadas</b><span>'+Number(result.instrumentCount||result.perInstrument.length).toLocaleString('es-PA')+' instrumentos analizados</span><small>Guardado: '+stamp+'</small><small>Resultados almacenados en este dispositivo. Consultarlos no vuelve a ejecutar el optimizador.</small></div></div></details>';
+ $('optimizerResults').innerHTML='<details class="optimizer-folder"><summary>📊 ESTRATEGIAS OPTIMIZADAS POR INSTRUMENTO ('+result.perInstrument.length+')</summary><div class="optimizer-folder-content">'+(individual||'Sin resultados')+'</div></details><details class="optimizer-folder"><summary>📁 RESUMEN DE LA PRUEBA</summary><div class="optimizer-folder-content"><div class="optimizer-summary"><b>'+Number(result.total||0).toLocaleString('es-PA')+' combinaciones analizadas</b><span>'+Number(result.instrumentCount||result.perInstrument.length).toLocaleString('es-PA')+' instrumentos analizados</span><small>Estrategias conservadas (90%-100%): '+result.perInstrument.reduce((n,item)=>n+item.rows.length,0)+'</small><small>Pruebas inferiores al 90% eliminadas: '+Number(result.filteredBelow90||0)+'</small><small>Guardado: '+stamp+'</small><small>Resultados almacenados en este dispositivo. Consultarlos no vuelve a ejecutar el optimizador.</small></div></div></details>';
  $('optimizerResults').querySelectorAll('[data-apply-optimizer]').forEach(btn=>btn.addEventListener('click',()=>{const cfg=result.configs[+btn.dataset.applyOptimizer];if(!cfg)return;applyOptimizerConfig(cfg);saveSettings();S.backtestCache=null;S.lastBacktestScan=0;S.activeCache=[];S.lastActiveScan=0;render();$('optimizerStatus').textContent='Configuración aplicada manualmente. Los resultados guardados no se modificaron.';}));
 }
 function loadSavedOptimizerResults(){
