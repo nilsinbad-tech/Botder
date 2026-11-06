@@ -147,23 +147,18 @@ function renderSignalMarkers(liveSignal=null){
 }
 function restoreOpenSignals(symbol,candles){
  if(!Array.isArray(candles)||candles.length<30)return 0;
- const history=signalsFor(candles,true,symbol),market=S.markets.get(symbol),latest=candles.at(-1);
+ const history=resolveTrades(signalsFor(candles,true,symbol),candles),market=S.markets.get(symbol);
  let restored=0;
  for(const signal of history){
+  // Solo se recupera la última operación que siga realmente abierta.
+  // resolveTrades descarta como OPEN las señales ya tocadas por TP/SL
+  // y las que quedaron reemplazadas por una entrada posterior.
+  if(signal.result!=='OPEN')continue;
   const key=symbol+'|'+signal.side+'|'+signal.time;
   if(S.activeSignals.has(key)||S.liveHistory.some(x=>x.symbol===symbol&&x.side===signal.side&&x.time===signal.time))continue;
-  let closed=false;
-  for(const bar of candles){
-   if(bar.time<signal.time)continue;
-   const hitSL=signal.side==='BUY'?bar.low<=signal.sl:bar.high>=signal.sl;
-   const hitTP=signal.side==='BUY'?bar.high>=signal.tp:bar.low<=signal.tp;
-   if(hitSL||hitTP){closed=true;break}
-  }
-  if(closed)continue;
   S.activeSignals.set(key,{...signal,key,name:market?.name||S.symbols.find(x=>x.code===symbol)?.name||symbol,result:'OPEN',candles:candles.slice(-120)});
   restored++;
  }
- if(restored)renderActiveSignals();
  return restored;
 }
 function renderActiveSignals(){
@@ -205,7 +200,7 @@ async function loadGlobalMarket(symbol){
  const r=await send({ticks_history:symbol,adjust_start_time:1,count:1000,end:'latest',granularity:60,style:'candles'});
  const candles=(r.candles||[]).map(x=>({time:+x.epoch,open:+x.open,high:+x.high,low:+x.low,close:+x.close})).filter(x=>Number.isFinite(x.time)&&Number.isFinite(x.open)&&Number.isFinite(x.high)&&Number.isFinite(x.low)&&Number.isFinite(x.close));
  if(!candles.length)throw Error('Deriv no entregó velas M1 para '+symbol+'; se reintentará');
- const market={name:meta.name,candles};S.markets.set(symbol,market);restoreOpenSignals(symbol,candles);return market;
+ const market={name:meta.name,candles};S.markets.set(symbol,market);return market;
 }
 async function ensureGlobalSubscription(symbol){
  if(S.marketSubs.has(symbol))return;
@@ -219,28 +214,55 @@ async function ensureGlobalSubscription(symbol){
  S.marketLastTick.set(symbol,Date.now());
  if(r.tick)updateMarketTick(r.tick);
 }
+async function preloadGlobalMarkets(){
+ const queue=S.symbols.filter(x=>!S.markets.get(x.code)?.candles?.length);
+ let next=0;
+ const workers=Array.from({length:Math.min(3,queue.length)},async()=>{
+  while(next<queue.length){
+   const item=queue[next++];
+   try{await loadGlobalMarket(item.code)}catch(e){console.warn('No se pudieron cargar velas de '+item.name+': '+e.message)}
+  }
+ });
+ await Promise.all(workers);
+ // Calcular primero todos los instrumentos; el panel se publica una sola vez,
+ // cuando terminó la carga inicial de datos disponible.
+ for(const item of S.symbols){
+  const market=S.markets.get(item.code);
+  if(market?.candles?.length)restoreOpenSignals(item.code,market.candles);
+ }
+ renderActiveSignals();
+}
 async function scanMissingMarkets(){
  if(S.scanBusy||S.ws?.readyState!==1)return;S.scanBusy=true;
  try{
-  for(const item of S.symbols){
+  // No se suscribe ningún instrumento hasta que exista su histórico M1.
+  await preloadGlobalMarkets();
+  const queue=S.symbols.filter(item=>{
    const lastTick=S.marketLastTick.get(item.code)||0;
-   if(S.marketSubs.has(item.code)&&Date.now()-lastTick<90000)continue;
-   if(S.marketSubs.has(item.code)){
-    const oldId=S.marketSubs.get(item.code);
-    try{await send({forget:oldId})}catch{}
-    S.marketSubSymbols.delete(oldId);S.marketSubs.delete(item.code);S.marketLastTick.delete(item.code);
+   return !S.marketSubs.has(item.code)||Date.now()-lastTick>=90000;
+  });
+  let next=0;
+  const workers=Array.from({length:Math.min(3,queue.length)},async()=>{
+   while(next<queue.length){
+    const item=queue[next++];
+    if(S.marketSubs.has(item.code)){
+     const oldId=S.marketSubs.get(item.code);
+     try{await send({forget:oldId})}catch{}
+     S.marketSubSymbols.delete(oldId);S.marketSubs.delete(item.code);S.marketLastTick.delete(item.code);
+    }
+    try{await ensureGlobalSubscription(item.code)}catch(e){console.warn('Reintento escáner '+item.name+': '+e.message)}
    }
-   try{await ensureGlobalSubscription(item.code)}catch(e){console.warn('Reintento escáner '+item.name+': '+e.message)}
-  }
+  });
+  await Promise.all(workers);
   renderActiveSignals();
  }finally{S.scanBusy=false}
 }
 async function startGlobalScanner(){
  if(S.globalScanStarted)return;S.globalScanStarted=true;
- if(!S.markets.has(S.symbol))S.markets.set(S.symbol,{name:S.symbols.find(x=>x.code===S.symbol)?.name||S.symbol,candles:S.raw});
- await scanMissingMarkets();
+ if(!S.markets.has(S.symbol)&&S.raw?.length)S.markets.set(S.symbol,{name:S.symbols.find(x=>x.code===S.symbol)?.name||S.symbol,candles:S.raw});
  if(S.scanTimer)clearInterval(S.scanTimer);
  S.scanTimer=setInterval(()=>{if(S.ws?.readyState===1)scanMissingMarkets().catch(e=>console.warn('Revisión escáner global',e))},15000);
+ await scanMissingMarkets();
 }
 function notifyNewSignal(signal){
  if(!signal)return;
@@ -309,7 +331,7 @@ async function subscribeLive(){
 }
 function renderHistory(){const merged=new Map();for(const x of S.trades)merged.set((x.symbol||S.symbol)+'|'+x.side+'|'+x.time,x);for(const x of S.liveHistory.filter(x=>x.symbol===S.symbol))merged.set((x.symbol||S.symbol)+'|'+x.side+'|'+x.time,x);for(const x of S.activeSignals.values())if(x.symbol===S.symbol)merged.set(x.symbol+'|'+x.side+'|'+x.time,x);const rows=[...merged.values()].sort((a,b)=>a.time-b.time),w=rows.filter(x=>x.result==='WIN').length,l=rows.filter(x=>x.result==='LOSS').length,o=rows.filter(x=>x.result==='OPEN').length,neutral=rows.filter(x=>x.result==='CLOSED').length,closed=w+l;$('wins').textContent=w;$('losses').textContent=l;$('open').textContent=o;$('rate').textContent=(closed?100*w/closed:0).toFixed(1)+'%';$('history').innerHTML=rows.slice().reverse().map(x=>'<div class="history-row"><span>'+new Date(x.time*1000).toLocaleString('es-PA',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'})+'</span><b class="'+(x.side==='BUY'?'win':'loss')+'">'+(x.side==='BUY'?'COMPRA':'VENTA')+'</b><span>TP '+formatPrice(x.symbol||S.symbol,x.tp,x.candles||S.raw)+' · SL '+formatPrice(x.symbol||S.symbol,x.sl,x.candles||S.raw)+'</span><span class="'+(x.result==='WIN'?'win':x.result==='LOSS'?'loss':'')+'">'+x.result+'</span></div>').join('')||'No se encontraron operaciones con todos los filtros';const to=Math.floor(Date.now()/1000),from=to-48*3600,windowBars=S.raw.filter(x=>x.time>=from&&x.time<=to).length;$('coverage').textContent='VENTANA 48H · '+windowBars.toLocaleString('es-PA')+' velas M1';$('backtestStatus').textContent='PRUEBA HISTÓRICA: '+new Date(from*1000).toLocaleString('es-PA')+' — '+new Date(to*1000).toLocaleString('es-PA')+' · '+rows.length+' entradas ('+w+' ganadas, '+l+' perdidas, '+neutral+' cerradas, '+o+' abiertas) · '+windowBars+' velas M1 en ventana; '+S.raw.length+' velas recibidas para cálculos. Huecos M1 detectados: '+(S.dataQuality?.gaps??'—')+'.'}
 
-async function loadCurrent(){S.symbol=$('symbol').value;localStorage.setItem('botder-current-symbol',S.symbol);status('Descargando '+S.symbol+'…');$('chartName').textContent=S.symbol+' · M1';S.raw=await history(S.symbol);S.markets.set(S.symbol,{name:S.symbols.find(x=>x.code===S.symbol)?.name||S.symbol,candles:S.raw});if(!S.raw.length)throw Error('No hay velas M1 disponibles');restoreOpenSignals(S.symbol,S.raw);const cfg=config(S.symbol);$('tpPoints').value=cfg.tp;$('slPoints').value=cfg.sl;$('settingsStatus').textContent='Configuración de '+S.symbol;const span=S.raw.at(-1).time-S.raw[0].time;if(S.raw.length<COUNT)console.warn('Deriv devolvió '+S.raw.length+' de '+COUNT+' velas solicitadas');S.trades=backtest48h(S.raw);initCharts();drawChart();renderHistory();await subscribeLive();await startGlobalScanner();status('Deriv conectada · escáner global activo · '+S.symbol,true)}
+async function loadCurrent(){S.symbol=$('symbol').value;localStorage.setItem('botder-current-symbol',S.symbol);status('Cargando datos y señales de todos los instrumentos…');$('chartName').textContent=S.symbol+' · M1';await startGlobalScanner();status('Preparando gráfico '+S.symbol+'…');S.raw=await history(S.symbol);S.markets.set(S.symbol,{name:S.symbols.find(x=>x.code===S.symbol)?.name||S.symbol,candles:S.raw});if(!S.raw.length)throw Error('No hay velas M1 disponibles');restoreOpenSignals(S.symbol,S.raw);const cfg=config(S.symbol);$('tpPoints').value=cfg.tp;$('slPoints').value=cfg.sl;$('settingsStatus').textContent='Configuración de '+S.symbol;const span=S.raw.at(-1).time-S.raw[0].time;if(S.raw.length<COUNT)console.warn('Deriv devolvió '+S.raw.length+' de '+COUNT+' velas solicitadas');S.trades=backtest48h(S.raw);initCharts();drawChart();renderHistory();await subscribeLive();await startGlobalScanner();status('Deriv conectada · escáner global activo · '+S.symbol,true)}
 async function recalc(){saveConfig();S.trades=backtest48h(S.raw);drawChart();renderHistory()}
 $('symbol').addEventListener('change',()=>loadCurrent().catch(e=>status(e.message)));$('reload').addEventListener('click',()=>loadCurrent().catch(e=>status(e.message)));$('applyRisk').addEventListener('click',recalc);
 async function start(){restoreLiveHistory();try{await connect();await loadSymbols();const saved=localStorage.getItem('botder-current-symbol');if(saved&&S.symbols.some(x=>x.code===saved))$('symbol').value=saved;await loadCurrent()}catch(e){status(e.message);scheduleReconnect()}}
