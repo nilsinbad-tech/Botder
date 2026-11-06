@@ -141,6 +141,31 @@ function renderSignalMarkers(liveSignal=null){
  if(liveSignal)markers.push({time:liveSignal.time-60,position:liveSignal.side==='BUY'?'belowBar':'aboveBar',color:liveSignal.side==='BUY'?'#72ffd0':'#ff8798',shape:'circle',size:0.8,text:liveSignal.side==='BUY'?'B':'S'});
  try{if(S.markerApi)S.markerApi.setMarkers(markers);else if(S.price.setMarkers)S.price.setMarkers(markers)}catch(e){console.error('No se pudieron actualizar las señales del gráfico',e)}
 }
+function notifyNewSignal(signal){
+ if(!signal)return;
+ const key=signal.symbol+'|'+signal.side+'|'+signal.time;
+ if(S.notifiedSignals?.has(key))return;
+ if(!S.notifiedSignals)S.notifiedSignals=new Set();
+ S.notifiedSignals.add(key);
+ if(S.notifiedSignals.size>300)S.notifiedSignals=new Set([...S.notifiedSignals].slice(-150));
+ const host=$('signalNotices');if(!host)return;
+ host.hidden=false;
+ const card=document.createElement('article');
+ card.className='signal-notice '+(signal.side==='BUY'?'buy':'sell');
+ const title=document.createElement('b');title.className='notice-title';title.textContent=(signal.side==='BUY'?'B · COMPRA':'S · VENTA')+'  '+signal.symbol;
+ const details=document.createElement('div');details.className='notice-details';
+ details.textContent='ENTRADA '+formatPrice(signal.symbol,signal.price,S.raw)+'  ·  TP '+formatPrice(signal.symbol,signal.tp,S.raw)+'  ·  SL '+formatPrice(signal.symbol,signal.sl,S.raw);
+ const timer=document.createElement('span');timer.className='notice-timer';timer.textContent='45 s';
+ card.append(title,details,timer);host.prepend(card);
+ while(host.children.length>4)host.lastElementChild.remove();
+ const expires=Date.now()+45000;
+ const interval=setInterval(()=>{
+  const left=Math.max(0,Math.ceil((expires-Date.now())/1000));
+  timer.textContent=left+' s';
+  if(left<=0){clearInterval(interval);card.remove();if(!host.children.length)host.hidden=true}
+ },250);
+ setTimeout(()=>{clearInterval(interval);card.remove();if(!host.children.length)host.hidden=true},45100);
+}
 function updatePriceLine(price){
  if(!S.price||!Number.isFinite(price))return;
  try{if(S.currentPriceLine)S.price.removePriceLine(S.currentPriceLine)}catch{}
@@ -169,6 +194,7 @@ function updateLiveTick(tick){
   const current=S.raw.at(-1),candidates=signalsFor(S.raw,false).filter(x=>x.time===current.time+60);
   const liveSignal=candidates.at(-1)||null;
   renderSignalMarkers(liveSignal);
+  if(liveSignal)notifyNewSignal(liveSignal);
   $('liveSignal').textContent=liveSignal?(liveSignal.side==='BUY'?'COMPRA':'VENTA')+' EN VIVO · VELA EN FORMACIÓN':'SIN SEÑAL EN VELA ACTUAL';
   $('liveSignal').style.color=liveSignal?(liveSignal.side==='BUY'?'#20d18b':'#ff5968'):'#9aabc0';
  }catch(e){console.error('Error actualizando vela M1 en vivo',e)}
