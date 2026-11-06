@@ -54,15 +54,15 @@ group.prices.push(level.price);group.touches++;group.price=group.prices.reduce((
 return clusters.map(x=>({...x,score:x.strength+Math.max(0,x.touches-1)*0.75}));
 }
 function structuralTargets(sig){
-const m15=structuralLevels(sig,15),m30=structuralLevels(sig,30),all=[...m15,...m30],buy=sig.side==='BUY',support=all.filter(x=>x.side==='S'&&(buy?x.price<sig.price:x.price>sig.price)),resistance=all.filter(x=>x.side==='R'&&(buy?x.price>sig.price:x.price<sig.price));
-const stopPool=support.sort((a,b)=>Math.abs(sig.price-a.price)-Math.abs(sig.price-b.price));
+const m15=structuralLevels(sig,15),m30=structuralLevels(sig,30),all=[...m15,...m30],buy=sig.side==='BUY',slSide=buy?'S':'R',tpSide=buy?'R':'S';
+const stopPool=all.filter(x=>x.side===slSide&&(buy?x.price<sig.price:x.price>sig.price)).sort((a,b)=>Math.abs(sig.price-a.price)-Math.abs(sig.price-b.price));
 const slLevel=stopPool[0];
-const targetPool=resistance.sort((a,b)=>Math.abs(a.price-sig.price)-Math.abs(b.price-sig.price));
+const targetPool=all.filter(x=>x.side===tpSide&&(buy?x.price>sig.price:x.price<sig.price)).sort((a,b)=>Math.abs(a.price-sig.price)-Math.abs(b.price-sig.price));
 const tp1Level=targetPool[0];
 const targets=[];
 if(tp1Level)targets.push({name:'TP1',price:tp1Level.price,time:sig.time,tf:tp1Level.tf});
 if(tp1Level){
-const second=m30.filter(x=>x.side=== (buy?'R':'S')&&(buy?x.price>tp1Level.price:x.price<tp1Level.price)).sort((a,b)=>buy?a.price-b.price:b.price-a.price)[0];
+const second=m30.filter(x=>x.side===tpSide&&(buy?x.price>tp1Level.price:x.price<tp1Level.price)).sort((a,b)=>buy?a.price-b.price:b.price-a.price)[0];
 if(second)targets.push({name:'TP2',price:second.price,time:sig.time,tf:30});
 }
 if(slLevel)targets.push({name:'SL',price:slLevel.price,time:sig.time,tf:slLevel.tf});
