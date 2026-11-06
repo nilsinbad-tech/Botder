@@ -185,7 +185,7 @@ function updateSelectedSignalView(){
 }
 function updateMarketTrade(signal,price,time){
  if(signal.result!=='OPEN')return false;const hitSL=signal.side==='BUY'?price<=signal.sl:price>=signal.sl,hitTP=signal.side==='BUY'?price>=signal.tp:price<=signal.tp;
- if(hitSL||hitTP){signal.result=hitTP?'WIN':'LOSS';signal.exitTime=time;S.liveHistory.push({...signal,candles:undefined});if(S.liveHistory.length>2000)S.liveHistory.shift();persistLiveHistory();notifySignalResult(signal,signal.result);S.activeSignals.delete(signal.key);return true}return false;
+ if(hitSL||hitTP){signal.result=hitTP?'WIN':'LOSS';signal.exitTime=time;S.liveHistory.push({...signal,candles:undefined});if(S.liveHistory.length>2000)S.liveHistory.shift();persistLiveHistory();S.activeSignals.delete(signal.key);return true}return false;
 }
 function processMarketSignal(symbol,candles,price,time){
  if(!candles||!candles.length)return;let changed=false;
