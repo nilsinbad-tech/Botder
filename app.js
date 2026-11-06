@@ -121,7 +121,7 @@ async function startOptimizer(){
  const configs=optimizerConfigs(),items=S.symbols.filter(x=>x.active&&S.marketData.get(x.code)?.length>=300);
  if(!items.length){status.textContent='No hay instrumentos con al menos 300 velas cargadas.';return;}
  S.optimizerRunning=true;S.optimizerExitSettings={...original.exit};button.disabled=true;results.innerHTML='';
- const perInstrument=[],overall=configs.map((cfg,index)=>({cfg:{...cfg,index},wins:0,losses:0,open:0,closed:0,valW:0,valL:0,valClosed:0,trainW:0,trainL:0,trainClosed:0}));
+ const perInstrument=[],overall=configs.map((cfg,index)=>({cfg:{...cfg,index},wins:0,losses:0,open:0,closed:0,valW:0,valL:0,valClosed:0,trainW:0,trainL:0,trainClosed:0,winMove:0,lossMove:0}));
  const total=items.length*configs.length;let done=0,activeIndex=0,configIndex=0,currentRows=[];
  status.textContent='Preparando '+configs.length+' configuraciones × '+items.length+' instrumentos…';
  function restore(){
@@ -137,7 +137,7 @@ async function startOptimizer(){
      const item=items[activeIndex],data=S.marketData.get(item.code);
      S.symbol=item.code;S.raw=data;applyOptimizerConfig(configs[configIndex]);
      const signals=findSignals(),m=optimizerEvaluate(data,signals),g=overall[configIndex];
-     for(const k of ['wins','losses','open','closed','valW','valL','valClosed','trainW','trainL','trainClosed'])g[k]+=m[k];
+     for(const k of ['wins','losses','open','closed','valW','valL','valClosed','trainW','trainL','trainClosed','winMove','lossMove'])g[k]+=m[k];
      if(!currentRows[configIndex])currentRows[configIndex]={cfg:g.cfg,...m};
      else for(const k of ['wins','losses','open','closed','valW','valL','valClosed','trainW','trainL','trainClosed','winMove','lossMove'])currentRows[configIndex][k]+=m[k];
      done++;configIndex++;
