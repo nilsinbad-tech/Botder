@@ -73,14 +73,13 @@ function optimizerConfigs(){
  const mask=EMA_PAIRS.reduce((m,x,i)=>m+($(x[2]).checked?1<<i:0),0);
  const out=[{zigTf:base.tf,zigDepth:base.depth,zigDeviation:base.deviation,zigSeparation:base.separation,rsiTf,rsiPeriod,emaMask:mask}];
  for(let i=1;i<500;i++){
-  let n=i;
-  const cfg={zigTf:zt[n%5]};n=Math.floor(n/5);
+  let n=i;const cfg={emaMask:n%32};n=Math.floor(n/32);
+  cfg.zigTf=zt[n%5];n=Math.floor(n/5);
   cfg.zigDepth=depth[n%5];n=Math.floor(n/5);
   cfg.zigDeviation=dev[n%5];n=Math.floor(n/5);
   cfg.zigSeparation=sep[n%4];n=Math.floor(n/4);
   cfg.rsiTf=rt[n%4];n=Math.floor(n/4);
-  cfg.rsiPeriod=rp[n%5];n=Math.floor(n/5);
-  cfg.emaMask=n%32;
+  cfg.rsiPeriod=rp[n%5];
   out.push(cfg);
  }
  return out;
