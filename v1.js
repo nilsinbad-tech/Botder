@@ -8,7 +8,7 @@ function status(t,ok=false){$('connection').textContent=t;$('connection').style.
 function send(p){return new Promise((resolve,reject)=>{if(!S.ws||S.ws.readyState!==1)return reject(Error('Deriv desconectada'));const id=++S.req,t=setTimeout(()=>{S.pending.delete(id);reject(Error('Tiempo de espera de Deriv'))},20000);S.pending.set(id,{resolve:x=>{clearTimeout(t);resolve(x)},reject:e=>{clearTimeout(t);reject(e)}});S.ws.send(JSON.stringify({...p,req_id:id}))})}
 function stopHeartbeat(){if(S.heartbeatTimer){clearInterval(S.heartbeatTimer);S.heartbeatTimer=null}}
 function scheduleReconnect(){if(S.reconnectTimer)return;const wait=S.reconnectDelay;status('Deriv desconectada · reconectando…');S.reconnectTimer=setTimeout(async()=>{S.reconnectTimer=null;try{await connect();S.reconnectDelay=1000;await loadSymbols();if(S.symbol&&S.symbols.some(x=>x.code===S.symbol))$('symbol').value=S.symbol;await loadCurrent()}catch(e){status('Reintentando conexión…');S.reconnectDelay=Math.min(30000,S.reconnectDelay*2);scheduleReconnect()}},wait)}
-function connect(){if(S.connecting)return Promise.reject(Error('Conexión en curso'));S.connecting=true;return new Promise((resolve,reject)=>{const ws=new WebSocket(API);S.ws=ws;let settled=false;const timer=setTimeout(()=>{if(!settled){settled=true;S.connecting=false;try{ws.close()}catch{}reject(Error('Tiempo de espera conectando Deriv'))}},12000);ws.onopen=()=>{if(ws!==S.ws){ws.close();return}clearTimeout(timer);settled=true;S.connecting=false;S.reconnectDelay=1000;status('Deriv conectada',true);stopHeartbeat();S.heartbeatTimer=setInterval(()=>{if(S.ws===ws&&ws.readyState===1)send({ping:1}).catch(()=>{try{ws.close()}catch{}})},30000);resolve()};ws.onerror=()=>{clearTimeout(timer);if(!settled){settled=true;S.connecting=false;reject(Error('Error de conexión Deriv'))}};ws.onclose=()=>{if(ws!==S.ws)return;clearTimeout(timer);S.connecting=false;stopHeartbeat();S.marketSubs.clear();S.marketLastTick.clear();S.globalScanStarted=false;status('Deriv desconectada');for(const p of S.pending.values())p.reject(Error('Conexión cerrada'));S.pending.clear();scheduleReconnect()};ws.onmessage=e=>{let m;try{m=JSON.parse(e.data)}catch{return}if(m.msg_type==='tick'&&m.tick)updateLiveTick(m.tick);if(m.req_id&&S.pending.has(m.req_id)){const p=S.pending.get(m.req_id);S.pending.delete(m.req_id);m.error?p.reject(Error(m.error.message)):p.resolve(m)}}})}
+function connect(){if(S.connecting)return Promise.reject(Error('Conexión en curso'));S.connecting=true;return new Promise((resolve,reject)=>{const ws=new WebSocket(API);S.ws=ws;let settled=false;const timer=setTimeout(()=>{if(!settled){settled=true;S.connecting=false;try{ws.close()}catch{}reject(Error('Tiempo de espera conectando Deriv'))}},12000);ws.onopen=()=>{if(ws!==S.ws){ws.close();return}clearTimeout(timer);settled=true;S.connecting=false;S.reconnectDelay=1000;status('Deriv conectada',true);stopHeartbeat();S.heartbeatTimer=setInterval(()=>{if(S.ws===ws&&ws.readyState===1)send({ping:1}).catch(()=>{try{ws.close()}catch{}})},30000);resolve()};ws.onerror=()=>{clearTimeout(timer);if(!settled){settled=true;S.connecting=false;reject(Error('Error de conexión Deriv'))}};ws.onclose=()=>{if(ws!==S.ws)return;clearTimeout(timer);S.connecting=false;stopHeartbeat();S.marketSubs.clear();S.marketLastTick.clear();S.globalScanStarted=false;status('Deriv desconectada');for(const p of S.pending.values())p.reject(Error('Conexión cerrada'));S.pending.clear();scheduleReconnect()};ws.onmessage=e=>{let m;try{m=JSON.parse(e.data)}catch{return}if(m.msg_type==='tick'&&m.tick){try{updateLiveTick(m.tick)}catch(err){console.error('Error procesando tick global',m.tick.symbol,err)}}if(m.req_id&&S.pending.has(m.req_id)){const p=S.pending.get(m.req_id);S.pending.delete(m.req_id);m.error?p.reject(Error(m.error.message)):p.resolve(m)}}})}
 async function loadSymbols(){
  const r=await send({active_symbols:'brief'});
  const allowed=(r.active_symbols||[]).filter(x=>!Number(x.is_trading_suspended)).map(x=>{
@@ -145,6 +145,27 @@ function renderSignalMarkers(liveSignal=null){
  if(liveSignal){const markerKey=liveSignal.symbol+'|'+liveSignal.side+'|'+liveSignal.time;if(!seen.has(markerKey))markers.push({time:liveSignal.time-60,position:liveSignal.side==='BUY'?'belowBar':'aboveBar',color:liveSignal.side==='BUY'?'#72ffd0':'#ff8798',shape:'circle',size:0.8,text:liveSignal.side==='BUY'?'B':'S'});}
  try{if(S.markerApi)S.markerApi.setMarkers(markers);else if(S.price.setMarkers)S.price.setMarkers(markers)}catch(e){console.error('No se pudieron actualizar las señales del gráfico',e)}
 }
+function restoreOpenSignals(symbol,candles){
+ if(!Array.isArray(candles)||candles.length<30)return 0;
+ const history=signalsFor(candles,true,symbol),market=S.markets.get(symbol),latest=candles.at(-1);
+ let restored=0;
+ for(const signal of history){
+  const key=symbol+'|'+signal.side+'|'+signal.time;
+  if(S.activeSignals.has(key)||S.liveHistory.some(x=>x.symbol===symbol&&x.side===signal.side&&x.time===signal.time))continue;
+  let closed=false;
+  for(const bar of candles){
+   if(bar.time<signal.time)continue;
+   const hitSL=signal.side==='BUY'?bar.low<=signal.sl:bar.high>=signal.sl;
+   const hitTP=signal.side==='BUY'?bar.high>=signal.tp:bar.low<=signal.tp;
+   if(hitSL||hitTP){closed=true;break}
+  }
+  if(closed)continue;
+  S.activeSignals.set(key,{...signal,key,name:market?.name||S.symbols.find(x=>x.code===symbol)?.name||symbol,result:'OPEN',candles:candles.slice(-120)});
+  restored++;
+ }
+ if(restored)renderActiveSignals();
+ return restored;
+}
 function renderActiveSignals(){
  const host=$('activeSignals');if(!host)return;
  const items=[...S.activeSignals.values()].sort((a,b)=>b.time-a.time);
@@ -184,7 +205,7 @@ async function loadGlobalMarket(symbol){
  const r=await send({ticks_history:symbol,adjust_start_time:1,count:1000,end:'latest',granularity:60,style:'candles'});
  const candles=(r.candles||[]).map(x=>({time:+x.epoch,open:+x.open,high:+x.high,low:+x.low,close:+x.close})).filter(x=>Number.isFinite(x.time)&&Number.isFinite(x.open)&&Number.isFinite(x.high)&&Number.isFinite(x.low)&&Number.isFinite(x.close));
  if(!candles.length)throw Error('Deriv no entregó velas M1 para '+symbol+'; se reintentará');
- const market={name:meta.name,candles};S.markets.set(symbol,market);return market;
+ const market={name:meta.name,candles};S.markets.set(symbol,market);restoreOpenSignals(symbol,candles);return market;
 }
 async function ensureGlobalSubscription(symbol){
  if(S.marketSubs.has(symbol))return;
@@ -287,7 +308,7 @@ async function subscribeLive(){
 }
 function renderHistory(){const merged=new Map();for(const x of S.trades)merged.set((x.symbol||S.symbol)+'|'+x.side+'|'+x.time,x);for(const x of S.liveHistory.filter(x=>x.symbol===S.symbol))merged.set((x.symbol||S.symbol)+'|'+x.side+'|'+x.time,x);for(const x of S.activeSignals.values())if(x.symbol===S.symbol)merged.set(x.symbol+'|'+x.side+'|'+x.time,x);const rows=[...merged.values()].sort((a,b)=>a.time-b.time),w=rows.filter(x=>x.result==='WIN').length,l=rows.filter(x=>x.result==='LOSS').length,o=rows.filter(x=>x.result==='OPEN').length,neutral=rows.filter(x=>x.result==='CLOSED').length,closed=w+l;$('wins').textContent=w;$('losses').textContent=l;$('open').textContent=o;$('rate').textContent=(closed?100*w/closed:0).toFixed(1)+'%';$('history').innerHTML=rows.slice().reverse().map(x=>'<div class="history-row"><span>'+new Date(x.time*1000).toLocaleString('es-PA',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'})+'</span><b class="'+(x.side==='BUY'?'win':'loss')+'">'+(x.side==='BUY'?'COMPRA':'VENTA')+'</b><span>TP '+formatPrice(x.symbol||S.symbol,x.tp,x.candles||S.raw)+' · SL '+formatPrice(x.symbol||S.symbol,x.sl,x.candles||S.raw)+'</span><span class="'+(x.result==='WIN'?'win':x.result==='LOSS'?'loss':'')+'">'+x.result+'</span></div>').join('')||'No se encontraron operaciones con todos los filtros';const to=Math.floor(Date.now()/1000),from=to-48*3600,windowBars=S.raw.filter(x=>x.time>=from&&x.time<=to).length;$('coverage').textContent='VENTANA 48H · '+windowBars.toLocaleString('es-PA')+' velas M1';$('backtestStatus').textContent='PRUEBA HISTÓRICA: '+new Date(from*1000).toLocaleString('es-PA')+' — '+new Date(to*1000).toLocaleString('es-PA')+' · '+rows.length+' entradas ('+w+' ganadas, '+l+' perdidas, '+neutral+' cerradas, '+o+' abiertas) · '+windowBars+' velas M1 en ventana; '+S.raw.length+' velas recibidas para cálculos. Huecos M1 detectados: '+(S.dataQuality?.gaps??'—')+'.'}
 
-async function loadCurrent(){S.symbol=$('symbol').value;localStorage.setItem('botder-current-symbol',S.symbol);status('Descargando '+S.symbol+'…');$('chartName').textContent=S.symbol+' · M1';S.raw=await history(S.symbol);S.markets.set(S.symbol,{name:S.symbols.find(x=>x.code===S.symbol)?.name||S.symbol,candles:S.raw});if(!S.raw.length)throw Error('No hay velas M1 disponibles');const cfg=config(S.symbol);$('tpPoints').value=cfg.tp;$('slPoints').value=cfg.sl;$('settingsStatus').textContent='Configuración de '+S.symbol;const span=S.raw.at(-1).time-S.raw[0].time;if(S.raw.length<COUNT)console.warn('Deriv devolvió '+S.raw.length+' de '+COUNT+' velas solicitadas');S.trades=backtest48h(S.raw);initCharts();drawChart();renderHistory();await subscribeLive();await startGlobalScanner();status('Deriv conectada · escáner global activo · '+S.symbol,true)}
+async function loadCurrent(){S.symbol=$('symbol').value;localStorage.setItem('botder-current-symbol',S.symbol);status('Descargando '+S.symbol+'…');$('chartName').textContent=S.symbol+' · M1';S.raw=await history(S.symbol);S.markets.set(S.symbol,{name:S.symbols.find(x=>x.code===S.symbol)?.name||S.symbol,candles:S.raw});if(!S.raw.length)throw Error('No hay velas M1 disponibles');restoreOpenSignals(S.symbol,S.raw);const cfg=config(S.symbol);$('tpPoints').value=cfg.tp;$('slPoints').value=cfg.sl;$('settingsStatus').textContent='Configuración de '+S.symbol;const span=S.raw.at(-1).time-S.raw[0].time;if(S.raw.length<COUNT)console.warn('Deriv devolvió '+S.raw.length+' de '+COUNT+' velas solicitadas');S.trades=backtest48h(S.raw);initCharts();drawChart();renderHistory();await subscribeLive();await startGlobalScanner();status('Deriv conectada · escáner global activo · '+S.symbol,true)}
 async function recalc(){saveConfig();S.trades=backtest48h(S.raw);drawChart();renderHistory()}
 $('symbol').addEventListener('change',()=>loadCurrent().catch(e=>status(e.message)));$('reload').addEventListener('click',()=>loadCurrent().catch(e=>status(e.message)));$('applyRisk').addEventListener('click',recalc);
 async function start(){restoreLiveHistory();try{await connect();await loadSymbols();const saved=localStorage.getItem('botder-current-symbol');if(saved&&S.symbols.some(x=>x.code===saved))$('symbol').value=saved;await loadCurrent()}catch(e){status(e.message);scheduleReconnect()}}
