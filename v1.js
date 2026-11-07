@@ -197,7 +197,11 @@ function drawOverlay(zones){
    const left=Math.max(0,Math.min(x1,x2)),right=Math.min(width,Math.max(x1,x2));
    const top=Math.max(0,Math.min(y1,y2)),bottom=Math.min(height,Math.max(y1,y2));
    if(right<=left||(a.kind!=='entry'&&bottom<=top)){a.el.style.display='none';a.label.style.display='none';continue}
-   a.el.style.display='block';a.el.style.left=left+'px';a.el.style.width=(right-left)+'px';
+   a.el.style.display='block';
+   // La línea de ENTRADA queda dentro del mismo ancho de los recuadros TP/SL.
+   const zoneLeft=a.kind==='entry'?Math.min(right,left+2):left;
+   const zoneRight=a.kind==='entry'?Math.max(zoneLeft,right-2):right;
+   a.el.style.left=zoneLeft+'px';a.el.style.width=Math.max(0,zoneRight-zoneLeft)+'px';
    a.el.style.top=(a.kind==='entry'?Math.max(0,Math.min(height-1,y1)):top)+'px';a.el.style.height=(a.kind==='entry'?'1px':Math.max(1,bottom-top)+'px');
    a.label.style.display='block';
    const decimals=Number.isInteger(a.t.decimals)?a.t.decimals:symbolMeta(S.symbol,S.raw).decimals;
