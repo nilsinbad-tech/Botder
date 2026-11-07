@@ -19,6 +19,13 @@
 <section class="settings">
  <h3>TP / SL POR INSTRUMENTO</h3>
  <div class="inputs"><label>TP · puntos<input id="tpPoints" type="number" min="1" step="1" value="12"></label><label>SL · puntos<input id="slPoints" type="number" min="1" step="1" value="12"></label><button id="applyRisk">GUARDAR</button><small id="settingsStatus">Cada instrumento conserva su propio TP y SL. Pulsa GUARDAR antes de cambiar de instrumento.</small></div>
+ <div class="trend-settings">
+  <h3>TENDENCIA PRINCIPAL · M15</h3>
+  <label>EMA rápida<select id="trendFast"><option value="9">EMA 9</option><option value="20">EMA 20</option><option value="10">EMA 10</option><option value="50">EMA 50</option><option value="15">EMA 15</option></select></label>
+  <label>EMA lenta<select id="trendSlow"><option value="20">EMA 20</option><option value="9">EMA 9</option><option value="50">EMA 50</option><option value="100">EMA 100</option><option value="31">EMA 31</option></select></label>
+  <label class="toggle-row"><input id="trendFilter" type="checkbox"> Exigir que las entradas coincidan con la tendencia M15</label>
+  <small id="trendSettingsStatus">Desactivado: permite compras y ventas según las condiciones M1.</small>
+ </div>
  <small>TP y SL se calculan primero en una escala normalizada a 9592.00 y luego se convierten al precio REAL del instrumento. La entrada, las velas y todos los precios del gráfico permanecen reales; la normalización solo se usa internamente para TP/SL.</small>
 </section>
 <section class="stats">
