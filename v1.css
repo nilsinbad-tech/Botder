@@ -78,3 +78,5 @@
 #chart .si-structure.buy{border-color:rgba(32,209,139,.7);color:#72e2b0}
 #chart .si-structure.sell{border-color:rgba(255,89,104,.7);color:#ff929d}
 #chart .si-structure span{position:absolute;top:-9px;left:2px;font-size:7px;font-weight:700;background:rgba(8,13,22,.72);padding:0 2px;white-space:nowrap}
+
+.visual-settings{display:grid;grid-template-columns:minmax(150px,220px) 1fr;gap:9px;align-items:end;margin:8px 0}.visual-settings label{display:grid;gap:5px;color:var(--muted);font-size:10px;font-weight:800}.visual-settings small{color:var(--muted);font-size:10px;line-height:1.4}@media(max-width:600px){.visual-settings{grid-template-columns:1fr}}
