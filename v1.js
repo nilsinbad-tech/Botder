@@ -186,7 +186,9 @@ function drawOverlay(zones){
   }
   for(const a of areas){
    const hasExitTime=a.t.exitTime!==null&&a.t.exitTime!==undefined&&a.t.exitTime!==''&&Number.isFinite(Number(a.t.exitTime))&&Number(a.t.exitTime)>0;
-   const tradeEnd=hasExitTime?Number(a.t.exitTime):now+60;
+   const tradeEnd=hasExitTime?Math.floor(Number(a.t.exitTime)/60)*60:now+60;
+   // El cierre llega con la hora exacta del tick, que puede no coincidir con una vela M1.
+   // Anclar el extremo del recuadro al inicio de la vela M1 donde cerró evita que se oculte.
    const rawX1=ts.timeToCoordinate(+a.t.time-60),rawX2=ts.timeToCoordinate(tradeEnd);
    let x1=rawX1,x2=rawX2;
    if(x1==null)x1=(+a.t.time-60<=firstTime?0:(+a.t.time-60>lastTime?width:null));
