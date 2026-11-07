@@ -35,7 +35,7 @@ async function loadSymbols(){
 }
 async function history(symbol,target=COUNT){
  const chunk=4000,all=[];let receivedRaw=0,invalid=0;
- const first=await send({ticks_history:symbol,adjust_start_time:1,count:chunk,end:'latest',granularity:60,style:'candles'});
+ const first=await send({ticks_history:symbol,adjust_start_time:1,count:Math.min(chunk,target),end:'latest',granularity:60,style:'candles'});
  const clean=r=>{const rows=r.candles||[];receivedRaw+=rows.length;const valid=rows.map(x=>({time:+x.epoch,open:+x.open,high:+x.high,low:+x.low,close:+x.close})).filter(x=>Number.isFinite(x.time)&&Number.isFinite(x.open)&&Number.isFinite(x.high)&&Number.isFinite(x.low)&&Number.isFinite(x.close)&&x.high>=Math.max(x.open,x.close)&&x.low<=Math.min(x.open,x.close));invalid+=rows.length-valid.length;return valid};
  all.push(...clean(first));
  if(all.length<target&&all.length){
