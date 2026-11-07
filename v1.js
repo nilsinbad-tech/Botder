@@ -55,7 +55,8 @@ async function history(symbol,target=COUNT){
 function aggregate(c,n){const map=new Map();for(const x of c){const t=Math.floor(x.time/(n*60))*n*60;let b=map.get(t);if(!b){b={time:t,open:x.open,high:x.high,low:x.low,close:x.close,count:0};map.set(t,b)}b.high=Math.max(b.high,x.high);b.low=Math.min(b.low,x.low);b.close=x.close;b.count++}return [...map.values()].filter((x,i,a)=>x.count===n||i===a.length-1).map(({count,...x})=>x)}
 function ema(c,p){const out=Array(c.length).fill(null),k=2/(p+1);let v=null;c.forEach((x,i)=>{v=v===null?x.close:x.close*k+v*(1-k);out[i]=v});return out}
 function rsi(c,p=14){const out=Array(c.length).fill(null);let g=0,l=0;for(let i=1;i<c.length;i++){let d=c[i].close-c[i-1].close,a=Math.max(d,0),b=Math.max(-d,0);if(i<=p){g+=a;l+=b;if(i===p){g/=p;l/=p}}else{g=(g*(p-1)+a)/p;l=(l*(p-1)+b)/p}if(i>=p)out[i]=l===0?100:100-100/(1+g/l)}return out}
-function trend(c){if(c.length<50)return'NEUTRAL';const a=ema(c,9),b=ema(c,20),i=c.length-1;return a[i]>b[i]?'BUY':a[i]<b[i]?'SELL':'NEUTRAL'}
+function trendSettings(){const all=readConfigs(),v=all.trend||{};return{fast:[9,20,10,50,15].includes(+v.fast)?+v.fast:9,slow:[20,9,50,100,31].includes(+v.slow)?+v.slow:20,filter:v.filter===true}}
+function trend(c,fastPeriod=trendSettings().fast,slowPeriod=trendSettings().slow){if(c.length<Math.max(fastPeriod,slowPeriod)+2)return'NEUTRAL';const a=ema(c,fastPeriod),b=ema(c,slowPeriod),i=c.length-1;return a[i]>b[i]?'BUY':a[i]<b[i]?'SELL':'NEUTRAL'}
 function zigzag(c,depth=10,sep=3){const pts=[];for(let i=depth;i<c.length-depth;i++){let hi=true,lo=true;for(let j=1;j<=depth;j++){if(c[i].high<c[i-j].high||c[i].high<c[i+j].high)hi=false;if(c[i].low>c[i-j].low||c[i].low>c[i+j].low)lo=false}if(hi||lo){const p={index:i,time:c[i].time,price:hi?c[i].high:c[i].low,type:hi?'HIGH':'LOW',confirmed:i+depth};const last=pts.at(-1);if(!last||last.type!==p.type){if(!last||i-last.index>=sep)pts.push(p)}else if((p.type==='HIGH'&&p.price>last.price)||(p.type==='LOW'&&p.price<last.price))pts[pts.length-1]=p}}return pts}
 function obZones(m15){
  const zones=[],lookback=5;
@@ -82,12 +83,10 @@ function config(symbol=S.symbol){
 function saveConfig(){
  const all=readConfigs();
  if(!all.bySymbol||typeof all.bySymbol!=='object')all.bySymbol={};
- all.bySymbol[S.symbol]={
-  tp:Math.max(1,+$('tpPoints').value||12),
-  sl:Math.max(1,+$('slPoints').value||12)
- };
+ all.bySymbol[S.symbol]={tp:Math.max(1,+$('tpPoints').value||12),sl:Math.max(1,+$('slPoints').value||12)};
+ all.trend={fast:+$('trendFast').value,slow:+$('trendSlow').value,filter:$('trendFilter').checked};
  localStorage.setItem(STORE,JSON.stringify(all));
- $('settingsStatus').textContent='Guardado para '+S.symbol;
+ $('settingsStatus').textContent='TP/SL guardados para '+S.symbol+' · tendencia M15 guardada globalmente';
 }
 const TP_SL_REFERENCE_PRICE=9592.00;
 // Calcula en el espacio de referencia y devuelve TP/SL convertidos al precio REAL.
@@ -104,8 +103,8 @@ function symbolMeta(symbol=S.symbol,c=S.raw){const sym=S.symbols.find(x=>x.code=
 function getPoint(){return symbolMeta(S.symbol,S.raw).point}
 function formatPrice(symbol,price,c){return Number(price).toFixed(symbolMeta(symbol,c).decimals)}
 function signalsFor(c,asOfEnd=true,symbol=S.symbol){
- const m15=aggregate(c,15),zones=obZones(m15),fast=ema(c,9),slow=ema(c,20),rv=rsi(c),out=[];
- const meta=symbolMeta(symbol,c),point=meta.point,used=new Set();let lastEntryTime=-1;
+ const m15=aggregate(c,15),zones=obZones(m15),fast=ema(c,9),slow=ema(c,20),rv=rsi(c),out=[],tc=trendSettings();
+ const meta=symbolMeta(symbol,c),point=meta.point,used=new Set();let lastEntryTime=-1,m15Index=-1;
  for(let i=3;i<c.length;i++){
   const bar=c[i],closeTime=bar.time+60;if(asOfEnd&&closeTime>Date.now()/1000)continue;
   if(rv[i]==null||fast[i]==null||slow[i]==null)continue;
@@ -117,13 +116,16 @@ function signalsFor(c,asOfEnd=true,symbol=S.symbol){
   if(fast[i]>slow[i]&&rising)side='BUY';
   else if(fast[i]<slow[i]&&falling)side='SELL';
   if(!side)continue;
+  while(m15Index+1<m15.length&&m15[m15Index+1].time+900<=closeTime)m15Index++;
+  const trend15=m15Index>=0?trend(m15.slice(0,m15Index+1),tc.fast,tc.slow):'NEUTRAL';
+  if(tc.filter&&(trend15==='NEUTRAL'||trend15!==side))continue;
   const candle=bar,bodyConfirm=side==='BUY'?candle.close>candle.open&&candle.close>fast[i]:candle.close<candle.open&&candle.close<fast[i];
   if(!bodyConfirm)continue;
   const candidates=zones.filter(z=>z.side===side&&z.confirmedAt<=bar.time&&!used.has(z.time+':'+z.side)&&bar.low<=z.high&&bar.high>=z.low);
   if(!candidates.length)continue;
   const zone=candidates.at(-1),entry=candle.close,cfg=config(symbol);
   const levels=calculateTpSl(entry,side,point,cfg);
-  out.push({symbol,side,time:closeTime,price:entry,tp:levels.tp,sl:levels.sl,point,decimals:meta.decimals,scale:levels.scale,normalizedEntry:levels.normalizedEntry,rsi:rv[i],trend15:side,trend5:side,obTime:zone.time,obLow:zone.low,obHigh:zone.high});
+  out.push({symbol,side,time:closeTime,price:entry,tp:levels.tp,sl:levels.sl,point,decimals:meta.decimals,scale:levels.scale,normalizedEntry:levels.normalizedEntry,rsi:rv[i],trend15,trend5:trend(aggregate(c.slice(0,i+1),5),9,20),obTime:zone.time,obLow:zone.low,obHigh:zone.high});
   used.add(zone.time+':'+zone.side);lastEntryTime=closeTime;
  }
  return out;
@@ -131,7 +133,7 @@ function signalsFor(c,asOfEnd=true,symbol=S.symbol){
 function resolveTrades(signals,c){const out=[];for(let n=0;n<signals.length;n++){const s=signals[n],next=signals[n+1],bars=c.filter(x=>x.time>=s.time);let result='OPEN',exitTime=null;for(const b of bars){const hitSL=s.side==='BUY'?b.low<=s.sl:b.high>=s.sl,hitTP=s.side==='BUY'?b.high>=s.tp:b.low<=s.tp;if(hitSL&&hitTP){result='LOSS';exitTime=b.time+60;break}if(hitSL){result='LOSS';exitTime=b.time+60;break}if(hitTP){result='WIN';exitTime=b.time+60;break}if(next&&b.time>=next.time){result='CLOSED';exitTime=b.time+60;break}}out.push({...s,result,exitTime})}return out}
 function backtest48h(c){const now=Math.floor(Date.now()/1000),cutoff=now-48*3600;return resolveTrades(signalsFor(c),c).filter(x=>x.time>=cutoff&&x.time<=now)}
 function initCharts(){if(!window.LightweightCharts)throw Error('No cargó el gráfico');const L=LightweightCharts;$('chart').innerHTML='';$('rsiChart').innerHTML='';S.chart=L.createChart($('chart'),{autoSize:true,layout:{background:{type:'solid',color:'#0a1320'},textColor:'#aab9ca'},grid:{vertLines:{color:'#1b2a3d'},horzLines:{color:'#1b2a3d'}},timeScale:{timeVisible:true,borderColor:'#34445a'},rightPriceScale:{borderColor:'#34445a'},handleScroll:{mouseWheel:true,pressedMouseMove:true,horzTouchDrag:true},handleScale:{mouseWheel:true,pinch:true}});S.chart.timeScale().subscribeVisibleLogicalRangeChange(range=>{renderSignalMarkers();if(range&&range.from<80)loadOlderHistory().catch(e=>console.warn('Carga histórica anterior',e))});S.price=S.chart.addSeries(L.CandlestickSeries,{upColor:'#20d18b',downColor:'#ff5968',wickUpColor:'#20d18b',wickDownColor:'#ff5968',borderVisible:false,lastValueVisible:true,priceLineVisible:false});S.markerApi=L.createSeriesMarkers?L.createSeriesMarkers(S.price,[]):null;S.ema9=S.chart.addSeries(L.LineSeries,{color:'#318bff',lineWidth:2,priceLineVisible:false,title:'EMA 9'});S.ema20=S.chart.addSeries(L.LineSeries,{color:'#ff9d28',lineWidth:2,priceLineVisible:false,title:'EMA 20'});S.rsiChart=L.createChart($('rsiChart'),{autoSize:true,layout:{background:{type:'solid',color:'#0a1320'},textColor:'#aab9ca'},grid:{vertLines:{color:'#1b2a3d'},horzLines:{color:'#1b2a3d'}},timeScale:{visible:false},rightPriceScale:{borderColor:'#34445a'}});S.rsiLine=S.rsiChart.addSeries(L.LineSeries,{color:'#b36bff',lineWidth:2,priceLineVisible:false});[25,50,75].forEach((level,i)=>S.rsiLine.createPriceLine({price:level,color:i===1?'#8796aa':i===0?'#ff5968':'#20d18b',lineWidth:1,lineStyle:2,axisLabelVisible:true,title:String(level)}));}
-function drawChart(){const c=S.raw,m9=ema(c,9),m45=ema(c,20),rv=rsi(c),signals=S.trades;S.price.setData(c);updatePriceLine(c.at(-1)?.close);S.ema9.setData(c.map((x,i)=>({time:x.time,value:m9[i]})));S.ema20.setData(c.map((x,i)=>({time:x.time,value:m45[i]})));S.rsiLine.setData(c.map((x,i)=>rv[i]==null?null:{time:x.time,value:rv[i]}).filter(Boolean));renderSignalMarkers();const to=Math.floor(Date.now()/1000),from=to-48*3600;try{S.chart.timeScale().setVisibleRange({from,to});S.rsiChart.timeScale().setVisibleRange({from,to})}catch{}drawOverlay(obZones(aggregate(S.raw,15)));const last=rv.at(-1),d15=trend(aggregate(S.raw,15)),d5=trend(aggregate(S.raw,5));$('trend15').textContent=d15==='BUY'?'ALCISTA':d15==='SELL'?'BAJISTA':'LATERAL';$('trend5').textContent=d5==='BUY'?'ALCISTA':d5==='SELL'?'BAJISTA':'LATERAL';$('trend15').style.color=d15==='BUY'?'var(--green)':d15==='SELL'?'var(--red)':'#ffc45d';$('trend5').style.color=d5==='BUY'?'var(--green)':d5==='SELL'?'var(--red)':'#ffc45d';$('rsiValue').textContent=last==null?'—':last.toFixed(1);const rs=last>=50&&last<=75?'RSI COMPRA':last>=25&&last<50?'RSI VENTA':'RSI NEUTRAL';$('rsiState').textContent=rs;$('rsiState').style.color=rs.includes('COMPRA')?'var(--green)':rs.includes('VENTA')?'var(--red)':'#ffc45d';const latest=selectedChartTrades().at(-1);$('signalState').textContent=latest?(latest.side==='BUY'?'COMPRA':'VENTA')+' · '+(latest.result==='WIN'?'GANADA':latest.result==='LOSS'?'PERDIDA':latest.result==='OPEN'?'ABIERTA':'CERRADA'):'SIN OPERACIÓN';$('chartName').textContent=S.symbol+' · M1';const m15=aggregate(S.raw,15),zones=obZones(m15).slice(-4);$('rsiCaption').textContent='RSI '+(last==null?'—':last.toFixed(1))+' · '+rs+' · M15 '+$('trend15').textContent+' / M5 '+$('trend5').textContent;return zones}
+function drawChart(){const c=S.raw,m9=ema(c,9),m45=ema(c,20),rv=rsi(c),signals=S.trades;S.price.setData(c);updatePriceLine(c.at(-1)?.close);S.ema9.setData(c.map((x,i)=>({time:x.time,value:m9[i]})));S.ema20.setData(c.map((x,i)=>({time:x.time,value:m45[i]})));S.rsiLine.setData(c.map((x,i)=>rv[i]==null?null:{time:x.time,value:rv[i]}).filter(Boolean));renderSignalMarkers();const to=Math.floor(Date.now()/1000),from=to-48*3600;try{S.chart.timeScale().setVisibleRange({from,to});S.rsiChart.timeScale().setVisibleRange({from,to})}catch{}drawOverlay(obZones(aggregate(S.raw,15)));const last=rv.at(-1),tc=trendSettings(),d15=trend(aggregate(S.raw,15),tc.fast,tc.slow),d5=trend(aggregate(S.raw,5),9,20);$('trend15').textContent=d15==='BUY'?'ALCISTA':d15==='SELL'?'BAJISTA':'LATERAL';$('trend5').textContent=d5==='BUY'?'ALCISTA':d5==='SELL'?'BAJISTA':'LATERAL';$('trend15').style.color=d15==='BUY'?'var(--green)':d15==='SELL'?'var(--red)':'#ffc45d';$('trend5').style.color=d5==='BUY'?'var(--green)':d5==='SELL'?'var(--red)':'#ffc45d';$('rsiValue').textContent=last==null?'—':last.toFixed(1);const rs=last>=50&&last<=75?'RSI COMPRA':last>=25&&last<50?'RSI VENTA':'RSI NEUTRAL';$('rsiState').textContent=rs;$('rsiState').style.color=rs.includes('COMPRA')?'var(--green)':rs.includes('VENTA')?'var(--red)':'#ffc45d';const latest=selectedChartTrades().at(-1);$('signalState').textContent=latest?(latest.side==='BUY'?'COMPRA':'VENTA')+' · '+(latest.result==='WIN'?'GANADA':latest.result==='LOSS'?'PERDIDA':latest.result==='OPEN'?'ABIERTA':'CERRADA'):'SIN OPERACIÓN';$('chartName').textContent=S.symbol+' · M1';const m15=aggregate(S.raw,15),zones=obZones(m15).slice(-4);$('rsiCaption').textContent='RSI '+(last==null?'—':last.toFixed(1))+' · '+rs+' · M15 '+$('trend15').textContent+' / M5 '+$('trend5').textContent;return zones}
 
 function drawOverlay(zones){
  const host=$('chart');
@@ -544,13 +546,13 @@ async function loadCurrent(){
  // Cargar primero el instrumento visible para reutilizarlo en el escáner global.
  S.raw=await history(S.symbol);if(!S.raw.length)throw Error('No hay velas M1 disponibles');
  const meta=S.symbols.find(x=>x.code===S.symbol);S.markets.set(S.symbol,{name:meta?.name||S.symbol,candles:S.raw});
- const cfg=config(S.symbol);$('tpPoints').value=cfg.tp;$('slPoints').value=cfg.sl;$('settingsStatus').textContent='Configuración de '+S.symbol;
+ const cfg=config(S.symbol);$('tpPoints').value=cfg.tp;$('slPoints').value=cfg.sl;$('settingsStatus').textContent='Configuración de '+S.symbol;const tc=trendSettings();$('trendFast').value=String(tc.fast);$('trendSlow').value=String(tc.slow);$('trendFilter').checked=tc.filter;$('trendSettingsStatus').textContent='M15: EMA '+tc.fast+' / EMA '+tc.slow+' · filtro '+(tc.filter?'ACTIVADO':'DESACTIVADO')+'.';
  if(S.raw.length<COUNT)console.warn('Deriv devolvió '+S.raw.length+' de '+COUNT+' velas solicitadas');
  S.trades=backtest48h(S.raw);S.backtestCache.set(S.symbol,S.trades);
  restoreOpenSignals(S.symbol,S.raw);initCharts();drawChart();renderHistory();await subscribeLive();
  status('Preparando señales de todos los instrumentos…');await startGlobalScanner();status('Deriv conectada · escáner global activo · '+S.symbol,true)
 }
-async function recalc(){saveConfig();S.trades=backtest48h(S.raw);S.backtestCache.set(S.symbol,S.trades);drawChart();renderHistory()}
+async function recalc(){saveConfig();S.trades=backtest48h(S.raw);S.backtestCache.set(S.symbol,S.trades);drawChart();renderHistory();$('trendSettingsStatus').textContent='Tendencia M15: EMA '+trendSettings().fast+' / EMA '+trendSettings().slow+' · filtro '+(trendSettings().filter?'ACTIVADO':'DESACTIVADO')+'. Las señales nuevas usarán esta configuración.'}
 $('symbol').addEventListener('change',()=>loadCurrent().catch(e=>status(e.message)));$('reload').addEventListener('click',()=>loadCurrent().catch(e=>status(e.message)));$('applyRisk').addEventListener('click',recalc);
 async function start(){restoreLiveHistory();try{await connect();await loadSymbols();const saved=localStorage.getItem('botder-current-symbol');if(saved&&S.symbols.some(x=>x.code===saved))$('symbol').value=saved;await loadCurrent()}catch(e){status(e.message);scheduleReconnect()}}
 start();
