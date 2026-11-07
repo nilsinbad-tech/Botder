@@ -28,3 +28,5 @@
 #chart .entry-star{position:absolute;display:block;transform:translate(-50%,-50%);font-size:12px;line-height:12px;font-weight:900;white-space:nowrap;text-shadow:0 0 2px #000,0 0 4px currentColor}
 #chart .entry-star.buy{color:#35ffad}
 #chart .entry-star.sell{color:#ff5268}
+
+.trend-settings{display:grid;grid-template-columns:1fr 1fr;gap:8px;align-items:end;margin:12px 0;padding:10px;border:1px solid var(--line);border-radius:8px;background:#0b1421}.trend-settings h3{grid-column:1/-1;margin:0}.trend-settings label{display:grid;gap:5px;color:var(--muted);font-size:10px;font-weight:800}.trend-settings .toggle-row{grid-column:1/-1;display:flex;align-items:center;gap:8px;color:#eef4fc;font-size:11px}.trend-settings input[type=checkbox]{width:18px;height:18px;accent-color:var(--green)}.trend-settings small{grid-column:1/-1;color:var(--muted);font-size:10px}@media(max-width:600px){.trend-settings{grid-template-columns:1fr 1fr}}
