@@ -51,3 +51,15 @@
 #chart .si-liquidity span,#chart .si-day span,#chart .si-fvg span,#chart .si-ob span,#chart .si-signal span{font-size:7px;font-weight:750;padding:0 2px;background:rgba(8,13,22,.78);white-space:nowrap}
 #chart .si-fvg span,#chart .si-ob span{position:absolute;top:0;left:2px}
 #chart .si-signal span{position:absolute;top:-10px;left:2px}
+
+/* Strong Demands / Supplies: zonas discretas y líneas finas */
+#chart .si-ob{border-width:1px;opacity:.66;border-radius:2px}
+#chart .si-ob.buy{background:rgba(55,205,125,.075);border-color:rgba(70,220,145,.58)}
+#chart .si-ob.sell{background:rgba(235,75,90,.075);border-color:rgba(255,105,120,.58)}
+#chart .si-fvg{opacity:.43;border-width:1px;border-style:solid}
+#chart .si-liquidity{height:0!important;border-top:1px solid!important;opacity:.8}
+#chart .si-liquidity span,#chart .si-day span{position:absolute;top:-10px;left:2px;font-size:7px;font-weight:700;color:inherit;background:rgba(8,13,22,.72);padding:0 2px;white-space:nowrap}
+#chart .si-signal{height:0!important;border-top:1px solid!important;opacity:.8}
+#chart .si-signal span{font-size:7px;top:-10px;background:rgba(8,13,22,.72)}
+#chart .si-engulf{height:0!important;border:0!important;opacity:.85}
+#chart .si-engulf span{position:absolute;top:-7px;left:0;font-size:9px;background:transparent;text-shadow:0 1px 2px #000}
