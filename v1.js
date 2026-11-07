@@ -185,7 +185,8 @@ function drawOverlay(zones){
    z._el.style.top=top+'px';z._el.style.height=(bottom-top)+'px';
   }
   for(const a of areas){
-   const tradeEnd=Number.isFinite(+a.t.exitTime)?+a.t.exitTime:now+60;
+   const hasExitTime=a.t.exitTime!==null&&a.t.exitTime!==undefined&&a.t.exitTime!==''&&Number.isFinite(Number(a.t.exitTime))&&Number(a.t.exitTime)>0;
+   const tradeEnd=hasExitTime?Number(a.t.exitTime):now+60;
    const rawX1=ts.timeToCoordinate(+a.t.time-60),rawX2=ts.timeToCoordinate(tradeEnd);
    let x1=rawX1,x2=rawX2;
    if(x1==null)x1=(+a.t.time-60<=firstTime?0:(+a.t.time-60>lastTime?width:null));
