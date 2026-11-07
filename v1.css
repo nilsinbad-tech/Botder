@@ -11,3 +11,14 @@
 .si-liquidity span,.si-day span,.si-fvg span{font-size:8px;font-weight:900;padding:1px 3px;background:#08111dcc;white-space:nowrap}
 .si-mark{position:absolute;z-index:10;font-size:8px;font-weight:900;padding:1px 3px;background:#08111ddd;border:1px solid currentColor;border-radius:3px;white-space:nowrap}
 .si-mark.buy{color:#6be09b}.si-mark.sell{color:#ff7883}
+
+/* Strong Demands / Supplies + Liquidity: overlay visual en el gráfico M1 */
+.si-ob{position:absolute;z-index:8;pointer-events:none;box-sizing:border-box;border:1px solid;border-radius:2px;opacity:.82}
+.si-ob.buy{background:rgba(32,209,139,.16);border-color:#20d18b;color:#55e7a5}
+.si-ob.sell{background:rgba(255,89,104,.16);border-color:#ff5968;color:#ff8792}
+.si-ob span{font-size:8px;font-weight:900;padding:1px 3px;background:#08111ddd;white-space:nowrap}
+.si-break,.si-mark{position:absolute;z-index:10;font-size:8px;font-weight:900;padding:1px 3px;background:#08111ddd;border:1px solid currentColor;border-radius:3px;white-space:nowrap;pointer-events:none}
+.si-break.buy,.si-mark.buy{color:#6be09b}.si-break.sell,.si-mark.sell{color:#ff7883}
+.si-structure{position:absolute;z-index:9;font-size:8px;font-weight:900;padding:1px 2px;background:#08111ddd;color:#d8e3f2;border-radius:2px;white-space:nowrap;pointer-events:none}
+.si-mid{position:absolute;z-index:6;border-top:1px dashed #d3b66c;color:#e7ca80;pointer-events:none}
+.si-mid span{font-size:8px;font-weight:900;background:#08111ddd;padding:1px 3px;white-space:nowrap}
