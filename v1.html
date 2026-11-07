@@ -2,33 +2,41 @@
 <html lang="es"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#080d16"><title>BOTDER · Scalping M1</title>
-<link rel="stylesheet" href="v1.css?v=3">
+<link rel="stylesheet" href="v1.css?v=13">
 <script src="https://unpkg.com/lightweight-charts@5.0.8/dist/lightweight-charts.standalone.production.js" onerror="this.onerror=null;this.src='https://cdn.jsdelivr.net/npm/lightweight-charts@5.0.8/dist/lightweight-charts.standalone.production.js'"></script>
 </head><body>
 <header><b>BOTDER <small>SCALPING M1 · V1</small></b><span id="connection">Conectando Deriv…</span></header>
 <main>
+<section id="signalNotices" class="signal-notices" aria-live="polite" aria-label="Avisos de señales"></section><section class="active-board"><h3>SEÑALES VIGENTES · TODOS LOS INSTRUMENTOS</h3><div id="activeSignals" class="active-signals" hidden></div></section>
 <section class="toolbar"><label>INSTRUMENTO<select id="symbol"></select></label><button id="reload">↻ ACTUALIZAR</button></section>
 <section class="statusgrid">
  <article><small>TENDENCIA M15</small><b id="trend15">—</b></article>
  <article><small>CONFIRMACIÓN M5</small><b id="trend5">—</b></article>
  <article><small>RSI M1</small><b id="rsiValue">—</b><strong id="rsiState">RSI —</strong></article>
- <article><small>SEÑAL</small><b id="signalState">ESPERANDO</b></article>
+ <article><small>ÚLTIMA OPERACIÓN</small><b id="signalState">ESPERANDO</b></article>
 </section>
-<section class="chartcard"><div class="charttitle"><b id="chartName">Gráfico M1</b><span id="coverage">Cargando 3 días…</span></div><div id="chart"></div><div class="charttitle"><b>RSI (14)</b><span id="rsiCaption">Compra 50–75 · Venta 25–50</span></div><div id="rsiChart"></div></section>
-<section class="settings"><h3>INDICADOR VISUAL · STRONG DEMANDS / SUPPLIES + LIQUIDITY</h3><small>Liquidez, FVG, envolventes y máximos/mínimos del día anterior. Los Order Blocks M15 existentes se conservan. Este indicador es visual y no cambia las señales ni el backtesting.</small></section><section class="settings">
- <h3>TP / SL GENERAL · TODOS LOS INSTRUMENTOS</h3>
- <div class="inputs"><label>TP · puntos<input id="tpPoints" type="number" min="1" step="1" value="12"></label><label>SL · puntos<input id="slPoints" type="number" min="1" step="1" value="12"></label><button id="applyRisk">APLICAR Y RECALCULAR</button></div>
- <small>Los mismos puntos TP/SL se aplican a todos los instrumentos. Al cambiarlos, se recalcula el backtesting del instrumento seleccionado.</small>
+<section class="chartcard"><div class="charttitle"><b id="chartName">Gráfico M1</b><span id="coverage">Cargando ventana de 48 horas…</span></div><div id="liveFeed">Esperando flujo de precios de Deriv…</div><div id="liveSignal">SIN SEÑAL EN VELA ACTUAL</div><div id="chart"></div><div class="charttitle"><b>RSI (14)</b><span id="rsiCaption">Compra 50–75 · Venta 25–50</span></div><div id="rsiChart"></div></section>
+<section class="settings"><h3>INDICADOR VISUAL · STRONG DEMANDS / SUPPLIES + LIQUIDITY</h3><small>Solo visual: zonas de demanda/venta y FVG en recuadros transparentes; liquidez y señales BUY/SHORT como líneas finas. No modifica estrategia, señales, TP/SL ni backtesting.</small></section>
+<section class="settings">
+ <h3>TP / SL POR INSTRUMENTO</h3>
+ <div class="inputs"><label>TP · puntos<input id="tpPoints" type="number" min="1" step="1" value="12"></label><label>SL · puntos<input id="slPoints" type="number" min="1" step="1" value="12"></label><button id="applyRisk">GUARDAR</button><small id="settingsStatus">Cada instrumento conserva su propio TP y SL. Pulsa GUARDAR antes de cambiar de instrumento.</small></div>
+ <div class="trend-settings">
+  <h3>TENDENCIA PRINCIPAL · M15</h3>
+  <label class="trend-pair">Comparación de EMAs<select id="trendPair"><option value="9,20">EMA 9 contra EMA 20</option><option value="20,9">EMA 20 contra EMA 9</option><option value="20,50">EMA 20 contra EMA 50</option><option value="10,25">EMA 10 contra EMA 25</option><option value="50,100">EMA 50 contra EMA 100</option><option value="15,31">EMA 15 contra EMA 31</option></select></label>
+  <label class="toggle-row"><input id="trendFilter" type="checkbox"> Exigir que las entradas coincidan con la tendencia M15</label>
+  <small id="trendSettingsStatus">Desactivado: permite compras y ventas según las condiciones M1.</small>
+ </div>
+ <small>TP y SL se calculan primero en una escala normalizada a 9592.00 y luego se convierten al precio REAL del instrumento. La entrada, las velas y todos los precios del gráfico permanecen reales; la normalización solo se usa internamente para TP/SL.</small>
 </section>
 <section class="stats">
- <h3>BACKTEST · ÚLTIMOS 3 DÍAS</h3><div class="statgrid"><article><small>GANADAS</small><b id="wins">0</b></article><article><small>PERDIDAS</small><b id="losses">0</b></article><article><small>ABIERTAS</small><b id="open">0</b></article><article><small>ACIERTO</small><b id="rate">0%</b></article></div>
+ <h3>BACKTEST · ÚLTIMAS 48 HORAS</h3><div class="statgrid"><article><small>GANADAS</small><b id="wins">0</b></article><article><small>PERDIDAS</small><b id="losses">0</b></article><article><small>ABIERTAS</small><b id="open">0</b></article><article><small>ACIERTO</small><b id="rate">0%</b></article></div>
  <div class="chartlegend"><span class="green">■ TP / WIN</span><span class="red">■ SL / LOSS</span><span>● Entrada COMPRA / VENTA</span></div>
  <div id="backtestStatus">Esperando datos históricos…</div><div id="history"></div>
 </section>
 <section class="rules">
  <h3>REGLAS ACTIVAS</h3>
- <p><b>M15:</b> EMA 9/45 define tendencia principal. <b>M5:</b> EMA 9/45 confirma. <b>M1:</b> RSI 14 y confirmación ZigZag.</p>
- <p><b>Order Blocks:</b> M15; solo los dos más recientes se extienden a la derecha. Los anteriores quedan en su zona.</p>
- <p>El gráfico dibuja únicamente señales del instrumento seleccionado. El historial y las estadísticas también pertenecen a ese instrumento.</p>
+ <p><b>Order Block M15:</b> última vela contraria antes de desplazamiento fuerte y ruptura de estructura. <b>M1:</b> el precio toca el OB y una vela confirma la reacción; EMA 9/20 deben tener dirección y separación, sin lateralidad.</p>
+ <p><b>Order Blocks:</b> zonas basadas en el cuerpo de la vela, con fondo casi transparente. El selector incluye Volatility normales y de 1 segundo entre 10 y 75, Crash 50/500, Boom 50/500 y XAUUSD (oro), cuando Deriv lo devuelve como instrumento activo. Cada instrumento guarda su propio TP y SL en este dispositivo. El backtesting evalúa las últimas 48 horas del instrumento seleccionado.</p>
+ <p>El gráfico y el backtest muestran el instrumento seleccionado. El panel superior vigila todos los instrumentos permitidos; al cerrarse una señal desaparece de vigentes y queda en el gráfico e historial de su instrumento.</p>
 </section>
-</main><script src="v1.js?v=3"></script></body></html>
+</main><script src="v1.js?v=41"></script></body></html>
