@@ -218,21 +218,23 @@ function drawOverlay(zones){
 }
 function selectedChartTrades(){
  const merged=new Map();
+ const validPrice=v=>v!==null&&v!==undefined&&v!==''&&Number.isFinite(Number(v))&&Number(v)>0;
  const add=x=>{
-  if(!x||x.symbol!==S.symbol||!Number.isFinite(+x.time))return;
+  if(!x||x.symbol!==S.symbol||!Number.isFinite(+x.time)||!['BUY','SELL'].includes(x.side)||!validPrice(x.price))return;
   const key=x.symbol+'|'+x.side+'|'+x.time,prior=merged.get(key)||{};
-  // Unir las fuentes sin perder TP/SL si una copia del trade viene incompleta.
-  merged.set(key,{...prior,...x,
-   price:Number.isFinite(+x.price)?+x.price:prior.price,
-   tp:Number.isFinite(+x.tp)?+x.tp:prior.tp,
-   sl:Number.isFinite(+x.sl)?+x.sl:prior.sl,
-   decimals:Number.isInteger(x.decimals)?x.decimals:prior.decimals
-  });
+  let price=validPrice(x.price)?Number(x.price):prior.price;
+  let tp=validPrice(x.tp)?Number(x.tp):prior.tp,sl=validPrice(x.sl)?Number(x.sl):prior.sl;
+  // Si una fuente antigua trae entrada sin TP/SL, completar desde la configuración
+  // guardada para ese instrumento, sin alterar el cálculo del backtesting.
+  if(validPrice(price)&&(!validPrice(tp)||!validPrice(sl))){
+   try{const point=validPrice(x.point)?Number(x.point):symbolMeta(x.symbol,x.candles||S.raw).point;const levels=calculateTpSl(price,x.side,point,config(x.symbol));tp=levels.tp;sl=levels.sl}catch(e){console.warn('No se pudieron completar TP/SL de la entrada',key,e)}
+  }
+  merged.set(key,{...prior,...x,price,tp,sl,decimals:Number.isInteger(x.decimals)?x.decimals:prior.decimals});
  };
  for(const x of S.trades)add(x);
  for(const x of S.liveHistory)add(x);
  for(const x of S.activeSignals.values())add(x);
- return [...merged.values()].filter(x=>Number.isFinite(+x.price)&&Number.isFinite(+x.tp)&&Number.isFinite(+x.sl)).sort((a,b)=>a.time-b.time);
+ return [...merged.values()].filter(x=>validPrice(x.price)&&validPrice(x.tp)&&validPrice(x.sl)).sort((a,b)=>a.time-b.time);
 }
 function renderSignalMarkers(){
  const markers=[],seen=new Set();
