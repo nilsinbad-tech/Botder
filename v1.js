@@ -136,11 +136,12 @@ function signalsFor(c,asOfEnd=true,symbol=S.symbol){
 function resolveTrades(signals,c){const out=[];let cursor=0;for(let n=0;n<signals.length;n++){const s=signals[n],next=signals[n+1];while(cursor<c.length&&c[cursor].time<s.time)cursor++;let result='OPEN',exitTime=null;for(let j=cursor;j<c.length;j++){const b=c[j],hitSL=s.side==='BUY'?b.low<=s.sl:b.high>=s.sl,hitTP=s.side==='BUY'?b.high>=s.tp:b.low<=s.tp;if(hitSL&&hitTP){result='LOSS';exitTime=b.time+60;break}if(hitSL){result='LOSS';exitTime=b.time+60;break}if(hitTP){result='WIN';exitTime=b.time+60;break}if(next&&b.time>=next.time){result='CLOSED';exitTime=b.time+60;break}}out.push({...s,result,exitTime})}return out}
 function backtestHistory(c){const now=Math.floor(Date.now()/1000);return resolveTrades(signalsFor(c),c).filter(x=>x.time<=now)}
 function initCharts(){if(!window.LightweightCharts)throw Error('No cargó el gráfico');const L=LightweightCharts;$('chart').innerHTML='';$('rsiChart').innerHTML='';S.chart=L.createChart($('chart'),{autoSize:true,layout:{background:{type:'solid',color:'#0a1320'},textColor:'#aab9ca'},grid:{vertLines:{color:'#1b2a3d'},horzLines:{color:'#1b2a3d'}},timeScale:{timeVisible:true,borderColor:'#34445a'},rightPriceScale:{borderColor:'#34445a'},handleScroll:{mouseWheel:true,pressedMouseMove:true,horzTouchDrag:true},handleScale:{mouseWheel:true,pinch:true}});S.chart.timeScale().subscribeVisibleLogicalRangeChange(range=>{renderSignalMarkers();if(range&&range.from<80)loadOlderHistory().catch(e=>console.warn('Carga histórica anterior',e))});S.price=S.chart.addSeries(L.CandlestickSeries,{upColor:'#20d18b',downColor:'#ff5968',wickUpColor:'#20d18b',wickDownColor:'#ff5968',borderVisible:false,lastValueVisible:true,priceLineVisible:false});S.markerApi=L.createSeriesMarkers?L.createSeriesMarkers(S.price,[]):null;S.ema9=S.chart.addSeries(L.LineSeries,{color:'#318bff',lineWidth:2,priceLineVisible:false,title:'EMA 9'});S.ema20=S.chart.addSeries(L.LineSeries,{color:'#ff9d28',lineWidth:2,priceLineVisible:false,title:'EMA 20'});S.rsiChart=L.createChart($('rsiChart'),{autoSize:true,layout:{background:{type:'solid',color:'#0a1320'},textColor:'#aab9ca'},grid:{vertLines:{color:'#1b2a3d'},horzLines:{color:'#1b2a3d'}},timeScale:{visible:false},rightPriceScale:{borderColor:'#34445a'}});S.rsiLine=S.rsiChart.addSeries(L.LineSeries,{color:'#b36bff',lineWidth:2,priceLineVisible:false});[25,50,75].forEach((level,i)=>S.rsiLine.createPriceLine({price:level,color:i===1?'#8796aa':i===0?'#ff5968':'#20d18b',lineWidth:1,lineStyle:2,axisLabelVisible:true,title:String(level)}));}
-function drawChart(){const c=S.raw,m9=ema(c,9),m45=ema(c,20),rv=rsi(c),signals=S.trades;S.price.setData(c);updatePriceLine(c.at(-1)?.close);S.ema9.setData(c.map((x,i)=>({time:x.time,value:m9[i]})));S.ema20.setData(c.map((x,i)=>({time:x.time,value:m45[i]})));S.rsiLine.setData(c.map((x,i)=>rv[i]==null?null:{time:x.time,value:rv[i]}).filter(Boolean));renderSignalMarkers();const to=Math.floor(Date.now()/1000),from=to-48*3600;try{S.chart.timeScale().setVisibleRange({from,to});S.rsiChart.timeScale().setVisibleRange({from,to})}catch{}drawOverlay(obZones(aggregate(S.raw,15)));const last=rv.at(-1),tc=trendSettings(),d15=trend(aggregate(S.raw,15),tc.fast,tc.slow),d5=trend(aggregate(S.raw,5),9,20);$('trend15').textContent=d15==='BUY'?'ALCISTA':d15==='SELL'?'BAJISTA':'LATERAL';$('trend5').textContent=d5==='BUY'?'ALCISTA':d5==='SELL'?'BAJISTA':'LATERAL';$('trend15').style.color=d15==='BUY'?'var(--green)':d15==='SELL'?'var(--red)':'#ffc45d';$('trend5').style.color=d5==='BUY'?'var(--green)':d5==='SELL'?'var(--red)':'#ffc45d';$('rsiValue').textContent=last==null?'—':last.toFixed(1);const rs=last>=50&&last<=75?'RSI COMPRA':last>=25&&last<50?'RSI VENTA':'RSI NEUTRAL';$('rsiState').textContent=rs;$('rsiState').style.color=rs.includes('COMPRA')?'var(--green)':rs.includes('VENTA')?'var(--red)':'#ffc45d';const latest=selectedChartTrades().at(-1);$('signalState').textContent=latest?(latest.side==='BUY'?'COMPRA':'VENTA')+' · '+(latest.result==='WIN'?'GANADA':latest.result==='LOSS'?'PERDIDA':latest.result==='OPEN'?'ABIERTA':'CERRADA'):'SIN OPERACIÓN';$('chartName').textContent=S.symbol+' · M1';const m15=aggregate(S.raw,15),zones=obZones(m15).slice(-4);$('rsiCaption').textContent='RSI '+(last==null?'—':last.toFixed(1))+' · '+rs+' · M15 '+$('trend15').textContent+' / M5 '+$('trend5').textContent;return zones}
+function drawChart(){const c=S.raw,m9=ema(c,9),m45=ema(c,20),rv=rsi(c),signals=S.trades;S.price.setData(c);updatePriceLine(c.at(-1)?.close);S.ema9.setData(c.map((x,i)=>({time:x.time,value:m9[i]})));S.ema20.setData(c.map((x,i)=>({time:x.time,value:m45[i]})));S.rsiLine.setData(c.map((x,i)=>rv[i]==null?null:{time:x.time,value:rv[i]}).filter(Boolean));renderSignalMarkers();const to=Math.floor(Date.now()/1000),from=to-48*3600;try{S.chart.timeScale().setVisibleRange({from,to});S.rsiChart.timeScale().setVisibleRange({from,to})}catch{}drawOverlay();const last=rv.at(-1),tc=trendSettings(),d15=trend(aggregate(S.raw,15),tc.fast,tc.slow),d5=trend(aggregate(S.raw,5),9,20);$('trend15').textContent=d15==='BUY'?'ALCISTA':d15==='SELL'?'BAJISTA':'LATERAL';$('trend5').textContent=d5==='BUY'?'ALCISTA':d5==='SELL'?'BAJISTA':'LATERAL';$('trend15').style.color=d15==='BUY'?'var(--green)':d15==='SELL'?'var(--red)':'#ffc45d';$('trend5').style.color=d5==='BUY'?'var(--green)':d5==='SELL'?'var(--red)':'#ffc45d';$('rsiValue').textContent=last==null?'—':last.toFixed(1);const rs=last>=50&&last<=75?'RSI COMPRA':last>=25&&last<50?'RSI VENTA':'RSI NEUTRAL';$('rsiState').textContent=rs;$('rsiState').style.color=rs.includes('COMPRA')?'var(--green)':rs.includes('VENTA')?'var(--red)':'#ffc45d';const latest=selectedChartTrades().at(-1);$('signalState').textContent=latest?(latest.side==='BUY'?'COMPRA':'VENTA')+' · '+(latest.result==='WIN'?'GANADA':latest.result==='LOSS'?'PERDIDA':latest.result==='OPEN'?'ABIERTA':'CERRADA'):'SIN OPERACIÓN';$('chartName').textContent=S.symbol+' · M1';const m15=aggregate(S.raw,15),zones=obZones(m15).slice(-4);$('rsiCaption').textContent='RSI '+(last==null?'—':last.toFixed(1))+' · '+rs+' · M15 '+$('trend15').textContent+' / M5 '+$('trend5').textContent;return zones}
 
-function strongVisuals(c){
+function visualTimeframe(){const v=+$('visualTimeframe')?.value||+(localStorage.getItem(STORE+'-visual-timeframe')||5);return [2,3,4,5,6,10,15].includes(v)?v:5}
+ function strongVisuals(c,timeframeMinutes=5){
  const out=[];if(c.length<60)return out;
- const n=c.length,last=c[n-1],tail=last.time+180;
+ const n=c.length,last=c[n-1],tail=last.time+timeframeMinutes*60;
  const avgRange=(arr)=>arr.length?arr.reduce((v,x)=>v+x.high-x.low,0)/arr.length:0;
  const atr10=c.map((x,i)=>avgRange(c.slice(Math.max(0,i-9),i+1)));
  const atr200=c.map((x,i)=>avgRange(c.slice(Math.max(0,i-199),i+1)));
@@ -170,7 +171,7 @@ function strongVisuals(c){
  for(let i=Math.max(2,n-500);i<n;i++){
   const b=c[i],q=c[i-2],p=c[i-1],move=p.open?Math.abs((p.close-p.open)/p.open*100):0;
   if(b.low>q.high&&p.close>q.high&&move>0){
-   const gap={kind:'fvg',time:p.time,end:b.time+300,high:b.low,low:q.high,label:'FVG ALCISTA',side:'BUY',created:i};
+   const gap={kind:'fvg',time:p.time,end:b.time+timeframeMinutes*60,high:b.low,low:q.high,label:'FVG ALCISTA',side:'BUY',created:i};
    if(!c.slice(i+1).some(x=>x.low<=gap.low))recentFvgs.push(gap);
   }
   if(b.high<q.low&&p.close<q.low&&move>0){
@@ -196,20 +197,20 @@ function strongVisuals(c){
  return out;
 }
 
-function drawOverlay(zones){
+function drawOverlay(){
  const host=$('chart');
  host.querySelectorAll('.v1-overlay,.trade-overlay').forEach(x=>x.remove());
  const layer=document.createElement('div');layer.className='v1-overlay';host.insertBefore(layer,host.firstChild);
  const tradeLayer=document.createElement('div');tradeLayer.className='trade-overlay';host.appendChild(tradeLayer);
  const end=Math.floor(Date.now()/1000),cutoff=end-48*3600;
- const allZones=(zones||[]).filter(z=>z.time>=cutoff).slice(-4);
+ const allZones=obZones(aggregate(S.raw,visualTimeframe())).filter(z=>z.time>=cutoff).slice(-4);
  for(const z of allZones){
   const el=document.createElement('div');el.className='obbox '+(z.side==='BUY'?'buy':'sell');
   el.textContent=z.side==='BUY'?'OB ALCISTA M15':'OB BAJISTA M15';el.style.color=z.side==='BUY'?'#20d18b':'#ff5968';
   layer.appendChild(el);z._el=el;z._end=z.time+900;
  }
  const visualEls=[];
- const rawVisuals=strongVisuals(S.raw);
+ const visualMinutes=visualTimeframe(),visualCandles=aggregate(S.raw,visualMinutes);const rawVisuals=strongVisuals(visualCandles,visualMinutes);
  const takeLast=(kind,count)=>rawVisuals.filter(v=>v.kind===kind).slice(-count);
  // Control de densidad: conserva los niveles más recientes/importantes sin llenar el gráfico.
  const visualItems=[...takeLast('liquidity',6),...takeLast('fvg',3),...takeLast('ob',4),...takeLast('day',2),...takeLast('break',8),...takeLast('engulf',8),...takeLast('structure',8)].sort((a,b)=>a.time-b.time);
@@ -406,7 +407,7 @@ function notifySignalResult(signal,result){
  const host=$('signalNotices');if(!host)return;host.hidden=false;const card=document.createElement('article');card.className='signal-notice '+(result==='WIN'?'buy':'sell');const title=document.createElement('b');title.className='notice-title';title.textContent=(result==='WIN'?'✓ GANADA':'✕ PERDIDA')+' · '+signal.name;const details=document.createElement('div');details.className='notice-details';details.textContent=(signal.side==='BUY'?'COMPRA':'VENTA')+' · '+result;card.append(title,details);host.prepend(card);while(host.children.length>4)host.lastElementChild.remove();setTimeout(()=>{card.remove();if(!host.children.length)host.hidden=true},8000);
 }
 function updateSelectedSignalView(){
- if(!S.chart||!S.price)return;renderSignalMarkers();drawOverlay(obZones(aggregate(S.raw,15)));renderHistory();
+ if(!S.chart||!S.price)return;renderSignalMarkers();drawOverlay();renderHistory();
 }
 function updateMarketTrade(signal,price,time){
  if(signal.result!=='OPEN')return false;const hitSL=signal.side==='BUY'?price<=signal.sl:price>=signal.sl,hitTP=signal.side==='BUY'?price>=signal.tp:price<=signal.tp;
@@ -550,7 +551,7 @@ function updateLiveTick(tick){
   if(rv[i]!=null)S.rsiLine.update({time,value:rv[i]});
   $('rsiValue').textContent=rv[i]==null?'—':rv[i].toFixed(1);
   $('chartName').textContent=S.symbol+' · M1 · '+price;
-  if(time>last.time){drawOverlay(obZones(aggregate(S.raw,15)));renderHistory()}
+  if(time>last.time){drawOverlay();renderHistory()}
   const current=S.raw.at(-1);processMarketSignal(S.symbol,S.raw,price,+tick.epoch);$('chart')._updateTradeOverlay?.();const liveSignal=[...S.activeSignals.values()].find(x=>x.symbol===S.symbol&&x.time===current.time+60)||null;
   renderSignalMarkers();
   $('liveSignal').textContent=liveSignal?(liveSignal.side==='BUY'?'⭐ B · COMPRA':'⭐ S · VENTA')+' REGISTRADA':'SIN SEÑAL EN VELA ACTUAL';
@@ -613,7 +614,7 @@ async function loadOlderHistory(){
   S.trades=backtestHistory(S.raw);S.backtestCache.set(S.symbol,S.trades);
   if(previousRange){try{S.chart.timeScale().setVisibleLogicalRange({from:previousRange.from+added,to:previousRange.to+added})}catch{}}
   renderSignalMarkers();
-  drawOverlay(obZones(aggregate(S.raw,15)));
+  drawOverlay();
   renderHistory();
  }catch(e){
   console.warn('No se pudieron cargar velas anteriores de '+symbol,e);
@@ -635,6 +636,7 @@ async function loadCurrent(){
  status('Preparando señales de todos los instrumentos…');await startGlobalScanner();status('Deriv conectada · escáner global activo · '+S.symbol,true)
 }
 async function recalc(){saveConfig();S.trades=backtestHistory(S.raw);S.backtestCache.set(S.symbol,S.trades);drawChart();renderHistory();$('trendSettingsStatus').textContent='Tendencia M15: EMA '+trendSettings().fast+' / EMA '+trendSettings().slow+' · filtro '+(trendSettings().filter?'ACTIVADO':'DESACTIVADO')+'. Las señales nuevas usarán esta configuración.'}
+const visualSelect=$('visualTimeframe');visualSelect.value=String(visualTimeframe());$('visualTimeframeStatus').textContent='FVG, OB, liquidez y estructura calculados en M'+visualTimeframe()+'. No cambia al cambiar de instrumento ni al mover la temporalidad del gráfico.';visualSelect.addEventListener('change',()=>{const v=visualTimeframe();localStorage.setItem(STORE+'-visual-timeframe',String(v));$('visualTimeframeStatus').textContent='FVG, OB, liquidez y estructura calculados en M'+v+'. No cambia al cambiar de instrumento ni al mover la temporalidad del gráfico.';drawOverlay()});
 $('symbol').addEventListener('change',()=>loadCurrent().catch(e=>status(e.message)));$('reload').addEventListener('click',()=>loadCurrent().catch(e=>status(e.message)));$('applyRisk').addEventListener('click',recalc);
 async function start(){restoreLiveHistory();try{await connect();await loadSymbols();const saved=localStorage.getItem('botder-current-symbol');if(saved&&S.symbols.some(x=>x.code===saved))$('symbol').value=saved;await loadCurrent()}catch(e){status(e.message);scheduleReconnect()}}
 start();
