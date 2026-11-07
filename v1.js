@@ -236,24 +236,30 @@ function selectedChartTrades(){
 }
 function renderSignalMarkers(){
  const markers=[],seen=new Set();
- // Solo un punto discreto en la vela de entrada: sin B/S, WIN, LOSS ni puntos de salida.
+ // Estrellas pequeñas: verde para compra y roja para venta.
  for(const s of selectedChartTrades()){
   const markerKey=s.symbol+'|'+s.side+'|'+s.time;
   if(seen.has(markerKey))continue;
   seen.add(markerKey);
-  markers.push({time:s.time-60,position:s.side==='BUY'?'belowBar':'aboveBar',color:s.side==='BUY'?'#35ffad':'#ff5268',shape:'circle',size:0.55});
+  markers.push({time:s.time-60,position:s.side==='BUY'?'belowBar':'aboveBar',color:s.side==='BUY'?'#35ffad':'#ff5268',shape:'text',text:'★',size:1});
  }
- try{if(S.markerApi)S.markerApi.setMarkers(markers);else if(S.price.setMarkers)S.price.setMarkers(markers)}catch(e){console.error('No se pudieron actualizar los puntos de entrada',e)}
+ try{if(S.markerApi)S.markerApi.setMarkers(markers);else if(S.price.setMarkers)S.price.setMarkers(markers)}catch(e){console.error('No se pudieron actualizar las estrellas de entrada',e)}
 }
 function restoreOpenSignals(symbol,candles){
  if(!Array.isArray(candles)||candles.length<30)return 0;
- const history=resolveTrades(signalsFor(candles,true,symbol),candles),market=S.markets.get(symbol);
+ // Reconstruir cada señal por separado. No cerrar una señal porque aparezca
+ // otra posterior: solo deja de estar vigente cuando toca su TP o su SL.
+ const candidates=signalsFor(candles,true,symbol),market=S.markets.get(symbol);
  let restored=0;
- for(const signal of history){
-  // Solo se recupera la última operación que siga realmente abierta.
-  // resolveTrades descarta como OPEN las señales ya tocadas por TP/SL
-  // y las que quedaron reemplazadas por una entrada posterior.
-  if(signal.result!=='OPEN')continue;
+ for(const signal of candidates){
+  const bars=candles.filter(b=>b.time>=signal.time);
+  let closed=false;
+  for(const bar of bars){
+   const hitSL=signal.side==='BUY'?bar.low<=signal.sl:bar.high>=signal.sl;
+   const hitTP=signal.side==='BUY'?bar.high>=signal.tp:bar.low<=signal.tp;
+   if(hitSL||hitTP){closed=true;break}
+  }
+  if(closed)continue;
   const key=symbol+'|'+signal.side+'|'+signal.time;
   if(S.activeSignals.has(key)||S.liveHistory.some(x=>x.symbol===symbol&&x.side===signal.side&&x.time===signal.time))continue;
   S.activeSignals.set(key,{...signal,key,name:market?.name||S.symbols.find(x=>x.code===symbol)?.name||symbol,result:'OPEN',candles:candles.slice(-120)});
