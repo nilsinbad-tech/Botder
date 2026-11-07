@@ -19,3 +19,6 @@
 #chart .trade-label{font-size:8px;text-shadow:0 0 2px #000}
 #chart .obbox{border-width:1px;box-shadow:0 0 2px currentColor,inset 0 0 1px currentColor}
 .signal-notice,.active-signal,.toolbar,.chartcard,.settings,.stats,.rules,.statusgrid article,.statgrid article,.active-board{border-width:1px;box-shadow:0 0 3px rgba(90,160,255,.12)}
+
+#chart .trade-zone.entry{background:rgba(245,196,81,.98);opacity:1;box-shadow:0 0 3px rgba(245,196,81,.7)}
+#chart .trade-label.entry{color:#f5c451}
