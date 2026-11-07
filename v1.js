@@ -211,9 +211,25 @@ function drawOverlay(zones){
   }
  };
  host._updateTradeOverlay=update;
+ // Recalcular al cambiar el rango horizontal del gráfico.
  if(host._tradeOverlayRangeHandler)try{S.chart.timeScale().unsubscribeVisibleLogicalRangeChange(host._tradeOverlayRangeHandler)}catch{}
  host._tradeOverlayRangeHandler=update;
  S.chart.timeScale().subscribeVisibleLogicalRangeChange(update);
+ // Recalcular también al cambiar el rango vertical de precios. Así TP/SL
+ // reaparecen cuando el usuario mueve o ajusta la escala vertical.
+ const priceScale=S.price.priceScale();
+ if(host._tradeOverlayPriceHandler&&host._tradeOverlayPriceScale){
+  try{host._tradeOverlayPriceScale.unsubscribeVisiblePriceRangeChange(host._tradeOverlayPriceHandler)}catch{}
+ }
+ host._tradeOverlayPriceScale=priceScale;
+ host._tradeOverlayPriceHandler=update;
+ try{priceScale.subscribeVisiblePriceRangeChange?.(update)}catch(e){console.warn('No se pudo suscribir el rango vertical del overlay',e)}
+ // Recalcular cuando cambia el tamaño del área del gráfico.
+ if(host._tradeOverlaySizeHandler&&S.chart.unsubscribeSizeChange){
+  try{S.chart.unsubscribeSizeChange(host._tradeOverlaySizeHandler)}catch{}
+ }
+ host._tradeOverlaySizeHandler=update;
+ try{S.chart.subscribeSizeChange?.(update)}catch{}
  requestAnimationFrame(update);
 }
 function selectedChartTrades(){
