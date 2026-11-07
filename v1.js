@@ -84,7 +84,7 @@ function saveConfig(){
  const all=readConfigs();
  if(!all.bySymbol||typeof all.bySymbol!=='object')all.bySymbol={};
  all.bySymbol[S.symbol]={tp:Math.max(1,+$('tpPoints').value||12),sl:Math.max(1,+$('slPoints').value||12)};
- all.trend={fast:+$('trendFast').value,slow:+$('trendSlow').value,filter:$('trendFilter').checked};
+ const pair=$('trendPair').value.split(',').map(Number);all.trend={fast:pair[0],slow:pair[1],filter:$('trendFilter').checked};
  localStorage.setItem(STORE,JSON.stringify(all));
  $('settingsStatus').textContent='TP/SL guardados para '+S.symbol+' · tendencia M15 guardada globalmente';
 }
@@ -546,7 +546,7 @@ async function loadCurrent(){
  // Cargar primero el instrumento visible para reutilizarlo en el escáner global.
  S.raw=await history(S.symbol);if(!S.raw.length)throw Error('No hay velas M1 disponibles');
  const meta=S.symbols.find(x=>x.code===S.symbol);S.markets.set(S.symbol,{name:meta?.name||S.symbol,candles:S.raw});
- const cfg=config(S.symbol);$('tpPoints').value=cfg.tp;$('slPoints').value=cfg.sl;$('settingsStatus').textContent='Configuración de '+S.symbol;const tc=trendSettings();$('trendFast').value=String(tc.fast);$('trendSlow').value=String(tc.slow);$('trendFilter').checked=tc.filter;$('trendSettingsStatus').textContent='M15: EMA '+tc.fast+' / EMA '+tc.slow+' · filtro '+(tc.filter?'ACTIVADO':'DESACTIVADO')+'.';
+ const cfg=config(S.symbol);$('tpPoints').value=cfg.tp;$('slPoints').value=cfg.sl;$('settingsStatus').textContent='Configuración de '+S.symbol;const tc=trendSettings();$('trendPair').value=tc.fast+','+tc.slow;$('trendFilter').checked=tc.filter;$('trendSettingsStatus').textContent='M15: EMA '+tc.fast+' / EMA '+tc.slow+' · filtro '+(tc.filter?'ACTIVADO':'DESACTIVADO')+'.';
  if(S.raw.length<COUNT)console.warn('Deriv devolvió '+S.raw.length+' de '+COUNT+' velas solicitadas');
  S.trades=backtest48h(S.raw);S.backtestCache.set(S.symbol,S.trades);
  restoreOpenSignals(S.symbol,S.raw);initCharts();drawChart();renderHistory();await subscribeLive();
