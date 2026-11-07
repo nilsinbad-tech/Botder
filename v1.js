@@ -163,9 +163,11 @@ function drawOverlay(zones){
   const mapY=p=>{
    const direct=S.price.priceToCoordinate(p);
    if(Number.isFinite(direct))return direct;
-   // Lightweight Charts devuelve minValue/maxValue, no from/to.
-   // Usarlos permite calcular y recortar niveles TP/SL fuera del rango visible.
-   const min=range?.minValue,max=range?.maxValue;
+   // Respaldo: reconstruir coordenada con el rango visible de precio.
+   let min=range?.minValue,max=range?.maxValue;
+   if(!(Number.isFinite(min)&&Number.isFinite(max)&&max>min)){
+    try{max=S.price.coordinateToPrice(0);min=S.price.coordinateToPrice(height)}catch{}
+   }
    if(Number.isFinite(min)&&Number.isFinite(max)&&max>min)
     return height*(max-p)/(max-min);
    return null;
@@ -212,10 +214,21 @@ function drawOverlay(zones){
 }
 function selectedChartTrades(){
  const merged=new Map();
- for(const x of S.trades)merged.set((x.symbol||S.symbol)+'|'+x.side+'|'+x.time,x);
- for(const x of S.liveHistory.filter(x=>x.symbol===S.symbol))merged.set((x.symbol||S.symbol)+'|'+x.side+'|'+x.time,x);
- for(const x of S.activeSignals.values())if(x.symbol===S.symbol)merged.set(x.symbol+'|'+x.side+'|'+x.time,x);
- return [...merged.values()].sort((a,b)=>a.time-b.time);
+ const add=x=>{
+  if(!x||x.symbol!==S.symbol||!Number.isFinite(+x.time))return;
+  const key=x.symbol+'|'+x.side+'|'+x.time,prior=merged.get(key)||{};
+  // Unir las fuentes sin perder TP/SL si una copia del trade viene incompleta.
+  merged.set(key,{...prior,...x,
+   price:Number.isFinite(+x.price)?+x.price:prior.price,
+   tp:Number.isFinite(+x.tp)?+x.tp:prior.tp,
+   sl:Number.isFinite(+x.sl)?+x.sl:prior.sl,
+   decimals:Number.isInteger(x.decimals)?x.decimals:prior.decimals
+  });
+ };
+ for(const x of S.trades)add(x);
+ for(const x of S.liveHistory)add(x);
+ for(const x of S.activeSignals.values())add(x);
+ return [...merged.values()].filter(x=>Number.isFinite(+x.price)&&Number.isFinite(+x.tp)&&Number.isFinite(+x.sl)).sort((a,b)=>a.time-b.time);
 }
 function renderSignalMarkers(){
  const markers=[],seen=new Set();
