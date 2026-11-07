@@ -2,7 +2,7 @@
 <html lang="es"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#080d16"><title>BOTDER · Scalping M1</title>
-<link rel="stylesheet" href="v1.css?v=17">
+<link rel="stylesheet" href="v1.css?v=18">
 <script src="https://unpkg.com/lightweight-charts@5.0.8/dist/lightweight-charts.standalone.production.js" onerror="this.onerror=null;this.src='https://cdn.jsdelivr.net/npm/lightweight-charts@5.0.8/dist/lightweight-charts.standalone.production.js'"></script>
 </head><body>
 <header><b>BOTDER <small>SCALPING M1 · V1</small></b><span id="connection">Conectando Deriv…</span></header>
@@ -16,7 +16,7 @@
  <article><small>ÚLTIMA OPERACIÓN</small><b id="signalState">ESPERANDO</b></article>
 </section>
 <section class="chartcard"><div class="charttitle"><b id="chartName">Gráfico M1</b><span id="coverage">Cargando 7.000 velas M1…</span></div><div id="liveFeed">Esperando flujo de precios de Deriv…</div><div id="liveSignal">SIN SEÑAL EN VELA ACTUAL</div><div id="chart"></div><div class="charttitle"><b>RSI (14)</b><span id="rsiCaption">Compra 50–75 · Venta 25–50</span></div><div id="rsiChart"></div></section>
-<section class="settings"><h3>INDICADOR VISUAL · STRONG DEMANDS / SUPPLIES + LIQUIDITY</h3><small>Solo visual: zonas de demanda/venta y FVG en recuadros transparentes; liquidez y señales BUY/SHORT como líneas finas. No modifica estrategia, señales, TP/SL ni backtesting.</small></section>
+<section class="settings"><h3>INDICADOR VISUAL · STRONG DEMANDS / SUPPLIES + LIQUIDITY</h3><div class="visual-settings"><label>Temporalidad de cálculo del indicador<select id="visualTimeframe"><option value="2">2 minutos</option><option value="3">3 minutos</option><option value="4">4 minutos</option><option value="5" selected>5 minutos</option><option value="6">6 minutos</option><option value="10">10 minutos</option><option value="15">15 minutos</option></select></label><small id="visualTimeframeStatus">El indicador calcula FVG, OB, liquidez y estructura en M5, independientemente de la temporalidad del gráfico.</small></div><small>Solo visual: no modifica estrategia, señales, TP/SL ni backtesting. Esta temporalidad es independiente por completo del instrumento y del marco temporal que visualices.</small></section>
 <section class="settings">
  <h3>TP / SL POR INSTRUMENTO</h3>
  <div class="inputs"><label>TP · puntos<input id="tpPoints" type="number" min="1" step="1" value="12"></label><label>SL · puntos<input id="slPoints" type="number" min="1" step="1" value="12"></label><button id="applyRisk">GUARDAR</button><small id="settingsStatus">Cada instrumento conserva su propio TP y SL. Pulsa GUARDAR antes de cambiar de instrumento.</small></div>
@@ -39,4 +39,4 @@
  <p><b>Order Blocks:</b> zonas basadas en el cuerpo de la vela, con fondo casi transparente. El selector incluye Volatility normales y de 1 segundo entre 10 y 75, Crash 50/500, Boom 50/500 y XAUUSD (oro), cuando Deriv lo devuelve como instrumento activo. Cada instrumento guarda su propio TP y SL en este dispositivo. El backtesting evalúa las últimas 48 horas del instrumento seleccionado.</p>
  <p>El gráfico y el backtest muestran el instrumento seleccionado. El panel superior vigila todos los instrumentos permitidos; al cerrarse una señal desaparece de vigentes y queda en el gráfico e historial de su instrumento.</p>
 </section>
-</main><script src="v1.js?v=45"></script></body></html>
+</main><script src="v1.js?v=46"></script></body></html>
