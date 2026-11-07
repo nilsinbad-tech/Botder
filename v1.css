@@ -63,3 +63,9 @@
 #chart .si-signal span{font-size:7px;top:-10px;background:rgba(8,13,22,.72)}
 #chart .si-engulf{height:0!important;border:0!important;opacity:.85}
 #chart .si-engulf span{position:absolute;top:-7px;left:0;font-size:9px;background:transparent;text-shadow:0 1px 2px #000}
+
+/* FVG recientes: recuadros visibles, pero sin ocultar las velas */
+#chart .si-fvg{opacity:1!important;border-width:1.5px!important;border-style:solid!important;border-radius:2px;box-shadow:0 0 5px currentColor}
+#chart .si-fvg.buy{background:rgba(32,209,139,.16)!important;border-color:rgba(32,209,139,.88)!important;color:#20d18b}
+#chart .si-fvg.sell{background:rgba(255,89,104,.16)!important;border-color:rgba(255,89,104,.88)!important;color:#ff5968}
+#chart .si-fvg span{font-size:8px;font-weight:900;padding:1px 3px;background:rgba(8,13,22,.86);border-radius:2px}
