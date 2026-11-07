@@ -24,34 +24,90 @@ function initCharts(){if(!window.LightweightCharts)throw Error('No cargó el gr�
 function drawChart(){const c=S.raw,m9=ema(c,9),m45=ema(c,20),rv=rsi(c),signals=S.trades;S.price.setData(c);S.ema9.setData(c.map((x,i)=>({time:x.time,value:m9[i]})));S.ema20.setData(c.map((x,i)=>({time:x.time,value:m45[i]})));S.rsiLine.setData(c.map((x,i)=>rv[i]==null?null:{time:x.time,value:rv[i]}).filter(Boolean));const markers=[];for(const s of signals){markers.push({time:s.time-60,position:s.side==='BUY'?'belowBar':'aboveBar',color:s.side==='BUY'?'#20d18b':'#ff5968',shape:s.side==='BUY'?'arrowUp':'arrowDown',text:s.side==='BUY'?'COMPRA':'VENTA'});if(s.result==='WIN'||s.result==='LOSS')markers.push({time:s.exitTime-60,position:s.side==='BUY'?'aboveBar':'belowBar',color:s.result==='WIN'?'#20d18b':'#ff5968',shape:'circle',text:s.result})}try{S.price.setMarkers(markers)}catch{}S.chart.timeScale().fitContent();S.rsiChart.timeScale().fitContent();drawOverlay(obZones(aggregate(S.raw,15)));const last=rv.at(-1),d15=trend(aggregate(S.raw,15)),d5=trend(aggregate(S.raw,5));$('trend15').textContent=d15==='BUY'?'ALCISTA':d15==='SELL'?'BAJISTA':'LATERAL';$('trend5').textContent=d5==='BUY'?'ALCISTA':d5==='SELL'?'BAJISTA':'LATERAL';$('trend15').style.color=d15==='BUY'?'var(--green)':d15==='SELL'?'var(--red)':'#ffc45d';$('trend5').style.color=d5==='BUY'?'var(--green)':d5==='SELL'?'var(--red)':'#ffc45d';$('rsiValue').textContent=last==null?'—':last.toFixed(1);const rs=last>=50&&last<=75?'RSI COMPRA':last>=25&&last<50?'RSI VENTA':'RSI NEUTRAL';$('rsiState').textContent=rs;$('rsiState').style.color=rs.includes('COMPRA')?'var(--green)':rs.includes('VENTA')?'var(--red)':'#ffc45d';$('signalState').textContent=signals.at(-1)?(signals.at(-1).side==='BUY'?'COMPRA':'VENTA')+' · '+signals.at(-1).result:'SIN SEÑAL';$('chartName').textContent=S.symbol+' · M1';const m15=aggregate(S.raw,15),zones=obZones(m15).slice(-2);$('rsiCaption').textContent='RSI '+(last==null?'—':last.toFixed(1))+' · '+rs+' · M15 '+$('trend15').textContent+' / M5 '+$('trend5').textContent;return zones}
 
 function strongVisuals(c){
- const out=[],depth=7,atr=c.slice(-100).reduce((s,b)=>s+b.high-b.low,0)/Math.max(1,Math.min(100,c.length));
+ const out=[];if(c.length<20)return out;
+ const depth=5,tail=c.at(-1).time+180,range=c.slice(-120),atr=range.reduce((v,b)=>v+b.high-b.low,0)/range.length,tol=Math.max(atr*.10,getPoint()*5);
  const piv=[];
- for(let i=depth;i<c.length-depth;i++){let hi=true,lo=true;for(let j=1;j<=depth;j++){if(c[i].high<=c[i-j].high||c[i].high<c[i+j].high)hi=false;if(c[i].low>=c[i-j].low||c[i].low>c[i+j].low)lo=false}if(hi)piv.push({i,time:c[i].time,price:c[i].high,type:'H'});if(lo)piv.push({i,time:c[i].time,price:c[i].low,type:'L'})}
- const clusters=[];for(const p of piv){let z=clusters.find(x=>x.type===p.type&&Math.abs(x.price-p.price)<=Math.max(atr*.12,getPoint()*5));if(z){z.count++;z.price=(z.price*(z.count-1)+p.price)/z.count;z.start=Math.min(z.start,p.i)}else clusters.push({type:p.type,price:p.price,count:1,start:p.i,time:p.time})}
- clusters.filter(x=>x.count>=2).slice(-6).forEach(x=>out.push({kind:'liquidity',time:c[x.start].time,end:c.at(-1).time+180,high:x.price,low:x.price,label:x.type==='H'?'LIQUIDEZ COMPRA':'LIQUIDEZ VENTA',side:x.type==='H'?'SELL':'BUY'}));
- for(let i=2;i<c.length;i++){const b=c[i],p=c[i-1],q=c[i-2];
-  if(b.low>q.high)out.push({kind:'fvg',time:p.time,end:b.time+300,high:b.low,low:q.high,label:'FVG ALCISTA',side:'BUY'});
-  if(b.high<q.low)out.push({kind:'fvg',time:p.time,end:b.time+300,high:q.low,low:b.high,label:'FVG BAJISTA',side:'SELL'});
-  if(p.open<=q.close&&p.open<q.open&&p.close>q.open)out.push({kind:'mark',time:p.time,price:p.low,label:'▲ ENVOLVENTE',side:'BUY'});
-  if(p.open>=q.close&&p.open>q.open&&p.close<q.open)out.push({kind:'mark',time:p.time,price:p.high,label:'▼ ENVOLVENTE',side:'SELL'});
+ for(let i=depth;i<c.length-depth;i++){
+  let hi=true,lo=true;
+  for(let j=1;j<=depth;j++){if(c[i].high<=c[i-j].high||c[i].high<c[i+j].high)hi=false;if(c[i].low>=c[i-j].low||c[i].low>c[i+j].low)lo=false}
+  if(hi)piv.push({i,time:c[i].time,price:c[i].high,type:'H'});
+  if(lo)piv.push({i,time:c[i].time,price:c[i].low,type:'L'});
  }
+ // Liquidez: agrupaciones de máximos/mínimos repetidos, no cada pivote aislado.
+ for(const type of ['H','L']){
+  const groups=[];
+  for(const p of piv.filter(x=>x.type===type)){
+   let g=groups.find(x=>Math.abs(x.price-p.price)<=tol);
+   if(!g)groups.push(g={price:p.price,count:0,start:p.i,last:p.i});
+   g.price=(g.price*g.count+p.price)/(g.count+1);g.count++;g.start=Math.min(g.start,p.i);g.last=p.i;
+  }
+  groups.filter(g=>g.count>=2&&g.last>=c.length-180).slice(-3).forEach(g=>out.push({kind:'liquidity',time:c[g.start].time,end:tail,high:g.price,low:g.price,label:type==='H'?'LIQUIDEZ SOBRE MÁXIMOS':'LIQUIDEZ BAJO MÍNIMOS',side:type==='H'?'SELL':'BUY'}));
+ }
+ // Estructura: HH/HL/LH/LL y rupturas BOS/CHoCH.
+ const highs=piv.filter(x=>x.type==='H'),lows=piv.filter(x=>x.type==='L');
+ for(const [arr,type] of [[highs,'H'],[lows,'L']]){
+  for(let i=1;i<arr.length;i++){
+   const p=arr[i],prev=arr[i-1],up=p.price>prev.price;
+   out.push({kind:'structure',time:p.time,price:p.price,label:type==='H'?(up?'HH':'LH'):(up?'HL':'LL'),side:type==='H'?(up?'BUY':'SELL'):(up?'BUY':'SELL')});
+  }
+ }
+ let lastHigh=highs.at(-1),lastLow=lows.at(-1),lastBreak='';
+ for(let i=Math.max(10,c.length-180);i<c.length;i++){
+  const b=c[i];let side='';
+  if(lastHigh&&b.close>lastHigh.price&&c[i-1].close<=lastHigh.price)side='BUY';
+  if(lastLow&&b.close<lastLow.price&&c[i-1].close>=lastLow.price)side='SELL';
+  if(side&&side!==lastBreak){out.push({kind:'break',time:b.time,price:side==='BUY'?b.low:b.high,label:lastBreak&&side!==lastBreak?'CHoCH': 'BOS '+(side==='BUY'?'ALCISTA':'BAJISTA'),side});lastBreak=side}
+ }
+ // Fair Value Gaps y velas envolventes.
+ for(let i=Math.max(2,c.length-220);i<c.length;i++){
+  const b=c[i],p=c[i-1],q=c[i-2];
+  if(b.low>q.high&&b.low-q.high>getPoint()*2)out.push({kind:'fvg',time:p.time,end:tail,high:b.low,low:q.high,label:'FVG ALCISTA',side:'BUY'});
+  if(b.high<q.low&&q.low-b.high>getPoint()*2)out.push({kind:'fvg',time:p.time,end:tail,high:q.low,low:b.high,label:'FVG BAJISTA',side:'SELL'});
+  if(p.close>p.open&&b.close<b.open&&b.open>=p.close&&b.close<=p.open)out.push({kind:'mark',time:b.time,price:b.high,label:'ENVOLVENTE BAJISTA',side:'SELL'});
+  if(p.close<p.open&&b.close>b.open&&b.open<=p.close&&b.close>=p.open)out.push({kind:'mark',time:b.time,price:b.low,label:'ENVOLVENTE ALCISTA',side:'BUY'});
+ }
+ // Order blocks recientes: última vela contraria antes del desplazamiento que rompe estructura.
+ for(let i=Math.max(5,c.length-180);i<c.length-1;i++){
+  const b=c[i],prevHigh=Math.max(...c.slice(Math.max(0,i-12),i).map(x=>x.high)),prevLow=Math.min(...c.slice(Math.max(0,i-12),i).map(x=>x.low)),next=c[i+1];
+  if(b.close<b.open&&next.close>b.high&&next.close>prevHigh)out.push({kind:'ob',time:b.time,end:tail,high:b.high,low:b.low,label:'OB ALCISTA',side:'BUY'});
+  if(b.close>b.open&&next.close<b.low&&next.close<prevLow)out.push({kind:'ob',time:b.time,end:tail,high:b.high,low:b.low,label:'OB BAJISTA',side:'SELL'});
+ }
+ // Máximo y mínimo del día anterior.
  const day=Math.floor(c.at(-1).time/DAY)*DAY,prev=c.filter(x=>x.time>=day-DAY&&x.time<day);
- if(prev.length){const hi=Math.max(...prev.map(x=>x.high)),lo=Math.min(...prev.map(x=>x.low));out.push({kind:'day',time:c[0].time,end:c.at(-1).time+180,high:hi,low:hi,label:'MÁX. DÍA ANTERIOR'});out.push({kind:'day',time:c[0].time,end:c.at(-1).time+180,high:lo,low:lo,label:'MÍN. DÍA ANTERIOR'})}
+ if(prev.length){const hi=Math.max(...prev.map(x=>x.high)),lo=Math.min(...prev.map(x=>x.low));out.push({kind:'day',time:c[0].time,end:tail,high:hi,low:hi,label:'MÁXIMO DÍA ANTERIOR'});out.push({kind:'day',time:c[0].time,end:tail,high:lo,low:lo,label:'MÍNIMO DÍA ANTERIOR'})}
+ // Premium / discount del rango visible reciente.
+ const hi=Math.max(...range.map(x=>x.high)),lo=Math.min(...range.map(x=>x.low)),mid=(hi+lo)/2;
+ out.push({kind:'mid',time:c[Math.max(0,c.length-120)].time,end:tail,high:mid,low:mid,label:'EQUILIBRIO 50%'});
  return out;
 }
 function drawOverlay(zones){
  const host=$('chart');host.querySelectorAll('.v1-overlay').forEach(x=>x.remove());
  const layer=document.createElement('div');layer.className='v1-overlay';host.appendChild(layer);
- const end=S.raw.at(-1)?.time||0,allZones=zones||[],visuals=strongVisuals(S.raw),elements=[];
+ const end=S.raw.at(-1)?.time||0,visuals=strongVisuals(S.raw),elements=[];
  const make=(cls,label)=>{const el=document.createElement('div');el.className=cls;if(label){const t=document.createElement('span');t.textContent=label;el.appendChild(t)}layer.appendChild(el);return el};
- for(let i=0;i<allZones.length;i++){const z=allZones[i],recent=i>=allZones.length-2,el=make('obbox '+(z.side==='BUY'?'buy':'sell'),z.side==='BUY'?'OB ALCISTA M15':'OB BAJISTA M15');el.style.color=z.side==='BUY'?'#20d18b':'#ff5968';elements.push({el,time:z.time,end:recent?end+900:z.time+900,high:z.high,low:z.low,kind:'zone'})}
- for(const v of visuals){const cls=v.kind==='liquidity'?'si-liquidity '+(v.side==='BUY'?'buy':'sell'):v.kind==='fvg'?'si-fvg '+v.side.toLowerCase():v.kind==='day'?'si-day':'si-mark '+v.side.toLowerCase();const el=make(cls,v.label);elements.push({el,...v})}
+ for(const z of zones||[]){const el=make('obbox '+(z.side==='BUY'?'buy':'sell'),z.side==='BUY'?'OB ALCISTA M15':'OB BAJISTA M15');elements.push({el,time:z.time,end:z.time+900,high:z.high,low:z.low,kind:'zone'})}
+ for(const v of visuals){
+  const cls=v.kind==='liquidity'?'si-liquidity '+(v.side==='BUY'?'buy':'sell'):v.kind==='fvg'?'si-fvg '+v.side.toLowerCase():v.kind==='day'?'si-day':v.kind==='ob'?'si-ob '+v.side.toLowerCase():v.kind==='break'?'si-break '+v.side.toLowerCase():v.kind==='mid'?'si-mid':'si-mark '+v.side.toLowerCase();
+  const el=make(cls,v.label);elements.push({el,...v});
+ }
  const areas=[];for(const t of S.trades){const xEnd=t.exitTime||end+60;for(const kind of ['tp','sl']){const el=document.createElement('div');el.className='trade-zone '+kind;const label=document.createElement('span');label.className='trade-label '+kind;label.textContent=kind.toUpperCase();layer.append(el,label);areas.push({el,label,t,kind,xEnd})}}
- const update=()=>{const ts=S.chart.timeScale(),width=host.clientWidth,height=host.clientHeight;
-  for(const z of elements){const x1=ts.timeToCoordinate(z.time),x2=ts.timeToCoordinate(z.end??z.time),y1=S.price.priceToCoordinate(z.high??z.price),y2=S.price.priceToCoordinate(z.low??z.price);if(x1==null||y1==null||y2==null){z.el.style.display='none';continue}const right=x2==null?width:x2;if(right<0||x1>width){z.el.style.display='none';continue}z.el.style.display='block';z.el.style.left=Math.max(0,x1)+'px';z.el.style.top=Math.max(0,Math.min(y1,y2))+'px';if(z.kind==='mark'){z.el.style.width='auto';z.el.style.height='auto'}else{z.el.style.width=Math.max(2,Math.min(width,right)-Math.max(0,x1))+'px';z.el.style.height=Math.max(2,Math.abs(y2-y1))+'px'}}
+ const update=()=>{
+  const ts=S.chart.timeScale(),width=host.clientWidth,height=host.clientHeight;
+  for(const z of elements){
+   const x1=ts.timeToCoordinate(z.time),x2=ts.timeToCoordinate(z.end??z.time),y1=S.price.priceToCoordinate(z.high??z.price),y2=S.price.priceToCoordinate(z.low??z.price);
+   if(x1==null||y1==null||y2==null){z.el.style.display='none';continue}
+   const right=x2==null?width:x2;if(right<0||x1>width){z.el.style.display='none';continue}
+   z.el.style.display='block';z.el.style.left=Math.max(0,x1)+'px';z.el.style.top=Math.max(0,Math.min(y1,y2))+'px';
+   if(['mark','structure','break'].includes(z.kind)){z.el.style.width='auto';z.el.style.height='auto'}
+   else{z.el.style.width=Math.max(2,Math.min(width,right)-Math.max(0,x1))+'px';z.el.style.height=Math.max(z.kind==='liquidity'||z.kind==='day'||z.kind==='mid'?1:2,Math.abs(y2-y1))+'px'}
+  }
   for(const a of areas){const x1=ts.timeToCoordinate(a.t.time-60),x2=ts.timeToCoordinate(a.xEnd),level=a.kind==='tp'?a.t.tp:a.t.sl,y1=S.price.priceToCoordinate(a.t.price),y2=S.price.priceToCoordinate(level);if(x1==null||y1==null||y2==null){a.el.style.display='none';a.label.style.display='none';continue}const left=Math.max(0,Math.min(x1,x2??width)),right=Math.min(width,Math.max(x1,x2??width)),top=Math.max(0,Math.min(y1,y2)),bottom=Math.min(height,Math.max(y1,y2));a.el.style.display='block';a.el.style.left=left+'px';a.el.style.width=Math.max(2,right-left)+'px';a.el.style.top=top+'px';a.el.style.height=Math.max(2,bottom-top)+'px';a.label.style.display='block';a.label.textContent=(a.kind==='tp'?'TP ':'SL ')+level.toFixed(5);a.label.style.left=Math.max(0,Math.min(width-60,left))+'px';a.label.style.top=Math.max(0,Math.min(height-15,top))+'px'}
  };
- S.chart.timeScale().subscribeVisibleLogicalRangeChange(update);requestAnimationFrame(update)
+ S.chart.timeScale().subscribeVisibleLogicalRangeChange(update);
+ S.chart.timeScale().subscribeVisibleTimeRangeChange(update);
+ try{S.price.priceScale().subscribeVisibleLogicalRangeChange(update)}catch{}
+ try{S.chart.subscribeSizeChange(update)}catch{}
+ requestAnimationFrame(()=>requestAnimationFrame(update));
 }
 function renderHistory(){const w=S.trades.filter(x=>x.result==='WIN').length,l=S.trades.filter(x=>x.result==='LOSS').length,o=S.trades.filter(x=>x.result==='OPEN').length,closed=w+l;$('wins').textContent=w;$('losses').textContent=l;$('open').textContent=o;$('rate').textContent=(closed?100*w/closed:0).toFixed(1)+'%';$('history').innerHTML=S.trades.slice().reverse().map(x=>'<div class="history-row"><span>'+new Date(x.time*1000).toLocaleString('es-PA',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'})+'</span><b class="'+(x.side==='BUY'?'win':'loss')+'">'+(x.side==='BUY'?'COMPRA':'VENTA')+'</b><span>TP '+x.tp.toFixed(5)+'</span><span class="'+(x.result==='WIN'?'win':x.result==='LOSS'?'loss':'')+'">'+x.result+'</span></div>').join('')||'No se encontraron operaciones con todos los filtros';const span=S.raw.length>1?(S.raw.at(-1).time-S.raw[0].time)/DAY:0;$('coverage').textContent=S.raw.length.toLocaleString('es-PA')+' velas visibles · '+span.toFixed(2)+' días';$('backtestStatus').textContent='Backtest M1 · '+S.raw.length+'/7,000 velas descargadas · '+span.toFixed(2)+' días cubiertos · estrategia y TP/SL actuales.'}
 
