@@ -1,6 +1,6 @@
 (()=>{'use strict';
 const $=id=>document.getElementById(id),API='wss://api.derivws.com/trading/v1/options/ws/public',DAY=86400,COUNT=7000;
-const S={ws:null,req:0,pending:new Map(),symbols:[],symbol:'',raw:[],candles:[],chart:null,rsiChart:null,price:null,ema9:null,ema45:null,rsiLine:null,markerApi:null,obSeries:[],markers:[],trades:[],point:0,settings:{},scanTimer:null,reconnectTimer:null,reconnectDelay:1000,heartbeatTimer:null,connecting:false,tickCount:0,lastTickAt:0,currentPriceLine:null,liveSymbol:'',markets:new Map(),marketSubs:new Map(),marketSubSymbols:new Map(),marketLastTick:new Map(),activeSignals:new Map(),liveHistory:[],globalScanStarted:false,scanBusy:false};
+const S={ws:null,req:0,pending:new Map(),symbols:[],symbol:'',raw:[],candles:[],chart:null,rsiChart:null,price:null,ema9:null,ema45:null,rsiLine:null,markerApi:null,obSeries:[],markers:[],trades:[],point:0,settings:{},scanTimer:null,reconnectTimer:null,reconnectDelay:1000,heartbeatTimer:null,connecting:false,tickCount:0,lastTickAt:0,currentPriceLine:null,liveSymbol:'',markets:new Map(),marketSubs:new Map(),marketSubSymbols:new Map(),marketLastTick:new Map(),activeSignals:new Map(),liveHistory:[],globalScanStarted:false,scanBusy:false,globalMarketsRestored:new Set(),marketSignalBar:new Map(),backtestCache:new Map()};
 const STORE='botder-scalping-m1-v1';
 function restoreLiveHistory(){try{const saved=JSON.parse(localStorage.getItem(STORE+'-live-history')||'[]');if(Array.isArray(saved))S.liveHistory=saved.filter(x=>x&&x.symbol&&x.side&&Number.isFinite(+x.time)).slice(-2000)}catch{S.liveHistory=[]}}
 function persistLiveHistory(){try{localStorage.setItem(STORE+'-live-history',JSON.stringify(S.liveHistory.slice(-2000)))}catch(e){console.warn('No se pudo guardar el historial live',e)}}
@@ -33,8 +33,8 @@ async function loadSymbols(){
  $('symbol').innerHTML=S.symbols.map(x=>'<option value="'+x.code+'">'+x.name+'</option>').join('');
  if(!S.symbols.length)throw Error('Deriv no devolvió instrumentos permitidos (Volatility 10–75, Crash/Boom 50/500)');
 }
-async function history(symbol){
- const target=COUNT,chunk=4000,all=[];let receivedRaw=0,invalid=0;
+async function history(symbol,target=COUNT){
+ const chunk=4000,all=[];let receivedRaw=0,invalid=0;
  const first=await send({ticks_history:symbol,adjust_start_time:1,count:chunk,end:'latest',granularity:60,style:'candles'});
  const clean=r=>{const rows=r.candles||[];receivedRaw+=rows.length;const valid=rows.map(x=>({time:+x.epoch,open:+x.open,high:+x.high,low:+x.low,close:+x.close})).filter(x=>Number.isFinite(x.time)&&Number.isFinite(x.open)&&Number.isFinite(x.high)&&Number.isFinite(x.low)&&Number.isFinite(x.close)&&x.high>=Math.max(x.open,x.close)&&x.low<=Math.min(x.open,x.close));invalid+=rows.length-valid.length;return valid};
  all.push(...clean(first));
@@ -280,6 +280,7 @@ function renderSignalMarkers(){
 }
 function restoreOpenSignals(symbol,candles){
  if(!Array.isArray(candles)||candles.length<30)return 0;
+ if(S.globalMarketsRestored.has(symbol))return 0;
  // Reconstruir cada señal por separado. No cerrar una señal porque aparezca
  // otra posterior: solo deja de estar vigente cuando toca su TP o su SL.
  const candidates=signalsFor(candles,true,symbol),market=S.markets.get(symbol);
@@ -298,12 +299,13 @@ function restoreOpenSignals(symbol,candles){
   S.activeSignals.set(key,{...signal,key,name:market?.name||S.symbols.find(x=>x.code===symbol)?.name||symbol,result:'OPEN',candles:candles.slice(-120)});
   restored++;
  }
+ S.globalMarketsRestored.add(symbol);
  renderActiveSignals();
  return restored;
 }
 function renderActiveSignals(){
  const host=$('activeSignals');if(!host)return;
- const items=[...S.activeSignals.values()].sort((a,b)=>b.time-a.time);
+ const items=[...S.activeSignals.values()].sort((a,b)=>b.time-a.time).slice(0,8);
  host.replaceChildren();host.hidden=!items.length;
  for(const s of items){
   const card=document.createElement('article');card.className='active-signal '+(s.side==='BUY'?'buy':'sell');
@@ -329,12 +331,14 @@ function updateMarketTrade(signal,price,time){
 function processMarketSignal(symbol,candles,price,time){
  if(!candles||!candles.length)return;let changed=false;
  for(const s of [...S.activeSignals.values()])if(s.symbol===symbol)changed=updateMarketTrade(s,price,time)||changed;
- const last=candles.at(-1),candidate=signalsFor(candles,false,symbol).find(x=>x.time===last.time+60);
+ const last=candles.at(-1),lastScanned=S.marketSignalBar.get(symbol);
+ let candidate=null;
+ if(last&&last.time!==lastScanned){S.marketSignalBar.set(symbol,last.time);candidate=signalsFor(candles,false,symbol).find(x=>x.time===last.time+60)}
  if(candidate){
   const samePoint=[...S.liveHistory,...S.activeSignals.values()].some(x=>x.symbol===symbol&&x.side===candidate.side&&x.obTime===candidate.obTime);
   if(!samePoint){const key=symbol+'|'+candidate.side+'|'+candidate.time,market=S.markets.get(symbol),item={...candidate,key,name:market?.name||symbol,result:'OPEN',candles:candles.slice()};S.activeSignals.set(key,item);notifyNewSignal(item);changed=true}
  }
- renderActiveSignals();if(changed&&symbol===S.symbol)updateSelectedSignalView();
+ if(changed)renderActiveSignals();if(changed&&symbol===S.symbol)updateSelectedSignalView();
 }
 function updateMarketTick(tick){
  const symbol=tick.symbol;if(!symbol||!Number.isFinite(+tick.epoch)||!Number.isFinite(+tick.quote))return;const market=S.markets.get(symbol);if(!market)return;
@@ -347,7 +351,7 @@ async function loadGlobalMarket(symbol){
  if(existing?.candles?.length>=30)return existing;
  const meta=S.symbols.find(x=>x.code===symbol);if(!meta)throw Error('Instrumento no encontrado: '+symbol);
  // Todos los mercados usan el mismo histórico M1 (7,000 velas) que el gráfico.
- const candles=await history(symbol);
+ const candles=await history(symbol,3000);
  if(!candles.length)throw Error('Deriv no entregó velas M1 para '+symbol+'; se reintentará');
  const market={name:meta.name,candles};S.markets.set(symbol,market);return market;
 }
@@ -377,7 +381,7 @@ async function preloadGlobalMarkets(){
  // cuando terminó la carga inicial de datos disponible.
  for(const item of S.symbols){
   const market=S.markets.get(item.code);
-  if(market?.candles?.length>=30)restoreOpenSignals(item.code,market.candles);
+  if(market?.candles?.length>=30&&!S.globalMarketsRestored.has(item.code))restoreOpenSignals(item.code,market.candles);
  }
  renderActiveSignals();
 }
@@ -462,7 +466,7 @@ function updateLiveTick(tick){
   if(rv[i]!=null)S.rsiLine.update({time,value:rv[i]});
   $('rsiValue').textContent=rv[i]==null?'—':rv[i].toFixed(1);
   $('chartName').textContent=S.symbol+' · M1 · '+price;
-  if(time>last.time){S.trades=backtest48h(S.raw);drawOverlay(obZones(aggregate(S.raw,15)));renderHistory()}
+  if(time>last.time){drawOverlay(obZones(aggregate(S.raw,15)));renderHistory()}
   const current=S.raw.at(-1);processMarketSignal(S.symbol,S.raw,price,+tick.epoch);$('chart')._updateTradeOverlay?.();const liveSignal=[...S.activeSignals.values()].find(x=>x.symbol===S.symbol&&x.time===current.time+60)||null;
   renderSignalMarkers();
   $('liveSignal').textContent=liveSignal?(liveSignal.side==='BUY'?'⭐ B · COMPRA':'⭐ S · VENTA')+' REGISTRADA':'SIN SEÑAL EN VELA ACTUAL';
@@ -521,7 +525,8 @@ async function loadOlderHistory(){
   S.ema20.setData(S.raw.map((x,i)=>({time:x.time,value:m20[i]})));
   S.rsiLine.setData(S.raw.map((x,i)=>rv[i]==null?null:{time:x.time,value:rv[i]}).filter(Boolean));
   S.markets.set(S.symbol,{name:S.symbols.find(x=>x.code===S.symbol)?.name||S.symbol,candles:S.raw});
-  S.trades=backtest48h(S.raw);
+  // El backtest de 48 h ya está calculado al abrir el instrumento.
+  // Cargar velas antiguas solo amplía el gráfico: no recalcula señales.
   if(previousRange){try{S.chart.timeScale().setVisibleLogicalRange({from:previousRange.from+added,to:previousRange.to+added})}catch{}}
   renderSignalMarkers();
   drawOverlay(obZones(aggregate(S.raw,15)));
@@ -533,8 +538,19 @@ async function loadOlderHistory(){
 }
 
 
-async function loadCurrent(){S.symbol=$('symbol').value;S.historyExhausted=false;localStorage.setItem('botder-current-symbol',S.symbol);status('Cargando datos y señales de todos los instrumentos…');$('chartName').textContent=S.symbol+' · M1';await startGlobalScanner();status('Preparando gráfico '+S.symbol+'…');S.raw=await history(S.symbol);S.markets.set(S.symbol,{name:S.symbols.find(x=>x.code===S.symbol)?.name||S.symbol,candles:S.raw});if(!S.raw.length)throw Error('No hay velas M1 disponibles');restoreOpenSignals(S.symbol,S.raw);const cfg=config(S.symbol);$('tpPoints').value=cfg.tp;$('slPoints').value=cfg.sl;$('settingsStatus').textContent='Configuración de '+S.symbol;const span=S.raw.at(-1).time-S.raw[0].time;if(S.raw.length<COUNT)console.warn('Deriv devolvió '+S.raw.length+' de '+COUNT+' velas solicitadas');S.trades=backtest48h(S.raw);initCharts();drawChart();renderHistory();await subscribeLive();await startGlobalScanner();status('Deriv conectada · escáner global activo · '+S.symbol,true)}
-async function recalc(){saveConfig();S.trades=backtest48h(S.raw);drawChart();renderHistory()}
+async function loadCurrent(){
+ S.symbol=$('symbol').value;S.historyExhausted=false;S.globalMarketsRestored.delete(S.symbol);S.marketSignalBar.delete(S.symbol);S.backtestCache.delete(S.symbol);
+ localStorage.setItem('botder-current-symbol',S.symbol);status('Cargando histórico M1 y backtest de 48 horas…');$('chartName').textContent=S.symbol+' · M1';
+ // Cargar primero el instrumento visible para reutilizarlo en el escáner global.
+ S.raw=await history(S.symbol);if(!S.raw.length)throw Error('No hay velas M1 disponibles');
+ const meta=S.symbols.find(x=>x.code===S.symbol);S.markets.set(S.symbol,{name:meta?.name||S.symbol,candles:S.raw});
+ const cfg=config(S.symbol);$('tpPoints').value=cfg.tp;$('slPoints').value=cfg.sl;$('settingsStatus').textContent='Configuración de '+S.symbol;
+ if(S.raw.length<COUNT)console.warn('Deriv devolvió '+S.raw.length+' de '+COUNT+' velas solicitadas');
+ S.trades=backtest48h(S.raw);S.backtestCache.set(S.symbol,S.trades);
+ restoreOpenSignals(S.symbol,S.raw);initCharts();drawChart();renderHistory();await subscribeLive();
+ status('Preparando señales de todos los instrumentos…');await startGlobalScanner();status('Deriv conectada · escáner global activo · '+S.symbol,true)
+}
+async function recalc(){saveConfig();S.trades=backtest48h(S.raw);S.backtestCache.set(S.symbol,S.trades);drawChart();renderHistory()}
 $('symbol').addEventListener('change',()=>loadCurrent().catch(e=>status(e.message)));$('reload').addEventListener('click',()=>loadCurrent().catch(e=>status(e.message)));$('applyRisk').addEventListener('click',recalc);
 async function start(){restoreLiveHistory();try{await connect();await loadSymbols();const saved=localStorage.getItem('botder-current-symbol');if(saved&&S.symbols.some(x=>x.code===saved))$('symbol').value=saved;await loadCurrent()}catch(e){status(e.message);scheduleReconnect()}}
 start();
