@@ -499,11 +499,12 @@ function renderHistory(){
 async function loadOlderHistory(){
  if(S.loadingOlder||S.historyExhausted||!S.raw.length||!S.chart||S.raw.length>=30000)return;
  S.loadingOlder=true;
- const before=S.raw[0].time,previousLength=S.raw.length;
+ const symbol=S.symbol,before=S.raw[0].time,previousLength=S.raw.length;
  let previousRange=null;
  try{previousRange=S.chart.timeScale().getVisibleLogicalRange()}catch{}
  try{
-  const r=await send({ticks_history:S.symbol,adjust_start_time:1,count:4000,end:String(before-60),granularity:60,style:'candles'});
+  const r=await send({ticks_history:symbol,adjust_start_time:1,count:4000,end:String(before-60),granularity:60,style:'candles'});
+  if(symbol!==S.symbol||before!==S.raw[0]?.time)return;
   const rows=(r.candles||[]).map(x=>({time:+x.epoch,open:+x.open,high:+x.high,low:+x.low,close:+x.close}))
    .filter(x=>Number.isFinite(x.time)&&Number.isFinite(x.open)&&Number.isFinite(x.high)&&Number.isFinite(x.low)&&Number.isFinite(x.close)&&x.high>=Math.max(x.open,x.close)&&x.low<=Math.min(x.open,x.close)&&x.time<before);
   const unique=new Map();for(const x of rows)unique.set(x.time,x);
@@ -526,13 +527,13 @@ async function loadOlderHistory(){
   drawOverlay(obZones(aggregate(S.raw,15)));
   renderHistory();
  }catch(e){
-  console.warn('No se pudieron cargar velas anteriores de '+S.symbol,e);
+  console.warn('No se pudieron cargar velas anteriores de '+symbol,e);
   $('backtestStatus').textContent+=' · Error al cargar más historial: '+e.message;
  }finally{S.loadingOlder=false}
 }
 
 
-async function loadCurrent(){S.symbol=$('symbol').value;localStorage.setItem('botder-current-symbol',S.symbol);status('Cargando datos y señales de todos los instrumentos…');$('chartName').textContent=S.symbol+' · M1';await startGlobalScanner();status('Preparando gráfico '+S.symbol+'…');S.raw=await history(S.symbol);S.markets.set(S.symbol,{name:S.symbols.find(x=>x.code===S.symbol)?.name||S.symbol,candles:S.raw});if(!S.raw.length)throw Error('No hay velas M1 disponibles');restoreOpenSignals(S.symbol,S.raw);const cfg=config(S.symbol);$('tpPoints').value=cfg.tp;$('slPoints').value=cfg.sl;$('settingsStatus').textContent='Configuración de '+S.symbol;const span=S.raw.at(-1).time-S.raw[0].time;if(S.raw.length<COUNT)console.warn('Deriv devolvió '+S.raw.length+' de '+COUNT+' velas solicitadas');S.trades=backtest48h(S.raw);initCharts();drawChart();renderHistory();await subscribeLive();await startGlobalScanner();status('Deriv conectada · escáner global activo · '+S.symbol,true)}
+async function loadCurrent(){S.symbol=$('symbol').value;S.historyExhausted=false;localStorage.setItem('botder-current-symbol',S.symbol);status('Cargando datos y señales de todos los instrumentos…');$('chartName').textContent=S.symbol+' · M1';await startGlobalScanner();status('Preparando gráfico '+S.symbol+'…');S.raw=await history(S.symbol);S.markets.set(S.symbol,{name:S.symbols.find(x=>x.code===S.symbol)?.name||S.symbol,candles:S.raw});if(!S.raw.length)throw Error('No hay velas M1 disponibles');restoreOpenSignals(S.symbol,S.raw);const cfg=config(S.symbol);$('tpPoints').value=cfg.tp;$('slPoints').value=cfg.sl;$('settingsStatus').textContent='Configuración de '+S.symbol;const span=S.raw.at(-1).time-S.raw[0].time;if(S.raw.length<COUNT)console.warn('Deriv devolvió '+S.raw.length+' de '+COUNT+' velas solicitadas');S.trades=backtest48h(S.raw);initCharts();drawChart();renderHistory();await subscribeLive();await startGlobalScanner();status('Deriv conectada · escáner global activo · '+S.symbol,true)}
 async function recalc(){saveConfig();S.trades=backtest48h(S.raw);drawChart();renderHistory()}
 $('symbol').addEventListener('change',()=>loadCurrent().catch(e=>status(e.message)));$('reload').addEventListener('click',()=>loadCurrent().catch(e=>status(e.message)));$('applyRisk').addEventListener('click',recalc);
 async function start(){restoreLiveHistory();try{await connect();await loadSymbols();const saved=localStorage.getItem('botder-current-symbol');if(saved&&S.symbols.some(x=>x.code===saved))$('symbol').value=saved;await loadCurrent()}catch(e){status(e.message);scheduleReconnect()}}
