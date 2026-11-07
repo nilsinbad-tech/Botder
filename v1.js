@@ -165,12 +165,21 @@ function strongVisuals(c){
   for(const p of pts){let g=groups.find(x=>Math.abs(x.price-p.price)<=tolAt(p.i));if(!g){g={price:p.price,count:0,first:p.i,last:p.i,seed:p.price};groups.push(g)}g.price=(g.price*g.count+p.price)/(g.count+1);g.count++;g.first=Math.min(g.first,p.i);g.last=Math.max(g.last,p.i)}
   groups.filter(g=>g.count>2&&g.last>=n-220).sort((x,y)=>y.count-x.count).slice(0,3).forEach(g=>out.push({kind:'liquidity',time:c[g.first].time,end:tail,price:g.price,high:g.price,low:g.price,label:type==='H'?'LIQUIDEZ SOBRE MÁXIMOS':'LIQUIDEZ BAJO MÍNIMOS',side:type==='H'?'SELL':'BUY'}));
  }
- // FVG: Pine's three-candle imbalance, bounded forward extension; remove mitigated gaps.
+ // FVG: keep only the 3 newest unmitigated gaps, removing old/filled zones.
+ const recentFvgs=[];
  for(let i=Math.max(2,n-500);i<n;i++){
   const b=c[i],q=c[i-2],p=c[i-1],move=p.open?Math.abs((p.close-p.open)/p.open*100):0;
-  if(b.low>q.high&&p.close>q.high&&move>0)out.push({kind:'fvg',time:p.time,end:b.time+300,high:b.low,low:q.high,label:'FVG ALCISTA',side:'BUY'});
-  if(b.high<q.low&&p.close<q.low&&move>0)out.push({kind:'fvg',time:p.time,end:b.time+300,high:q.low,low:b.high,label:'FVG BAJISTA',side:'SELL'});
+  if(b.low>q.high&&p.close>q.high&&move>0){
+   const gap={kind:'fvg',time:p.time,end:b.time+300,high:b.low,low:q.high,label:'FVG ALCISTA',side:'BUY',created:i};
+   if(!c.slice(i+1).some(x=>x.low<=gap.low))recentFvgs.push(gap);
+  }
+  if(b.high<q.low&&p.close<q.low&&move>0){
+   const gap={kind:'fvg',time:p.time,end:b.time+300,high:q.low,low:b.high,label:'FVG BAJISTA',side:'SELL',created:i};
+   if(!c.slice(i+1).some(x=>x.high>=gap.high))recentFvgs.push(gap);
+  }
  }
+ recentFvgs.sort((a,b)=>b.created-a.created);
+ out.push(...recentFvgs.slice(0,3));
  // Swing BOS creates the last opposing candle as an Order Block (Pine ob_coord logic).
  const seen=new Set();
  for(const br of out.filter(x=>x.kind==='break')){
