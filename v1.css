@@ -22,3 +22,9 @@
 
 #chart .trade-zone.entry{background:rgba(245,196,81,.98);opacity:1;box-shadow:0 0 3px rgba(245,196,81,.7)}
 #chart .trade-label.entry{color:#f5c451}
+
+/* Estrellas ancladas al precio exacto de entrada, no al máximo/mínimo móvil de la vela */
+#chart .entry-star-layer{position:absolute;inset:0;pointer-events:none;z-index:9;overflow:hidden}
+#chart .entry-star{position:absolute;display:block;transform:translate(-50%,-50%);font-size:12px;line-height:12px;font-weight:900;white-space:nowrap;text-shadow:0 0 2px #000,0 0 4px currentColor}
+#chart .entry-star.buy{color:#35ffad}
+#chart .entry-star.sell{color:#ff5268}
