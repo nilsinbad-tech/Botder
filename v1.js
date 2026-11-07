@@ -139,62 +139,54 @@ function initCharts(){if(!window.LightweightCharts)throw Error('No cargó el gr�
 function drawChart(){const c=S.raw,m9=ema(c,9),m45=ema(c,20),rv=rsi(c),signals=S.trades;S.price.setData(c);updatePriceLine(c.at(-1)?.close);S.ema9.setData(c.map((x,i)=>({time:x.time,value:m9[i]})));S.ema20.setData(c.map((x,i)=>({time:x.time,value:m45[i]})));S.rsiLine.setData(c.map((x,i)=>rv[i]==null?null:{time:x.time,value:rv[i]}).filter(Boolean));renderSignalMarkers();const to=Math.floor(Date.now()/1000),from=to-48*3600;try{S.chart.timeScale().setVisibleRange({from,to});S.rsiChart.timeScale().setVisibleRange({from,to})}catch{}drawOverlay(obZones(aggregate(S.raw,15)));const last=rv.at(-1),tc=trendSettings(),d15=trend(aggregate(S.raw,15),tc.fast,tc.slow),d5=trend(aggregate(S.raw,5),9,20);$('trend15').textContent=d15==='BUY'?'ALCISTA':d15==='SELL'?'BAJISTA':'LATERAL';$('trend5').textContent=d5==='BUY'?'ALCISTA':d5==='SELL'?'BAJISTA':'LATERAL';$('trend15').style.color=d15==='BUY'?'var(--green)':d15==='SELL'?'var(--red)':'#ffc45d';$('trend5').style.color=d5==='BUY'?'var(--green)':d5==='SELL'?'var(--red)':'#ffc45d';$('rsiValue').textContent=last==null?'—':last.toFixed(1);const rs=last>=50&&last<=75?'RSI COMPRA':last>=25&&last<50?'RSI VENTA':'RSI NEUTRAL';$('rsiState').textContent=rs;$('rsiState').style.color=rs.includes('COMPRA')?'var(--green)':rs.includes('VENTA')?'var(--red)':'#ffc45d';const latest=selectedChartTrades().at(-1);$('signalState').textContent=latest?(latest.side==='BUY'?'COMPRA':'VENTA')+' · '+(latest.result==='WIN'?'GANADA':latest.result==='LOSS'?'PERDIDA':latest.result==='OPEN'?'ABIERTA':'CERRADA'):'SIN OPERACIÓN';$('chartName').textContent=S.symbol+' · M1';const m15=aggregate(S.raw,15),zones=obZones(m15).slice(-4);$('rsiCaption').textContent='RSI '+(last==null?'—':last.toFixed(1))+' · '+rs+' · M15 '+$('trend15').textContent+' / M5 '+$('trend5').textContent;return zones}
 
 function strongVisuals(c){
- const out=[];if(c.length<20)return out;
- const depth=5,tail=c.at(-1).time+180,range=c.slice(-120),atr=range.reduce((v,b)=>v+b.high-b.low,0)/range.length,tol=Math.max(atr*.10,getPoint()*5);
- const piv=[];
- for(let i=depth;i<c.length-depth;i++){
-  let hi=true,lo=true;
-  for(let j=1;j<=depth;j++){if(c[i].high<=c[i-j].high||c[i].high<c[i+j].high)hi=false;if(c[i].low>=c[i-j].low||c[i].low>c[i+j].low)lo=false}
-  if(hi)piv.push({i,time:c[i].time,price:c[i].high,type:'H'});
-  if(lo)piv.push({i,time:c[i].time,price:c[i].low,type:'L'});
+ const out=[];if(c.length<60)return out;
+ const n=c.length,last=c[n-1],tail=last.time+180;
+ const avgRange=(arr)=>arr.length?arr.reduce((v,x)=>v+x.high-x.low,0)/arr.length:0;
+ const atr10=c.map((x,i)=>avgRange(c.slice(Math.max(0,i-9),i+1)));
+ const atr200=c.map((x,i)=>avgRange(c.slice(Math.max(0,i-199),i+1)));
+ const pivots=(len)=>{const out=[];for(let i=len;i<n-len;i++){let hi=true,lo=true;for(let k=1;k<=len;k++){if(c[i].high<=c[i-k].high||c[i].high<c[i+k].high)hi=false;if(c[i].low>=c[i-k].low||c[i].low>c[i+k].low)lo=false}if(hi)out.push({i,time:c[i].time,price:c[i].high,type:'H'});if(lo)out.push({i,time:c[i].time,price:c[i].low,type:'L'})}return out};
+ const swings=pivots(50),internal=pivots(5),highs=swings.filter(x=>x.type==='H'),lows=swings.filter(x=>x.type==='L');
+ // HH/HL/LH/LL from the 50-bar swing structure (Pine length=50).
+ for(const [arr,type] of [[highs,'H'],[lows,'L']])for(let i=Math.max(1,arr.length-5);i<arr.length;i++){const p=arr[i],prev=arr[i-1],up=p.price>prev.price;out.push({kind:'structure',time:p.time,price:p.price,label:type==='H'?(up?'HH':'LH'):(up?'HL':'LL'),side:type==='H'?(up?'SELL':'BUY'):(up?'BUY':'SELL')})}
+ // Internal pivots length=5 and swing pivots define BOS / CHoCH. Lines, not shaded blocks.
+ let trend=0,itrend=0,lastSwingHigh=null,lastSwingLow=null,lastIntHigh=null,lastIntLow=null;
+ for(const p of swings){if(p.type==='H')lastSwingHigh=p;else lastSwingLow=p}
+ for(const p of internal){if(p.type==='H')lastIntHigh=p;else lastIntLow=p}
+ const start=Math.max(1,n-500);
+ for(let i=start;i<n;i++){
+  const prev=c[i-1],bar=c[i];let side='',kind='break',label='';
+  if(lastSwingHigh&&prev.close<=lastSwingHigh.price&&bar.close>lastSwingHigh.price){side='BUY';label=trend<0?'CHoCH':'BOS';trend=1;out.push({kind,time:bar.time,price:lastSwingHigh.price,label,side})}
+  if(lastSwingLow&&prev.close>=lastSwingLow.price&&bar.close<lastSwingLow.price){side='SELL';label=trend>0?'CHoCH':'BOS';trend=-1;out.push({kind,time:bar.time,price:lastSwingLow.price,label,side})}
  }
- // Liquidez: agrupaciones de máximos/mínimos repetidos, no cada pivote aislado.
+ // Liquidity pools: repeated confirmed pivots clustered within ATR(10)/(10/6.9), retain 3 strongest.
+ const tolAt=i=>Math.max((atr10[i]||0)/(10/6.9),getPoint()*2);
  for(const type of ['H','L']){
-  const groups=[];
-  for(const p of piv.filter(x=>x.type===type)){
-   let g=groups.find(x=>Math.abs(x.price-p.price)<=tol);
-   if(!g)groups.push(g={price:p.price,count:0,start:p.i,last:p.i});
-   g.price=(g.price*g.count+p.price)/(g.count+1);g.count++;g.start=Math.min(g.start,p.i);g.last=p.i;
-  }
-  groups.filter(g=>g.count>=2&&g.last>=c.length-180).slice(-2).forEach(g=>out.push({kind:'liquidity',time:c[g.start].time,end:tail,high:g.price,low:g.price,label:type==='H'?'LIQUIDEZ SOBRE MÁXIMOS':'LIQUIDEZ BAJO MÍNIMOS',side:type==='H'?'SELL':'BUY'}));
+  const pts=internal.filter(p=>p.type===type&&p.i>=n-500),groups=[];
+  for(const p of pts){let g=groups.find(x=>Math.abs(x.price-p.price)<=tolAt(p.i));if(!g){g={price:p.price,count:0,first:p.i,last:p.i,seed:p.price};groups.push(g)}g.price=(g.price*g.count+p.price)/(g.count+1);g.count++;g.first=Math.min(g.first,p.i);g.last=Math.max(g.last,p.i)}
+  groups.filter(g=>g.count>2&&g.last>=n-220).sort((x,y)=>y.count-x.count).slice(0,3).forEach(g=>out.push({kind:'liquidity',time:c[g.first].time,end:tail,price:g.price,high:g.price,low:g.price,label:type==='H'?'LIQUIDEZ SOBRE MÁXIMOS':'LIQUIDEZ BAJO MÍNIMOS',side:type==='H'?'SELL':'BUY'}));
  }
- // Estructura: HH/HL/LH/LL y rupturas BOS/CHoCH.
- const highs=piv.filter(x=>x.type==='H'),lows=piv.filter(x=>x.type==='L');
- for(const [arr,type] of [] ){
-  for(let i=1;i<arr.length;i++){
-   const p=arr[i],prev=arr[i-1],up=p.price>prev.price;
-   out.push({kind:'structure',time:p.time,price:p.price,label:type==='H'?(up?'HH':'LH'):(up?'HL':'LL'),side:type==='H'?(up?'BUY':'SELL'):(up?'BUY':'SELL')});
-  }
+ // FVG: Pine's three-candle imbalance, bounded forward extension; remove mitigated gaps.
+ for(let i=Math.max(2,n-500);i<n;i++){
+  const b=c[i],q=c[i-2],p=c[i-1],move=p.open?Math.abs((p.close-p.open)/p.open*100):0;
+  if(b.low>q.high&&p.close>q.high&&move>0)out.push({kind:'fvg',time:p.time,end:b.time+300,high:b.low,low:q.high,label:'FVG ALCISTA',side:'BUY'});
+  if(b.high<q.low&&p.close<q.low&&move>0)out.push({kind:'fvg',time:p.time,end:b.time+300,high:q.low,low:b.high,label:'FVG BAJISTA',side:'SELL'});
  }
- let lastHigh=highs.at(-1),lastLow=lows.at(-1),lastBreak='';
- for(let i=Math.max(10,c.length-180);i<c.length;i++){
-  const b=c[i];let side='';
-  if(lastHigh&&b.close>lastHigh.price&&c[i-1].close<=lastHigh.price)side='BUY';
-  if(lastLow&&b.close<lastLow.price&&c[i-1].close>=lastLow.price)side='SELL';
-  if(side&&side!==lastBreak){out.push({kind:'break',time:b.time,price:side==='BUY'?b.low:b.high,label:side==='BUY'?'BUY':'SHORT',side});lastBreak=side}
+ // Swing BOS creates the last opposing candle as an Order Block (Pine ob_coord logic).
+ const seen=new Set();
+ for(const br of out.filter(x=>x.kind==='break')){
+  const idx=c.findIndex(x=>x.time===br.time);if(idx<2)continue;
+  const from=Math.max(0,idx-50);let chosen=-1,best=br.side==='BUY'?-Infinity:Infinity;
+  for(let i=from;i<idx;i++){const x=c[i],bodyOk=(x.high-x.low)<(atr200[i]||avgRange(c.slice(Math.max(0,i-30),i+1)))*2;if(!bodyOk)continue;if(br.side==='BUY'&&x.close<x.open&&x.high>best){best=x.high;chosen=i}if(br.side==='SELL'&&x.close>x.open&&x.low<best){best=x.low;chosen=i}}
+  if(chosen>=0){const x=c[chosen],key=br.side+':'+x.time;if(!seen.has(key)){seen.add(key);out.push({kind:'ob',time:x.time,end:tail,high:x.high,low:x.low,label:br.side==='BUY'?'DEMANDA / COMPRA':'OFERTA / VENTA',side:br.side})}}
  }
- // Fair Value Gaps y velas envolventes.
- for(let i=Math.max(2,c.length-160);i<c.length;i++){
-  const b=c[i],p=c[i-1],q=c[i-2];
-  if(b.low>q.high&&b.low-q.high>getPoint()*2)out.push({kind:'fvg',time:p.time,end:tail,high:b.low,low:q.high,label:'FVG ALCISTA',side:'BUY'});
-  if(b.high<q.low&&q.low-b.high>getPoint()*2)out.push({kind:'fvg',time:p.time,end:tail,high:q.low,low:b.high,label:'FVG BAJISTA',side:'SELL'});
-  if(p.close>p.open&&b.close<b.open&&b.open>=p.close&&b.close<=p.open)
-  if(p.close<p.open&&b.close>b.open&&b.open<=p.close&&b.close>=p.open)
- }
- // Order blocks recientes: última vela contraria antes del desplazamiento que rompe estructura.
- for(let i=Math.max(5,c.length-120);i<c.length-1;i++){
-  const b=c[i],prevHigh=Math.max(...c.slice(Math.max(0,i-12),i).map(x=>x.high)),prevLow=Math.min(...c.slice(Math.max(0,i-12),i).map(x=>x.low)),next=c[i+1];
-  if(b.close<b.open&&next.close>b.high&&next.close>prevHigh)out.push({kind:'ob',time:b.time,end:tail,high:b.high,low:b.low,label:'OB ALCISTA',side:'BUY'});
-  if(b.close>b.open&&next.close<b.low&&next.close<prevLow)out.push({kind:'ob',time:b.time,end:tail,high:b.high,low:b.low,label:'OB BAJISTA',side:'SELL'});
- }
- // Máximo y mínimo del día anterior.
- const day=Math.floor(c.at(-1).time/DAY)*DAY,prev=c.filter(x=>x.time>=day-DAY&&x.time<day);
- if(prev.length){const hi=Math.max(...prev.map(x=>x.high)),lo=Math.min(...prev.map(x=>x.low));out.push({kind:'day',time:c[0].time,end:tail,high:hi,low:hi,label:'MÁXIMO DÍA ANTERIOR'});out.push({kind:'day',time:c[0].time,end:tail,high:lo,low:lo,label:'MÍNIMO DÍA ANTERIOR'})}
- // Premium / discount del rango visible reciente.
- const hi=Math.max(...range.map(x=>x.high)),lo=Math.min(...range.map(x=>x.low)),mid=(hi+lo)/2;
- out.push({kind:'mid',time:c[Math.max(0,c.length-120)].time,end:tail,high:mid,low:mid,label:'EQUILIBRIO 50%'});
- return out;
+ // Previous day high/low (daily boundary).
+ const day=Math.floor(last.time/DAY)*DAY,prevDay=c.filter(x=>x.time>=day-DAY&&x.time<day);
+ if(prevDay.length){const hi=Math.max(...prevDay.map(x=>x.high)),lo=Math.min(...prevDay.map(x=>x.low));out.push({kind:'day',time:prevDay[0].time,end:tail,price:hi,high:hi,low:hi,label:'MÁXIMO DÍA ANTERIOR'});out.push({kind:'day',time:prevDay[0].time,end:tail,price:lo,high:lo,low:lo,label:'MÍNIMO DÍA ANTERIOR'})}
+ // Engulfing markers as tiny unobtrusive line markers, matching Pine conditions.
+ for(let i=Math.max(1,n-250);i<n;i++){const p=c[i-1],b=c[i];if(b.open<=p.close&&b.open<p.open&&b.close>p.open)out.push({kind:'engulf',time:b.time,price:b.low,label:'▲',side:'BUY'});if(b.open>=p.close&&b.open>p.open&&b.close<p.open)out.push({kind:'engulf',time:b.time,price:b.high,label:'▼',side:'SELL'})}
+ return out.slice(-180);
 }
+
 function drawOverlay(zones){
  const host=$('chart');
  host.querySelectorAll('.v1-overlay,.trade-overlay').forEach(x=>x.remove());
@@ -208,10 +200,10 @@ function drawOverlay(zones){
   layer.appendChild(el);z._el=el;z._end=z.time+900;
  }
  const visualEls=[];
- const visualItems=strongVisuals(S.raw).filter(v=>['liquidity','fvg','ob','day','break'].includes(v.kind));
+ const visualItems=strongVisuals(S.raw).filter(v=>['liquidity','fvg','ob','day','break','engulf'].includes(v.kind));
  for(const v of visualItems){
   const el=document.createElement('div');
-  el.className=v.kind==='liquidity'?'si-liquidity '+(v.side==='BUY'?'buy':'sell'):v.kind==='fvg'?'si-fvg '+v.side.toLowerCase():v.kind==='ob'?'si-ob '+v.side.toLowerCase():v.kind==='day'?'si-day':'si-signal '+v.side.toLowerCase();
+  el.className=v.kind==='liquidity'?'si-liquidity '+(v.side==='BUY'?'buy':'sell'):v.kind==='fvg'?'si-fvg '+v.side.toLowerCase():v.kind==='ob'?'si-ob '+v.side.toLowerCase():v.kind==='day'?'si-day':v.kind==='engulf'?'si-engulf '+v.side.toLowerCase():'si-signal '+v.side.toLowerCase();
   if(v.label){const label=document.createElement('span');label.textContent=v.label;el.appendChild(label)}
   layer.appendChild(el);visualEls.push({el,...v});
  }
@@ -248,9 +240,9 @@ function drawOverlay(zones){
    const right=x2==null?width:x2;
    if(right<0||x1>width){v.el.style.display='none';continue}
    const left=Math.max(0,x1),r=Math.min(width,right),top=Math.max(0,Math.min(p1,p2)),bottom=Math.min(height,Math.max(p1,p2));
-   v.el.style.display='block';v.el.style.left=left+'px';v.el.style.top=(v.kind==='liquidity'||v.kind==='day'||v.kind==='break'?Math.max(0,Math.min(height-1,p1)):top)+'px';
+   v.el.style.display='block';v.el.style.left=left+'px';v.el.style.top=(['liquidity','day','break','engulf'].includes(v.kind)?Math.max(0,Math.min(height-1,p1)):top)+'px';
    v.el.style.width=Math.max(1,r-left)+'px';
-   v.el.style.height=(v.kind==='liquidity'||v.kind==='day'||v.kind==='break'?'1px':Math.max(2,bottom-top)+'px');
+   v.el.style.height=(['liquidity','day','break','engulf'].includes(v.kind)?'1px':Math.max(2,bottom-top)+'px');
   }
   for(const z of allZones){
    const rawX1=ts.timeToCoordinate(z.time),rawX2=ts.timeToCoordinate(z._end);
