@@ -207,8 +207,9 @@ function drawOverlay(zones){
    const decimals=Number.isInteger(a.t.decimals)?a.t.decimals:symbolMeta(S.symbol,S.raw).decimals;
    a.label.textContent=(a.kind==='entry'?'ENTRADA ':a.kind==='tp'?'TP ':'SL ')+level.toFixed(decimals);
    a.label.style.left=Math.max(0,Math.min(width-82,left))+'px';
-   a.label.style.top=Math.max(0,Math.min(height-13,a.kind==='entry'?y1-14:a.kind==='tp'?top-15:bottom+2))+'px';
+   a.label.style.top=Math.max(0,Math.min(height-13,a.kind==='entry'?y1-14:a.kind==='tp'?top+1:bottom-13))+'px';
   }
+  renderSignalMarkers();
  };
  host._updateTradeOverlay=update;
  // Recalcular al cambiar el rango horizontal del gráfico.
@@ -253,15 +254,26 @@ function selectedChartTrades(){
  return [...merged.values()].filter(x=>validPrice(x.price)&&validPrice(x.tp)&&validPrice(x.sl)).sort((a,b)=>a.time-b.time);
 }
 function renderSignalMarkers(){
- const markers=[],seen=new Set();
- // Estrellas pequeñas: verde para compra y roja para venta.
- for(const s of selectedChartTrades()){
-  const markerKey=s.symbol+'|'+s.side+'|'+s.time;
-  if(seen.has(markerKey))continue;
-  seen.add(markerKey);
-  markers.push({time:s.time-60,position:s.side==='BUY'?'belowBar':'aboveBar',color:s.side==='BUY'?'#35ffad':'#ff5268',shape:'text',text:'★',size:1});
+ const host=$('chart');
+ if(!host||!S.chart||!S.price)return;
+ // Los marcadores nativos se anclan al máximo/mínimo móvil de la vela.
+ // Estas estrellas DOM se colocan en el precio REAL y fijo de entrada.
+ try{if(S.markerApi)S.markerApi.setMarkers([]);else if(S.price.setMarkers)S.price.setMarkers([])}catch{}
+ let layer=host.querySelector('.entry-star-layer');
+ if(!layer){layer=document.createElement('div');layer.className='entry-star-layer';host.appendChild(layer)}
+ const trades=selectedChartTrades(),wanted=new Set(),existing=new Map([...layer.children].map(el=>[el.dataset.key,el]));
+ for(const s of trades){
+  const key=s.symbol+'|'+s.side+'|'+s.time;
+  wanted.add(key);
+  let el=existing.get(key);
+  if(!el){el=document.createElement('span');el.className='entry-star';el.textContent='★';el.dataset.key=key;layer.appendChild(el)}
+  el.className='entry-star '+(s.side==='BUY'?'buy':'sell');
+  const x=S.chart.timeScale().timeToCoordinate(+s.time-60);
+  const y=S.price.priceToCoordinate(+s.price);
+  if(!Number.isFinite(x)||!Number.isFinite(y)||x<0||x>host.clientWidth||y<0||y>host.clientHeight){el.style.display='none';continue}
+  el.style.display='block';el.style.left=x+'px';el.style.top=y+'px';
  }
- try{if(S.markerApi)S.markerApi.setMarkers(markers);else if(S.price.setMarkers)S.price.setMarkers(markers)}catch(e){console.error('No se pudieron actualizar las estrellas de entrada',e)}
+ for(const [key,el] of existing)if(!wanted.has(key))el.remove();
 }
 function restoreOpenSignals(symbol,candles){
  if(!Array.isArray(candles)||candles.length<30)return 0;
