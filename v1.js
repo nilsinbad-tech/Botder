@@ -199,11 +199,11 @@ function drawOverlay(zones){
    if(right<=left||(a.kind!=='entry'&&bottom<=top)){a.el.style.display='none';a.label.style.display='none';continue}
    a.el.style.display='block';a.el.style.left=left+'px';a.el.style.width=(right-left)+'px';
    a.el.style.top=(a.kind==='entry'?Math.max(0,Math.min(height-1,y1)):top)+'px';a.el.style.height=(a.kind==='entry'?'1px':Math.max(1,bottom-top)+'px');
-   a.label.style.display=a.kind==='entry'?'none':'block';
+   a.label.style.display='block';
    const decimals=Number.isInteger(a.t.decimals)?a.t.decimals:symbolMeta(S.symbol,S.raw).decimals;
-   a.label.textContent=(a.kind==='tp'?'TP ':'SL ')+level.toFixed(decimals);
+   a.label.textContent=(a.kind==='entry'?'ENTRADA ':a.kind==='tp'?'TP ':'SL ')+level.toFixed(decimals);
    a.label.style.left=Math.max(0,Math.min(width-82,left))+'px';
-   a.label.style.top=Math.max(0,Math.min(height-13,a.kind==='tp'?top-15:bottom+2))+'px';
+   a.label.style.top=Math.max(0,Math.min(height-13,a.kind==='entry'?y1-14:a.kind==='tp'?top-15:bottom+2))+'px';
   }
  };
  host._updateTradeOverlay=update;
@@ -398,7 +398,7 @@ function notifyNewSignal(signal){
 function updatePriceLine(price){
  if(!S.price||!Number.isFinite(price))return;
  try{if(S.currentPriceLine)S.price.removePriceLine(S.currentPriceLine)}catch{}
- S.currentPriceLine=S.price.createPriceLine({price,color:'#f5c451',lineWidth:1,lineStyle:2,axisLabelVisible:true,title:'PRECIO'});
+ S.currentPriceLine=S.price.createPriceLine({price,color:'#91a4bb',lineWidth:1,lineStyle:2,axisLabelVisible:true,title:'PRECIO'});
 }
 function updateLiveTick(tick){
  if(!tick||!Number.isFinite(+tick.epoch)||!Number.isFinite(+tick.quote))return;
