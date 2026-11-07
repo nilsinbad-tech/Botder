@@ -14,9 +14,12 @@ async function loadSymbols(){
  const allowed=(r.active_symbols||[]).filter(x=>!Number(x.is_trading_suspended)).map(x=>{
   const name=String(x.display_name||x.underlying_symbol_name||x.symbol||'').trim();
   const code=x.underlying_symbol||x.symbol;
-  return{code,name,pip:Number(x.pip)||0};
+  const normalizedCode=String(code||'');
+  const displayName=normalizedCode==='frxXAUUSD'?'XAUUSD · Oro':name;
+  return{code:normalizedCode,name:displayName,pip:Number(x.pip)||0};
  }).filter(x=>{
   if(!x.code||!x.name)return false;
+  if(x.code==='frxXAUUSD')return true;
   const n=x.name.replace(/\s+/g,' ').trim();
   if(/^(?:Crash|Boom)\s+(?:50|500)\s+Index$/i.test(n))return true;
   const v=n.match(/^Volatility\s+(\d+)(?:\s*\(1s\))?\s+Index$/i);
@@ -31,7 +34,7 @@ async function loadSymbols(){
   return a.name.localeCompare(b.name);
  });
  $('symbol').innerHTML=S.symbols.map(x=>'<option value="'+x.code+'">'+x.name+'</option>').join('');
- if(!S.symbols.length)throw Error('Deriv no devolvió instrumentos permitidos (Volatility 10–75, Crash/Boom 50/500)');
+ if(!S.symbols.length)throw Error('Deriv no devolvió instrumentos permitidos (Volatility 10–75, Crash/Boom 50/500 y XAUUSD)');
 }
 async function history(symbol,target=COUNT){
  const chunk=4000,all=[];let receivedRaw=0,invalid=0;
