@@ -193,7 +193,7 @@ function strongVisuals(c){
  if(prevDay.length){const hi=Math.max(...prevDay.map(x=>x.high)),lo=Math.min(...prevDay.map(x=>x.low));out.push({kind:'day',time:prevDay[0].time,end:tail,price:hi,high:hi,low:hi,label:'MÁXIMO DÍA ANTERIOR'});out.push({kind:'day',time:prevDay[0].time,end:tail,price:lo,high:lo,low:lo,label:'MÍNIMO DÍA ANTERIOR'})}
  // Engulfing markers as tiny unobtrusive line markers, matching Pine conditions.
  for(let i=Math.max(1,n-250);i<n;i++){const p=c[i-1],b=c[i];if(b.open<=p.close&&b.open<p.open&&b.close>p.open)out.push({kind:'engulf',time:b.time,price:b.low,label:'▲',side:'BUY'});if(b.open>=p.close&&b.open>p.open&&b.close<p.open)out.push({kind:'engulf',time:b.time,price:b.high,label:'▼',side:'SELL'})}
- return out.slice(-180);
+ return out;
 }
 
 function drawOverlay(zones){
@@ -209,10 +209,13 @@ function drawOverlay(zones){
   layer.appendChild(el);z._el=el;z._end=z.time+900;
  }
  const visualEls=[];
- const visualItems=strongVisuals(S.raw).filter(v=>['liquidity','fvg','ob','day','break','engulf'].includes(v.kind));
+ const rawVisuals=strongVisuals(S.raw);
+ const takeLast=(kind,count)=>rawVisuals.filter(v=>v.kind===kind).slice(-count);
+ // Control de densidad: conserva los niveles más recientes/importantes sin llenar el gráfico.
+ const visualItems=[...takeLast('liquidity',6),...takeLast('fvg',3),...takeLast('ob',4),...takeLast('day',2),...takeLast('break',8),...takeLast('engulf',8),...takeLast('structure',8)].sort((a,b)=>a.time-b.time);
  for(const v of visualItems){
   const el=document.createElement('div');
-  el.className=v.kind==='liquidity'?'si-liquidity '+(v.side==='BUY'?'buy':'sell'):v.kind==='fvg'?'si-fvg '+v.side.toLowerCase():v.kind==='ob'?'si-ob '+v.side.toLowerCase():v.kind==='day'?'si-day':v.kind==='engulf'?'si-engulf '+v.side.toLowerCase():'si-signal '+v.side.toLowerCase();
+  el.className=v.kind==='liquidity'?'si-liquidity '+(v.side==='BUY'?'buy':'sell'):v.kind==='fvg'?'si-fvg '+v.side.toLowerCase():v.kind==='ob'?'si-ob '+v.side.toLowerCase():v.kind==='day'?'si-day':v.kind==='engulf'?'si-engulf '+v.side.toLowerCase():v.kind==='structure'?'si-structure '+(v.side==='BUY'?'buy':'sell'):'si-signal '+v.side.toLowerCase();
   if(v.label){const label=document.createElement('span');label.textContent=v.label;el.appendChild(label)}
   layer.appendChild(el);visualEls.push({el,...v});
  }
@@ -249,7 +252,7 @@ function drawOverlay(zones){
    const right=x2==null?width:x2;
    if(right<0||x1>width){v.el.style.display='none';continue}
    const left=Math.max(0,x1),r=Math.min(width,right),top=Math.max(0,Math.min(p1,p2)),bottom=Math.min(height,Math.max(p1,p2));
-   v.el.style.display='block';v.el.style.left=left+'px';v.el.style.top=(['liquidity','day','break','engulf'].includes(v.kind)?Math.max(0,Math.min(height-1,p1)):top)+'px';
+   v.el.style.display='block';v.el.style.left=left+'px';v.el.style.top=(['liquidity','day','break','engulf','structure'].includes(v.kind)?Math.max(0,Math.min(height-1,p1)):top)+'px';
    v.el.style.width=Math.max(1,r-left)+'px';
    v.el.style.height=(['liquidity','day','break','engulf'].includes(v.kind)?'1px':Math.max(2,bottom-top)+'px');
   }
