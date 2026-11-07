@@ -133,8 +133,8 @@ function signalsFor(c,asOfEnd=true,symbol=S.symbol){
  }
  return out;
 }
-function resolveTrades(signals,c){const out=[];for(let n=0;n<signals.length;n++){const s=signals[n],next=signals[n+1],bars=c.filter(x=>x.time>=s.time);let result='OPEN',exitTime=null;for(const b of bars){const hitSL=s.side==='BUY'?b.low<=s.sl:b.high>=s.sl,hitTP=s.side==='BUY'?b.high>=s.tp:b.low<=s.tp;if(hitSL&&hitTP){result='LOSS';exitTime=b.time+60;break}if(hitSL){result='LOSS';exitTime=b.time+60;break}if(hitTP){result='WIN';exitTime=b.time+60;break}if(next&&b.time>=next.time){result='CLOSED';exitTime=b.time+60;break}}out.push({...s,result,exitTime})}return out}
-function backtest48h(c){const now=Math.floor(Date.now()/1000),cutoff=now-48*3600;return resolveTrades(signalsFor(c),c).filter(x=>x.time>=cutoff&&x.time<=now)}
+function resolveTrades(signals,c){const out=[];let cursor=0;for(let n=0;n<signals.length;n++){const s=signals[n],next=signals[n+1];while(cursor<c.length&&c[cursor].time<s.time)cursor++;let result='OPEN',exitTime=null;for(let j=cursor;j<c.length;j++){const b=c[j],hitSL=s.side==='BUY'?b.low<=s.sl:b.high>=s.sl,hitTP=s.side==='BUY'?b.high>=s.tp:b.low<=s.tp;if(hitSL&&hitTP){result='LOSS';exitTime=b.time+60;break}if(hitSL){result='LOSS';exitTime=b.time+60;break}if(hitTP){result='WIN';exitTime=b.time+60;break}if(next&&b.time>=next.time){result='CLOSED';exitTime=b.time+60;break}}out.push({...s,result,exitTime})}return out}
+function backtestHistory(c){const now=Math.floor(Date.now()/1000);return resolveTrades(signalsFor(c),c).filter(x=>x.time<=now)}
 function initCharts(){if(!window.LightweightCharts)throw Error('No cargó el gráfico');const L=LightweightCharts;$('chart').innerHTML='';$('rsiChart').innerHTML='';S.chart=L.createChart($('chart'),{autoSize:true,layout:{background:{type:'solid',color:'#0a1320'},textColor:'#aab9ca'},grid:{vertLines:{color:'#1b2a3d'},horzLines:{color:'#1b2a3d'}},timeScale:{timeVisible:true,borderColor:'#34445a'},rightPriceScale:{borderColor:'#34445a'},handleScroll:{mouseWheel:true,pressedMouseMove:true,horzTouchDrag:true},handleScale:{mouseWheel:true,pinch:true}});S.chart.timeScale().subscribeVisibleLogicalRangeChange(range=>{renderSignalMarkers();if(range&&range.from<80)loadOlderHistory().catch(e=>console.warn('Carga histórica anterior',e))});S.price=S.chart.addSeries(L.CandlestickSeries,{upColor:'#20d18b',downColor:'#ff5968',wickUpColor:'#20d18b',wickDownColor:'#ff5968',borderVisible:false,lastValueVisible:true,priceLineVisible:false});S.markerApi=L.createSeriesMarkers?L.createSeriesMarkers(S.price,[]):null;S.ema9=S.chart.addSeries(L.LineSeries,{color:'#318bff',lineWidth:2,priceLineVisible:false,title:'EMA 9'});S.ema20=S.chart.addSeries(L.LineSeries,{color:'#ff9d28',lineWidth:2,priceLineVisible:false,title:'EMA 20'});S.rsiChart=L.createChart($('rsiChart'),{autoSize:true,layout:{background:{type:'solid',color:'#0a1320'},textColor:'#aab9ca'},grid:{vertLines:{color:'#1b2a3d'},horzLines:{color:'#1b2a3d'}},timeScale:{visible:false},rightPriceScale:{borderColor:'#34445a'}});S.rsiLine=S.rsiChart.addSeries(L.LineSeries,{color:'#b36bff',lineWidth:2,priceLineVisible:false});[25,50,75].forEach((level,i)=>S.rsiLine.createPriceLine({price:level,color:i===1?'#8796aa':i===0?'#ff5968':'#20d18b',lineWidth:1,lineStyle:2,axisLabelVisible:true,title:String(level)}));}
 function drawChart(){const c=S.raw,m9=ema(c,9),m45=ema(c,20),rv=rsi(c),signals=S.trades;S.price.setData(c);updatePriceLine(c.at(-1)?.close);S.ema9.setData(c.map((x,i)=>({time:x.time,value:m9[i]})));S.ema20.setData(c.map((x,i)=>({time:x.time,value:m45[i]})));S.rsiLine.setData(c.map((x,i)=>rv[i]==null?null:{time:x.time,value:rv[i]}).filter(Boolean));renderSignalMarkers();const to=Math.floor(Date.now()/1000),from=to-48*3600;try{S.chart.timeScale().setVisibleRange({from,to});S.rsiChart.timeScale().setVisibleRange({from,to})}catch{}drawOverlay(obZones(aggregate(S.raw,15)));const last=rv.at(-1),tc=trendSettings(),d15=trend(aggregate(S.raw,15),tc.fast,tc.slow),d5=trend(aggregate(S.raw,5),9,20);$('trend15').textContent=d15==='BUY'?'ALCISTA':d15==='SELL'?'BAJISTA':'LATERAL';$('trend5').textContent=d5==='BUY'?'ALCISTA':d5==='SELL'?'BAJISTA':'LATERAL';$('trend15').style.color=d15==='BUY'?'var(--green)':d15==='SELL'?'var(--red)':'#ffc45d';$('trend5').style.color=d5==='BUY'?'var(--green)':d5==='SELL'?'var(--red)':'#ffc45d';$('rsiValue').textContent=last==null?'—':last.toFixed(1);const rs=last>=50&&last<=75?'RSI COMPRA':last>=25&&last<50?'RSI VENTA':'RSI NEUTRAL';$('rsiState').textContent=rs;$('rsiState').style.color=rs.includes('COMPRA')?'var(--green)':rs.includes('VENTA')?'var(--red)':'#ffc45d';const latest=selectedChartTrades().at(-1);$('signalState').textContent=latest?(latest.side==='BUY'?'COMPRA':'VENTA')+' · '+(latest.result==='WIN'?'GANADA':latest.result==='LOSS'?'PERDIDA':latest.result==='OPEN'?'ABIERTA':'CERRADA'):'SIN OPERACIÓN';$('chartName').textContent=S.symbol+' · M1';const m15=aggregate(S.raw,15),zones=obZones(m15).slice(-4);$('rsiCaption').textContent='RSI '+(last==null?'—':last.toFixed(1))+' · '+rs+' · M15 '+$('trend15').textContent+' / M5 '+$('trend5').textContent;return zones}
 
@@ -338,7 +338,7 @@ function selectedChartTrades(){
  for(const x of S.trades)add(x);
  for(const x of S.liveHistory)add(x);
  for(const x of S.activeSignals.values())add(x);
- const cutoff=Math.floor(Date.now()/1000)-48*3600,now=Math.floor(Date.now()/1000);return [...merged.values()].filter(x=>x.time>=cutoff&&x.time<=now&&validPrice(x.price)&&validPrice(x.tp)&&validPrice(x.sl)).sort((a,b)=>a.time-b.time);
+ const now=Math.floor(Date.now()/1000),cutoff=S.raw[0]?.time??(now-48*3600);return [...merged.values()].filter(x=>x.time>=cutoff&&x.time<=now&&validPrice(x.price)&&validPrice(x.tp)&&validPrice(x.sl)).sort((a,b)=>a.time-b.time);
 }
 function renderSignalMarkers(){
  const host=$('chart');
@@ -576,10 +576,10 @@ function renderHistory(){
  $('wins').textContent=w;$('losses').textContent=l;$('open').textContent=o;
  $('rate').textContent=(closed?100*w/closed:0).toFixed(1)+'%';
  $('history').innerHTML=rows.slice().reverse().map(x=>'<div class="history-row"><span>'+new Date(x.time*1000).toLocaleString('es-PA',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'})+'</span><b class="'+(x.side==='BUY'?'win':'loss')+'">'+(x.side==='BUY'?'COMPRA':'VENTA')+'</b><span>TP '+formatPrice(x.symbol||S.symbol,x.tp,x.candles||S.raw)+' · SL '+formatPrice(x.symbol||S.symbol,x.sl,x.candles||S.raw)+'</span><span class="'+(x.result==='WIN'?'win':x.result==='LOSS'?'loss':'')+'">'+x.result+'</span></div>').join('')||'No se encontraron operaciones con todos los filtros';
- const to=Math.floor(Date.now()/1000),from=to-48*3600,
+ const to=Math.floor(Date.now()/1000),from=S.raw[0]?.time??(to-48*3600),
        windowBars=S.raw.filter(x=>x.time>=from&&x.time<=to).length;
- $('coverage').textContent='VENTANA 48H · '+windowBars.toLocaleString('es-PA')+' velas M1';
- $('backtestStatus').textContent='PRUEBA HISTÓRICA: '+new Date(from*1000).toLocaleString('es-PA')+' — '+new Date(to*1000).toLocaleString('es-PA')+' · '+rows.length+' operaciones marcadas ('+w+' ganadas, '+l+' perdidas, '+neutral+' cerradas, '+o+' abiertas) · '+windowBars+' velas M1 en ventana; '+S.raw.length+' velas recibidas para cálculos. Huecos M1 detectados: '+(S.dataQuality?.gaps??'—')+'.';
+ $('coverage').textContent='HISTORIAL COMPLETO · '+windowBars.toLocaleString('es-PA')+' velas M1';
+ $('backtestStatus').textContent='PRUEBA HISTÓRICA: '+new Date(from*1000).toLocaleString('es-PA')+' — '+new Date(to*1000).toLocaleString('es-PA')+' · '+rows.length+' operaciones marcadas ('+w+' ganadas, '+l+' perdidas, '+neutral+' cerradas, '+o+' abiertas) · '+windowBars+' velas M1 evaluadas. Huecos M1 detectados: '+(S.dataQuality?.gaps??'—')+'.' ;
 }
 
 // Carga más velas M1 cuando el usuario llega al extremo izquierdo del gráfico.
@@ -609,8 +609,8 @@ async function loadOlderHistory(){
   S.ema20.setData(S.raw.map((x,i)=>({time:x.time,value:m20[i]})));
   S.rsiLine.setData(S.raw.map((x,i)=>rv[i]==null?null:{time:x.time,value:rv[i]}).filter(Boolean));
   S.markets.set(S.symbol,{name:S.symbols.find(x=>x.code===S.symbol)?.name||S.symbol,candles:S.raw});
-  // El backtest de 48 h ya está calculado al abrir el instrumento.
-  // Cargar velas antiguas solo amplía el gráfico: no recalcula señales.
+  // Al ampliar el historial, recalcular el backtest con todas las velas ya descargadas.
+  S.trades=backtestHistory(S.raw);S.backtestCache.set(S.symbol,S.trades);
   if(previousRange){try{S.chart.timeScale().setVisibleLogicalRange({from:previousRange.from+added,to:previousRange.to+added})}catch{}}
   renderSignalMarkers();
   drawOverlay(obZones(aggregate(S.raw,15)));
@@ -624,17 +624,17 @@ async function loadOlderHistory(){
 
 async function loadCurrent(){
  S.symbol=$('symbol').value;S.historyExhausted=false;S.globalMarketsRestored.delete(S.symbol);S.marketSignalBar.delete(S.symbol);S.backtestCache.delete(S.symbol);
- localStorage.setItem('botder-current-symbol',S.symbol);status('Cargando histórico M1 y backtest de 48 horas…');$('chartName').textContent=S.symbol+' · M1';
+ localStorage.setItem('botder-current-symbol',S.symbol);status('Cargando 7.000 velas M1 y backtest completo…');$('chartName').textContent=S.symbol+' · M1';
  // Cargar primero el instrumento visible para reutilizarlo en el escáner global.
  S.raw=await history(S.symbol);if(!S.raw.length)throw Error('No hay velas M1 disponibles');
  const meta=S.symbols.find(x=>x.code===S.symbol);S.markets.set(S.symbol,{name:meta?.name||S.symbol,candles:S.raw});
  const cfg=config(S.symbol);$('tpPoints').value=cfg.tp;$('slPoints').value=cfg.sl;$('settingsStatus').textContent='Configuración de '+S.symbol;const tc=trendSettings();$('trendPair').value=tc.fast+','+tc.slow;$('trendFilter').checked=tc.filter;$('trendSettingsStatus').textContent='M15: EMA '+tc.fast+' / EMA '+tc.slow+' · filtro '+(tc.filter?'ACTIVADO':'DESACTIVADO')+'.';
  if(S.raw.length<COUNT)console.warn('Deriv devolvió '+S.raw.length+' de '+COUNT+' velas solicitadas');
- S.trades=backtest48h(S.raw);S.backtestCache.set(S.symbol,S.trades);
+ S.trades=backtestHistory(S.raw);S.backtestCache.set(S.symbol,S.trades);
  restoreOpenSignals(S.symbol,S.raw);initCharts();drawChart();renderHistory();await subscribeLive();
  status('Preparando señales de todos los instrumentos…');await startGlobalScanner();status('Deriv conectada · escáner global activo · '+S.symbol,true)
 }
-async function recalc(){saveConfig();S.trades=backtest48h(S.raw);S.backtestCache.set(S.symbol,S.trades);drawChart();renderHistory();$('trendSettingsStatus').textContent='Tendencia M15: EMA '+trendSettings().fast+' / EMA '+trendSettings().slow+' · filtro '+(trendSettings().filter?'ACTIVADO':'DESACTIVADO')+'. Las señales nuevas usarán esta configuración.'}
+async function recalc(){saveConfig();S.trades=backtestHistory(S.raw);S.backtestCache.set(S.symbol,S.trades);drawChart();renderHistory();$('trendSettingsStatus').textContent='Tendencia M15: EMA '+trendSettings().fast+' / EMA '+trendSettings().slow+' · filtro '+(trendSettings().filter?'ACTIVADO':'DESACTIVADO')+'. Las señales nuevas usarán esta configuración.'}
 $('symbol').addEventListener('change',()=>loadCurrent().catch(e=>status(e.message)));$('reload').addEventListener('click',()=>loadCurrent().catch(e=>status(e.message)));$('applyRisk').addEventListener('click',recalc);
 async function start(){restoreLiveHistory();try{await connect();await loadSymbols();const saved=localStorage.getItem('botder-current-symbol');if(saved&&S.symbols.some(x=>x.code===saved))$('symbol').value=saved;await loadCurrent()}catch(e){status(e.message);scheduleReconnect()}}
 start();
