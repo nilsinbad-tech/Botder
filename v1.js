@@ -66,7 +66,7 @@ function aggregate1m(c){const map=new Map();for(const b of c){const t=Math.floor
 function updateVisuals(){
  if(!S.candleSeries||!S.chartBars.length)return;
  const bars=S.chartBars,markers=[],now=Date.now()/1000,cutoff=now-86400;
- const m10=aggregateMinutes(bars,10),pts=zigzag(m10);
+ const m10=bars,pts=zigzag(m10);
  // Solo pivotes recientes y confirmados: evita llenar el gráfico de flechas.
  const pivots=pts.filter(p=>p.confirmed<m10.length&&p.time>=cutoff).slice(-6);
  for(const p of pivots)markers.push({time:p.time,position:p.type==='LOW'?'belowBar':'aboveBar',color:p.type==='LOW'?'#20d18b':'#ff5968',shape:p.type==='LOW'?'arrowUp':'arrowDown',text:''});
@@ -78,8 +78,8 @@ function updateVisuals(){
  // No mostrar etiquetas en la escala de precios: se superponían unas con otras.
  const add=(price,title,color,style=2)=>{if(Number.isFinite(price))S.visualLines.push(S.candleSeries.createPriceLine({price,title,color,lineWidth:1,lineStyle:style,axisLabelVisible:false,title: title}))};
  const lows=pivots.filter(p=>p.type==='LOW'),highs=pivots.filter(p=>p.type==='HIGH');
- if(lows.length)add(lows.at(-1).price,'Soporte M10', '#20d18b',2);
- if(highs.length)add(highs.at(-1).price,'Resistencia M10','#ff5968',2);
+ if(lows.length)add(lows.at(-1).price,'Soporte M1', '#20d18b',2);
+ if(highs.length)add(highs.at(-1).price,'Resistencia M1','#ff5968',2);
  // Detectar únicamente el OB más reciente de las últimas tres velas M5.
  const m5=aggregateMinutes(bars,5),recent=m5.slice(-3);let ob=null;
  for(let i=recent.length-2;i>=0;i--){const a=recent[i],b=recent[i+1];if(a.close<a.open&&b.close>b.open&&b.close>a.high){ob={price:(a.high+a.low)/2,title:'OB alcista M5',color:'#20d18b'};break}if(a.close>a.open&&b.close<b.open&&b.close<a.low){ob={price:(a.high+a.low)/2,title:'OB bajista M5',color:'#ff5968'};break}}
