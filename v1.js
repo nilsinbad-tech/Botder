@@ -87,9 +87,9 @@ function updateVisuals(){
 function ema(c,p){const out=Array(c.length).fill(null),k=2/(p+1);let v=null;c.forEach((x,i)=>{v=v===null?x.close:x.close*k+v*(1-k);out[i]=v});return out}
 function aggregate15(c){const map=new Map();for(const b of c){const t=Math.floor(b.time/15)*15;let x=map.get(t);if(!x){x={time:t,open:b.open,high:b.high,low:b.low,close:b.close,count:0};map.set(t,x)}x.high=Math.max(x.high,b.high);x.low=Math.min(x.low,b.low);x.close=b.close;x.count++}return [...map.values()].filter(x=>x.count===3)}
 function zigzag(c,depth=DEPTH,sep=SEPARATION){const pts=[];for(let i=depth;i<c.length-depth;i++){let hi=true,lo=true;for(let j=1;j<=depth;j++){if(c[i].high<c[i-j].high||c[i].high<c[i+j].high)hi=false;if(c[i].low>c[i-j].low||c[i].low>c[i+j].low)lo=false}if(!hi&&!lo)continue;const p={index:i,time:c[i].time,price:hi?c[i].high:c[i].low,type:hi?'HIGH':'LOW',confirmed:i+depth};const last=pts.at(-1);if(!last||last.type!==p.type){if(!last||i-last.index>=sep)pts.push(p)}else if((p.type==='HIGH'&&p.price>last.price)||(p.type==='LOW'&&p.price<last.price))pts[pts.length-1]=p}return pts}
-function stackDirection(c){if(c.length<55)return'NEUTRAL';const a=ema(c,9),b=ema(c,20),d=ema(c,50),i=c.length-1;if(a[i]>b[i]&&b[i]>d[i]&&a[i]>a[i-2]&&b[i]>b[i-2])return'BUY';if(a[i]<b[i]&&b[i]<d[i]&&a[i]<a[i-2]&&b[i]<b[i-2])return'SELL';return'NEUTRAL'}
-function trend30Direction(){
- const m30=aggregateMinutes(S.raw,30);
+function stackDirection(c){if(c.length<20)return'NEUTRAL';const a=ema(c,9),b=ema(c,20),i=c.length-1;if(a[i]>b[i])return'BUY';if(a[i]<b[i])return'SELL';return'NEUTRAL'}
+function trend30Direction(source=S.raw){
+ const m30=aggregateMinutes(source,30);
  if(m30.length<20)return'NEUTRAL';
  const a=ema(m30,9),b=ema(m30,20),i=m30.length-1;
  if(a[i]>b[i]&&a[i]>a[i-1]&&b[i]>b[i-1])return'BUY';
@@ -142,8 +142,9 @@ function runBacktest(){
   }
   if(i<60||i<=busyUntil||!confirm||confirm.count!==3)continue;
   const p=points.at(-1);if(!p||p.confirmed!==i)continue;
-  const m30=aggregateMinutes(c.slice(0,i+1),30),m30a=ema(m30,9),m30b=ema(m30,20),mi=m30.length-1;const trend30=m30.length>=20?(m30a[mi]>m30b[mi]&&m30a[mi]>m30a[mi-1]&&m30b[mi]>m30b[mi-1]?'BUY':m30a[mi]<m30b[mi]&&m30a[mi]<m30a[mi-1]&&m30b[mi]<m30b[mi-1]?'SELL':'NEUTRAL'):'NEUTRAL';const dir=e9[i]>e20[i]&&e20[i]>e50[i]&&e9[i]>e9[i-2]&&e20[i]>e20[i-2]?'BUY':e9[i]<e20[i]&&e20[i]<e50[i]&&e9[i]<e9[i-2]&&e20[i]<e20[i-2]?'SELL':'NEUTRAL';
-  if(dir==='NEUTRAL')continue;
+  const trend30=trend30Direction(c.slice(0,i+1));const dir=e9[i]>e20[i]?'BUY':e9[i]<e20[i]?'SELL':'NEUTRAL';
+  // Regla EMA 9/20: solo opera en su dirección y además respeta la tendencia M30.
+  if(dir==='NEUTRAL'||trend30!==dir)continue;
   const bullish=confirm.close>confirm.open,bearish=confirm.close<confirm.open;
   let side=null,target=NaN;
   if(dir==='BUY'&&p.type==='LOW'&&bullish&&confirm.close>p.price){side='BUY';target=p.price+(confirm.close-p.price)*.5}
