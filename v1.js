@@ -10,12 +10,19 @@ function connect(){return new Promise((resolve,reject)=>{const ws=new WebSocket(
 function findCrypto(active,a){return active.find(x=>{const v=[x.symbol,x.underlying_symbol,x.display_name,x.underlying_symbol_name].map(norm);return a.keys.some(k=>v.some(z=>z===norm(k)||z.includes(norm(k))))})}
 async function loadSymbols(){const r=await send({active_symbols:'brief'}),active=(r.active_symbols||[]).filter(x=>!Number(x.is_trading_suspended));const list=[];for(const code of FOREX){const x=active.find(a=>(a.underlying_symbol||a.symbol)===code);if(x)list.push({code:x.underlying_symbol||x.symbol,name:x.display_name||x.underlying_symbol_name||code})}for(const a of CRYPTO){const x=findCrypto(active,a);if(x)list.push({code:x.underlying_symbol||x.symbol,name:a.label})}S.symbols=list;$('symbol').innerHTML=list.map(x=>'<option value="'+x.code+'">'+x.name+'</option>').join('');if(!list.length)throw Error('Deriv no devolvió pares Forex o criptomonedas disponibles');const preferred=list.find(x=>x.name==='SOL/USD')||list[0];$('symbol').value=preferred.code}
 async function history(symbol){
- const r=await send({ticks_history:symbol,adjust_start_time:1,count:5000,end:'latest',style:'candles',granularity:5});
- const clean=(r.candles||[]).map(x=>({time:+x.epoch,open:+x.open,high:+x.high,low:+x.low,close:+x.close})).filter(x=>Number.isFinite(x.time)&&Number.isFinite(x.open)&&Number.isFinite(x.high)&&Number.isFinite(x.low)&&Number.isFinite(x.close)).sort((a,b)=>a.time-b.time);
- const lastClosed=Math.floor(Date.now()/5)*5-5;
- const closed=clean.filter(x=>x.time<=lastClosed);
+ const cutoff=Math.floor(Date.now()/1000)-86400,all=new Map();let end='latest';
+ for(let page=0;page<8;page++){
+  const r=await send({ticks_history:symbol,adjust_start_time:1,count:5000,end,style:'candles',granularity:5});
+  const rows=(r.candles||[]).map(x=>({time:+x.epoch,open:+x.open,high:+x.high,low:+x.low,close:+x.close})).filter(x=>Number.isFinite(x.time)&&Number.isFinite(x.open)&&Number.isFinite(x.high)&&Number.isFinite(x.low)&&Number.isFinite(x.close));
+  if(!rows.length)break;
+  for(const x of rows)if(x.time>=cutoff)all.set(x.time,x);
+  const oldest=Math.min(...rows.map(x=>x.time));
+  if(oldest<=cutoff||rows.length<5000)break;
+  end=oldest-1;
+ }
+ const lastClosed=Math.floor(Date.now()/5)*5-5,closed=[...all.values()].filter(x=>x.time<=lastClosed).sort((a,b)=>a.time-b.time);
  if(!closed.length)throw Error('Deriv no entregó velas históricas de 5 segundos para '+symbol);
- return closed.slice(-5000);
+ return closed;
 }
 async function chartHistory(symbol){
  const r=await send({ticks_history:symbol,adjust_start_time:1,count:1440,end:'latest',style:'candles',granularity:60});
@@ -84,34 +91,51 @@ function fmt(v){if(!Number.isFinite(Number(v)))return'—';return Number(v).toPr
 function runBacktest(){
  const c=S.raw.slice(0,-1);
  if(c.length<100){$('backtestResult').textContent='Histórico insuficiente: se necesitan al menos 100 velas de 5 segundos.';return}
- let checked=0,entries=0,wins=0,losses=0,draws=0,lastKey='';
- for(let i=60;i<c.length-1&&wins+losses+draws<500;i++){
-  const prefix=c.slice(0,i+1),pts=zigzag(prefix),p=pts.at(-1);
-  if(!p||p.confirmed!==i)continue;
-  const dir=stackDirection(prefix);if(dir==='NEUTRAL')continue;
-  const m15=aggregate15(prefix),confirm=m15.at(-1);if(!confirm||confirm.count!==3)continue;
+ const e9=ema(c,9),e20=ema(c,20),e50=ema(c,50),points=[],trades=[];
+ let group=null,confirm=null,lastKey='',busyUntil=-1,checked=0;
+ for(let i=0;i<c.length&&trades.length<500;i++){
+  const bar=c[i],bucket=Math.floor(bar.time/15)*15;
+  if(!group||group.time!==bucket){group={time:bucket,open:bar.open,high:bar.high,low:bar.low,close:bar.close,count:1}}
+  else{group.high=Math.max(group.high,bar.high);group.low=Math.min(group.low,bar.low);group.close=bar.close;group.count++}
+  if(group.count===3)confirm={...group};
+  const pi=i-DEPTH;
+  if(pi>=DEPTH){
+   let hi=true,lo=true;
+   for(let j=1;j<=DEPTH;j++){if(c[pi].high<c[pi-j].high||c[pi].high<c[pi+j].high)hi=false;if(c[pi].low>c[pi-j].low||c[pi].low>c[pi+j].low)lo=false}
+   if(hi||lo){
+    const p={index:pi,time:c[pi].time,price:hi?c[pi].high:c[pi].low,type:hi?'HIGH':'LOW',confirmed:i},last=points.at(-1);
+    if(!last||last.type!==p.type){if(!last||pi-last.index>=SEPARATION)points.push(p)}
+    else if((p.type==='HIGH'&&p.price>last.price)||(p.type==='LOW'&&p.price<last.price))points[points.length-1]=p;
+   }
+  }
+  if(i<60||i<=busyUntil||!confirm||confirm.count!==3)continue;
+  const p=points.at(-1);if(!p||p.confirmed!==i)continue;
+  const dir=e9[i]>e20[i]&&e20[i]>e50[i]&&e9[i]>e9[i-2]&&e20[i]>e20[i-2]?'BUY':e9[i]<e20[i]&&e20[i]<e50[i]&&e9[i]<e9[i-2]&&e20[i]<e20[i-2]?'SELL':'NEUTRAL';
+  if(dir==='NEUTRAL')continue;
   const bullish=confirm.close>confirm.open,bearish=confirm.close<confirm.open;
   let side=null,target=NaN;
   if(dir==='BUY'&&p.type==='LOW'&&bullish&&confirm.close>p.price){side='BUY';target=p.price+(confirm.close-p.price)*.5}
   if(dir==='SELL'&&p.type==='HIGH'&&bearish&&confirm.close<p.price){side='SELL';target=p.price-(p.price-confirm.close)*.5}
   if(!side)continue;
   const key=side+'|'+p.time;if(key===lastKey)continue;lastKey=key;checked++;
-  const deadline=c[i].time+90, tol=Math.max(Math.abs(target)*.00001,.000001);let entry=-1;
-  for(let k=i+1;k<c.length;k++){
-   if(c[k].time>deadline)break;
-   const touched=side==='BUY'?(c[k].low<=target+tol):(c[k].high>=target-tol);
-   if(touched){entry=k;break}
+  const deadline=bar.time+90,tol=Math.max(Math.abs(target)*.00001,.000001);let entry=-1;
+  for(let k=i+1;k<c.length&&c[k].time<=deadline;k++){
+   if(side==='BUY'?c[k].low<=target+tol:c[k].high>=target-tol){entry=k;break}
   }
   if(entry<0)continue;
-  entries++;
   const exitTime=c[entry].time+120;let exit=-1;
   for(let k=entry+1;k<c.length;k++){if(c[k].time>=exitTime){exit=k;break}}
   if(exit<0)continue;
   const result=side==='BUY'?(c[exit].close>target?'WIN':c[exit].close<target?'LOSS':'EMPATE'):(c[exit].close<target?'WIN':c[exit].close>target?'LOSS':'EMPATE');
-  if(result==='WIN')wins++;else if(result==='LOSS')losses++;else draws++;i=exit;
+  trades.push({id:'BT-'+S.symbol+'-'+c[entry].time,symbol:S.symbol,side,entry:target,entryTime:c[entry].time*1000,exit:c[exit].close,exitTime:c[exit].time*1000,result,mode:'BACKTEST',pivotTime:p.time,targetPrice:target});
+  busyUntil=exit; 
  }
- const total=wins+losses+draws,rate=total?100*wins/total:0;
- $('backtestResult').textContent='BACKTEST · hasta 500 operaciones anteriores · '+c.length+' velas de 5s ('+(c.length/720).toFixed(1)+' h disponibles) · señales: '+checked+' · entradas alcanzadas: '+entries+' · operaciones cerradas: '+total+(total<500?' (no hubo 500 operaciones completas en el histórico descargado)':'')+' · WIN '+wins+' · LOSS '+losses+' · EMPATE '+draws+' · efectividad '+rate.toFixed(1)+'%.';
+ const previous=S.ops.filter(x=>!(x.mode==='BACKTEST'&&x.symbol===S.symbol));
+ S.ops=[...trades.slice().reverse(),...previous].slice(0,2000);
+ saveOps();renderOps();updateVisuals();
+ const wins=trades.filter(x=>x.result==='WIN').length,losses=trades.filter(x=>x.result==='LOSS').length,draws=trades.filter(x=>x.result==='EMPATE').length,total=trades.length,rate=total?100*wins/total:0;
+ const hours=(c.length*5/3600).toFixed(1);
+ $('backtestResult').textContent='BACKTEST · '+total+' de hasta 500 operaciones anteriores · '+c.length+' velas de 5s ('+hours+' h) · señales detectadas: '+checked+' · WIN '+wins+' · LOSS '+losses+' · EMPATE '+draws+' · efectividad '+rate.toFixed(1)+'%. '+(total<500?'No se encontraron 500 operaciones completas en las últimas 24 horas.':'Las 500 operaciones están cargadas en Historial y marcadas en el gráfico.');
 }
 function loadOps(){try{const a=JSON.parse(localStorage.getItem(STORE+'-operations')||'[]');S.ops=Array.isArray(a)?a:[]}catch{S.ops=[]}renderOps()}
 function saveOps(){localStorage.setItem(STORE+'-operations',JSON.stringify(S.ops.slice(0,2000)))}
