@@ -9,7 +9,14 @@ function send(p){return new Promise((resolve,reject)=>{if(!S.ws||S.ws.readyState
 function connect(){return new Promise((resolve,reject)=>{const ws=new WebSocket(API);S.ws=ws;const timer=setTimeout(()=>{try{ws.close()}catch{}reject(Error('Tiempo de conexión agotado'))},12000);ws.onopen=()=>{clearTimeout(timer);status('Deriv conectada',true);if(S.heartbeat)clearInterval(S.heartbeat);S.heartbeat=setInterval(()=>send({ping:1}).catch(()=>{}),30000);resolve()};ws.onerror=()=>{clearTimeout(timer);reject(Error('Error de conexión Deriv'))};ws.onclose=()=>{if(ws!==S.ws)return;status('Desconectada · reconectando…');for(const p of S.pending.values())p.reject(Error('Conexión cerrada'));S.pending.clear();setTimeout(()=>start().catch(e=>status(e.message)),5000)};ws.onmessage=e=>{let m;try{m=JSON.parse(e.data)}catch{return}if(m.req_id&&S.pending.has(m.req_id)){const p=S.pending.get(m.req_id);S.pending.delete(m.req_id);m.error?p.reject(Error(m.error.message)):p.resolve(m);return}if(m.tick)onTick(m.tick)}})}
 function findCrypto(active,a){return active.find(x=>{const v=[x.symbol,x.underlying_symbol,x.display_name,x.underlying_symbol_name].map(norm);return a.keys.some(k=>v.some(z=>z===norm(k)||z.includes(norm(k))))})}
 async function loadSymbols(){const r=await send({active_symbols:'brief'}),active=(r.active_symbols||[]).filter(x=>!Number(x.is_trading_suspended));const list=[];for(const code of FOREX){const x=active.find(a=>(a.underlying_symbol||a.symbol)===code);if(x)list.push({code:x.underlying_symbol||x.symbol,name:x.display_name||x.underlying_symbol_name||code})}for(const a of CRYPTO){const x=findCrypto(active,a);if(x)list.push({code:x.underlying_symbol||x.symbol,name:a.label})}S.symbols=list;$('symbol').innerHTML=list.map(x=>'<option value="'+x.code+'">'+x.name+'</option>').join('');if(!list.length)throw Error('Deriv no devolvió pares Forex o criptomonedas disponibles');const preferred=list.find(x=>x.name==='SOL/USD')||list[0];$('symbol').value=preferred.code}
-async function history(symbol){const r=await send({ticks_history:symbol,adjust_start_time:1,count:5000,end:'latest',style:'ticks'});const times=r.history?.times||[],prices=r.history?.prices||[],map=new Map();for(let i=0;i<Math.min(times.length,prices.length);i++){const epoch=+times[i],price=+prices[i];if(!Number.isFinite(epoch)||!Number.isFinite(price))continue;const time=Math.floor(epoch/5)*5;let b=map.get(time);if(!b){b={time,open:price,high:price,low:price,close:price};map.set(time,b)}else{b.high=Math.max(b.high,price);b.low=Math.min(b.low,price);b.close=price}}const lastClosed=Math.floor(Date.now()/5000)*5-5,clean=[...map.values()].filter(x=>x.time<=lastClosed).sort((a,b)=>a.time-b.time);if(!clean.length)throw Error('Deriv no entregó ticks históricos para formar velas de 5 segundos en '+symbol);return clean}
+async function history(symbol){
+ const r=await send({ticks_history:symbol,adjust_start_time:1,count:5000,end:'latest',style:'candles',granularity:5});
+ const clean=(r.candles||[]).map(x=>({time:+x.epoch,open:+x.open,high:+x.high,low:+x.low,close:+x.close})).filter(x=>Number.isFinite(x.time)&&Number.isFinite(x.open)&&Number.isFinite(x.high)&&Number.isFinite(x.low)&&Number.isFinite(x.close)).sort((a,b)=>a.time-b.time);
+ const lastClosed=Math.floor(Date.now()/5)*5-5;
+ const closed=clean.filter(x=>x.time<=lastClosed);
+ if(!closed.length)throw Error('Deriv no entregó velas históricas de 5 segundos para '+symbol);
+ return closed.slice(-5000);
+}
 async function chartHistory(symbol){
  const r=await send({ticks_history:symbol,adjust_start_time:1,count:1440,end:'latest',style:'candles',granularity:60});
  const out=(r.candles||[]).map(x=>({time:+x.epoch,open:+x.open,high:+x.high,low:+x.low,close:+x.close})).filter(x=>Number.isFinite(x.time)&&Number.isFinite(x.close)).sort((a,b)=>a.time-b.time);
@@ -75,10 +82,10 @@ function onTick(t){
 }
 function fmt(v){if(!Number.isFinite(Number(v)))return'—';return Number(v).toPrecision(8).replace(/(\.\d*?)0+$/,'$1').replace(/\.$/,'')}
 function runBacktest(){
- const c=S.raw.slice(-1201,-1);
+ const c=S.raw.slice(0,-1);
  if(c.length<100){$('backtestResult').textContent='Histórico insuficiente: se necesitan al menos 100 velas de 5 segundos.';return}
  let checked=0,entries=0,wins=0,losses=0,draws=0,lastKey='';
- for(let i=60;i<c.length-1;i++){
+ for(let i=60;i<c.length-1&&wins+losses+draws<500;i++){
   const prefix=c.slice(0,i+1),pts=zigzag(prefix),p=pts.at(-1);
   if(!p||p.confirmed!==i)continue;
   const dir=stackDirection(prefix);if(dir==='NEUTRAL')continue;
@@ -104,7 +111,7 @@ function runBacktest(){
   if(result==='WIN')wins++;else if(result==='LOSS')losses++;else draws++;i=exit;
  }
  const total=wins+losses+draws,rate=total?100*wins/total:0;
- $('backtestResult').textContent='Últimas '+c.length+' velas de 5s (aprox. '+Math.round(c.length*5/60)+' min) · señales detectadas: '+checked+' · entradas alcanzadas: '+entries+' · operaciones cerradas: '+total+' · WIN '+wins+' · LOSS '+losses+' · EMPATE '+draws+' · efectividad '+rate.toFixed(1)+'%.';
+ $('backtestResult').textContent='BACKTEST · hasta 500 operaciones anteriores · '+c.length+' velas de 5s ('+(c.length/720).toFixed(1)+' h disponibles) · señales: '+checked+' · entradas alcanzadas: '+entries+' · operaciones cerradas: '+total+(total<500?' (no hubo 500 operaciones completas en el histórico descargado)':'')+' · WIN '+wins+' · LOSS '+losses+' · EMPATE '+draws+' · efectividad '+rate.toFixed(1)+'%.';
 }
 function loadOps(){try{const a=JSON.parse(localStorage.getItem(STORE+'-operations')||'[]');S.ops=Array.isArray(a)?a:[]}catch{S.ops=[]}renderOps()}
 function saveOps(){localStorage.setItem(STORE+'-operations',JSON.stringify(S.ops.slice(0,2000)))}
