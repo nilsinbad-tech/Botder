@@ -91,3 +91,10 @@
 .sol-trade,.sol-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}.sol-stats{grid-template-columns:repeat(3,1fr)}.sol-trade>div,.sol-stats>div{background:#0a1320;padding:8px;border-radius:7px;min-width:0}.sol-trade small,.sol-stats small{display:block;color:#9aabc0;font-size:8px}.sol-trade b,.sol-stats b{display:block;font-size:12px;margin-top:4px;overflow-wrap:anywhere}.sol-stats b{font-size:16px}
 .sol-row{display:flex;justify-content:space-between;gap:8px;padding:7px 3px;border-top:1px solid #26364b;font-size:10px}.sol-row.win{color:#20d18b}.sol-row.loss{color:#ff5968}
 @media(max-width:600px){.sol-trade{grid-template-columns:repeat(2,1fr)}.sol-head{align-items:flex-start;flex-direction:column}.sol-quote{flex-wrap:wrap}.sol-quote span{width:100%;margin:0}}
+
+/* BOTDER binarias ZigZag 5s */
+.binary-signal{display:grid;grid-template-columns:1fr auto;gap:8px;padding:13px;border:1px solid var(--line);border-radius:10px;background:var(--panel);margin:10px 0}
+.binary-signal b{font-size:16px}.binary-signal p{font-size:11px;color:var(--muted);margin:6px 0}.binary-signal>strong{font-size:22px;color:#f5c451;align-self:center;font-variant-numeric:tabular-nums}.binary-signal.buy{border-color:#20d18b}.binary-signal.sell{border-color:#ff5968}.binary-signal.buy b{color:#20d18b}.binary-signal.sell b{color:#ff5968}
+.binary-actions{grid-column:1/-1;display:grid;grid-template-columns:2fr 1fr;gap:8px}.binary-actions button:first-child{background:#146343;border-color:#20d18b}.binary-actions button:disabled{opacity:.4}.binary-signal>small{grid-column:1/-1;color:var(--muted);font-size:10px}
+#chart{height:390px;min-height:320px}.op-row{display:grid;grid-template-columns:1fr 1fr 1fr 1.3fr auto;gap:7px;padding:9px 4px;border-top:1px solid var(--line);font-size:10px;align-items:center}.op-row.win{color:#20d18b}.op-row.loss{color:#ff5968}
+@media(max-width:600px){#chart{height:360px}.op-row{grid-template-columns:1fr 1fr;gap:5px}.binary-actions{grid-template-columns:1fr 1fr}}
