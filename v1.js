@@ -145,7 +145,7 @@ function runBacktest(){
    }
   }
   if(i<60||i<=busyUntil||!confirm||confirm.count!==confirmBars)continue;
-  const p=points.at(-1);if(!p||p.confirmed!==i)continue;
+  const p=points.at(-1);if(!p||p.confirmed!==i||confirm.time+confirmSeconds>bar.time+5||confirm.time<p.time+(CFG.depth+1)*5)continue;
   const trend30=trend30Direction(c.slice(0,i+1));const dir=e9[i]>e20[i]?'BUY':e9[i]<e20[i]?'SELL':'NEUTRAL';
   // Regla EMA 9/20: solo opera en su dirección y además respeta la tendencia M30.
   if(dir==='NEUTRAL'||trend30!==dir)continue;
