@@ -10,31 +10,35 @@ function connect(){return new Promise((resolve,reject)=>{const ws=new WebSocket(
 function findCrypto(active,a){return active.find(x=>{const v=[x.symbol,x.underlying_symbol,x.display_name,x.underlying_symbol_name].map(norm);return a.keys.some(k=>v.some(z=>z===norm(k)||z.includes(norm(k))))})}
 async function loadSymbols(){const r=await send({active_symbols:'brief'}),active=(r.active_symbols||[]).filter(x=>!Number(x.is_trading_suspended));const list=[];for(const code of FOREX){const x=active.find(a=>(a.underlying_symbol||a.symbol)===code);if(x)list.push({code:x.underlying_symbol||x.symbol,name:x.display_name||x.underlying_symbol_name||code})}for(const a of CRYPTO){const x=findCrypto(active,a);if(x)list.push({code:x.underlying_symbol||x.symbol,name:a.label})}S.symbols=list;$('symbol').innerHTML=list.map(x=>'<option value="'+x.code+'">'+x.name+'</option>').join('');if(!list.length)throw Error('Deriv no devolvió pares Forex o criptomonedas disponibles');const preferred=list.find(x=>x.name==='SOL/USD')||list[0];$('symbol').value=preferred.code}
 async function history(symbol){
- // Deriv no ofrece velas históricas de 5s: ticks_history con style=candles
- // admite granularity desde 60s. Descargamos los ticks y los agrupamos localmente.
- const cutoff=Math.floor(Date.now()/1000)-86400,byBucket=new Map();let end='latest',previousOldest=Infinity,pages=0,totalTicks=0;
- while(pages<1000){
-  status('Descargando histórico 5s · página '+(pages+1)+' · '+symbol);
-  const r=await send({ticks_history:symbol,adjust_start_time:1,count:5000,end,style:'ticks'});
+ // Descargar exactamente el rango de 24h. Se pagina de más nuevo a más antiguo,
+ // fijando START en todas las peticiones para evitar el límite predeterminado de 1 día.
+ const cutoff=Math.floor(Date.now()/1000)-86400,byBucket=new Map();let end=Math.floor(Date.now()/1000),pages=0,totalTicks=0,lastOldest=Infinity;
+ while(end>cutoff&&pages<1000){
+  status('Descargando 24h de histórico · '+symbol+' · página '+(pages+1));
+  const r=await send({ticks_history:symbol,start:cutoff,end:String(end),count:5000,style:'ticks'});
   const h=r.history||{},times=h.times||[],prices=h.prices||[];
   if(!times.length||!prices.length)break;
-  const rows=times.map((t,i)=>({time:Number(t),price:Number(prices[i])})).filter(x=>Number.isFinite(x.time)&&Number.isFinite(x.price)).sort((a,b)=>a.time-b.time);
+  const rows=times.map((t,i)=>({time:Number(t),price:Number(prices[i])})).filter(x=>Number.isFinite(x.time)&&Number.isFinite(x.price)).sort((x,y)=>x.time-y.time);
   if(!rows.length)break;
   totalTicks+=rows.length;pages++;
   for(const tick of rows){
-   if(tick.time<cutoff)continue;
+   if(tick.time<cutoff||tick.time>end)continue;
    const time=Math.floor(tick.time/5)*5;let bar=byBucket.get(time);
    if(!bar)byBucket.set(time,{time,open:tick.price,high:tick.price,low:tick.price,close:tick.price,ticks:1});
    else{bar.high=Math.max(bar.high,tick.price);bar.low=Math.min(bar.low,tick.price);bar.close=tick.price;bar.ticks++}
   }
   const oldest=rows[0].time;
-  if(oldest<=cutoff||rows.length<5000||oldest>=previousOldest)break;
-  previousOldest=oldest;end=String(Math.floor(oldest)-1);
+  if(oldest<=cutoff)break;
+  if(oldest>=lastOldest)throw Error('Deriv repitió una página del histórico. Descarga detenida para evitar datos duplicados.');
+  lastOldest=oldest;
+  end=Math.floor(oldest)-1;
+  if(rows.length<5000)break;
  }
- const lastClosed=Math.floor(Date.now()/5)*5-5,closed=[...byBucket.values()].filter(x=>x.time>=cutoff&&x.time<=lastClosed).sort((a,b)=>a.time-b.time);
+ const lastClosed=Math.floor(Date.now()/5)*5-5,closed=[...byBucket.values()].filter(x=>x.time>=cutoff&&x.time<=lastClosed).sort((x,y)=>x.time-y.time);
  if(!closed.length)throw Error('Deriv no entregó ticks históricos para '+symbol+'.');
  const hours=(closed.length*5/3600).toFixed(2);
- if(closed[0].time>cutoff+300)throw Error('Histórico incompleto: solo se recuperaron '+hours+' horas de velas de 5s. No se iniciará el análisis con 24h incompletas.');
+ const firstTime=closed[0].time;
+ if(firstTime>cutoff+300)throw Error('Histórico incompleto: '+hours+' horas de velas 5s recuperadas en '+pages+' páginas ('+totalTicks+' ticks). Deriv no entregó el resto de las 24h; no se iniciará el análisis.');
  return closed;
 }
 async function chartHistory(symbol){
