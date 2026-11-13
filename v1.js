@@ -123,8 +123,8 @@ function cancelPendingSignal(message){
 }
 function prepareSignal(epoch){
  if(S.trade||S.signal)return;
- const minute=Math.floor(epoch/60)*60,second=epoch-minute;
- if(second<50||second>52||S.lastPrealertMinute===minute)return;
+ const minute=Math.floor(epoch/60)*60,second=epoch-minute,prealertSecond=60-ENTRY_WINDOW/1000;
+ if(second<prealertSecond||second>prealertSecond+2||S.lastPrealertMinute===minute)return;
  const complete=aggregate1m(S.raw).filter(x=>x.time<minute);
  if(complete.length<CFG.depth*2+4)return;
  const partial=partialMinute(S.raw,minute);if(!partial)return;
@@ -182,7 +182,7 @@ function runBacktest(){
   const entry=c[entryIndex].open,exit=c[exitIndex].close;
   const result=side==='BUY'?(exit>entry?'WIN':exit<entry?'LOSS':'EMPATE'):(exit<entry?'WIN':exit>entry?'LOSS':'EMPATE');
   const entryTime=c[entryIndex].time*1000,exitTime=(c[i].time+180)*1000;
-  trades.push({id:'BT-'+S.symbol+'-'+entryTime,symbol:S.symbol,side,entry,entryTime,exit,exitTime,result,mode:'BACKTEST',pivotTime:pivot.time,signalTime:c[i].time+50});
+  trades.push({id:'BT-'+S.symbol+'-'+entryTime,symbol:S.symbol,side,entry,entryTime,exit,exitTime,result,mode:'BACKTEST',pivotTime:pivot.time,signalTime:c[i].time+60-ENTRY_WINDOW/1000});
   busyUntil=exitIndex;
  }
  const previous=S.ops.filter(x=>!(x.mode==='BACKTEST'&&x.symbol===S.symbol));
