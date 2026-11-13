@@ -7,7 +7,16 @@
 </head><body>
 <header><b>BOTDER <small>SCALPING M1 · V1</small></b><span id="connection">Conectando Deriv…</span></header>
 <main>
-<section class="toolbar"><label>INSTRUMENTO<select id="symbol"></select></label><button id="reload">↻ ACTUALIZAR</button></section>
+<section class="sol-mode">
+ <div class="sol-head"><div><h3>⚡ SOL/USD · OPERACIÓN 30 SEGUNDOS</h3><small>Velas de 5 segundos · señal anticipada 5 segundos · seguimiento manual</small></div><b id="solConnection">Conectando SOL/USD…</b></div>
+ <div class="sol-quote"><small>PRECIO EN VIVO</small><strong id="solPrice">—</strong><span id="solCandle">Esperando ticks…</span></div>
+ <div class="sol-signal" id="solSignal"><b id="solSignalTitle">ESPERANDO SEÑAL</b><span id="solSignalInfo">Analizando EMA 9/20, RSI y tendencia corta</span><strong id="solCountdown">—</strong></div>
+ <div class="sol-actions"><button id="solEnter" disabled>ENTRÉ</button><button id="solCancel" disabled>CANCELAR SEÑAL</button></div>
+ <div class="sol-trade"><div><small>OPERACIÓN</small><b id="solTradeState">SIN OPERACIÓN</b></div><div><small>TIEMPO RESTANTE</small><b id="solTimer">—</b></div><div><small>PRECIO ENTRADA</small><b id="solEntry">—</b></div><div><small>PRECIO FINAL</small><b id="solExit">—</b></div></div>
+ <div class="sol-stats"><div><small>GANADAS</small><b id="solWins">0</b></div><div><small>PERDIDAS</small><b id="solLosses">0</b></div><div><small>ACIERTO</small><b id="solRate">0%</b></div></div>
+ <small class="sol-note">La señal se prepara 5 segundos antes. Pulsa ENTRÉ cuando llegue el momento de entrar; desde ahí se cuentan 30 segundos. No se envían órdenes a Deriv.</small>
+ <div id="solHistory"></div>
+</section>\n<section class="toolbar"><label>INSTRUMENTO<select id="symbol"></select></label><button id="reload">↻ ACTUALIZAR</button></section>
 <section class="statusgrid">
  <article><small>TENDENCIA M15</small><b id="trend15">—</b></article>
  <article><small>CONFIRMACIÓN M5</small><b id="trend5">—</b></article>
@@ -31,4 +40,4 @@
  <p><b>Order Blocks:</b> M15; solo los dos más recientes se extienden a la derecha. Los anteriores quedan en su zona.</p>
  <p>El gráfico dibuja únicamente señales del instrumento seleccionado. El historial y las estadísticas también pertenecen a ese instrumento.</p>
 </section>
-</main><script src="v1.js?v=3"></script></body></html>
+</main><script src="sol5s.js?v=1"></script><script src="v1.js?v=3"></script></body></html>
