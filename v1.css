@@ -127,3 +127,6 @@
 #chart .si-ob.buy{background:rgba(32,209,139,.045);border-color:rgba(32,209,139,.55)}
 #chart .si-ob.sell{background:rgba(255,89,104,.045);border-color:rgba(255,89,104,.55)}
 #chart .si-ob span{font-size:7px;font-weight:800;line-height:10px;padding:0 2px;background:rgba(8,13,22,.68);white-space:nowrap;color:inherit}
+
+/* Panel de señal siempre visible y antes del gráfico */
+#signal{display:grid!important;visibility:visible!important;min-height:92px;position:relative;z-index:2;margin:10px 0;padding:14px;border-width:2px;background:#101c2c;color:#f4f7fb}#signal #signalTitle{display:block;font-size:17px;line-height:1.35;font-weight:950;color:#f5c451}#signal.buy #signalTitle{color:#20d18b}#signal.sell #signalTitle{color:#ff5968}#signal #signalInfo{display:block;font-size:12px;line-height:1.4;color:#d3deeb;margin:6px 0}#signal #signalPrice{color:#fff;font-size:12px}#signal #signalCountdown{font-size:23px;color:#f5c451;min-width:78px;text-align:right}#signal #tradeState{font-weight:900;color:#f5c451}
