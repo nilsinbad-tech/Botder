@@ -89,7 +89,7 @@ function aggregate15(c){const map=new Map();for(const b of c){const t=Math.floor
 function zigzag(c,depth=DEPTH,sep=SEPARATION){const pts=[];for(let i=depth;i<c.length-depth;i++){let hi=true,lo=true;for(let j=1;j<=depth;j++){if(c[i].high<c[i-j].high||c[i].high<c[i+j].high)hi=false;if(c[i].low>c[i-j].low||c[i].low>c[i+j].low)lo=false}if(!hi&&!lo)continue;const p={index:i,time:c[i].time,price:hi?c[i].high:c[i].low,type:hi?'HIGH':'LOW',confirmed:i+depth};const last=pts.at(-1);if(!last||last.type!==p.type){if(!last||i-last.index>=sep)pts.push(p)}else if((p.type==='HIGH'&&p.price>last.price)||(p.type==='LOW'&&p.price<last.price))pts[pts.length-1]=p}return pts}
 function stackDirection(c){if(c.length<55)return'NEUTRAL';const a=ema(c,9),b=ema(c,20),d=ema(c,50),i=c.length-1;if(a[i]>b[i]&&b[i]>d[i]&&a[i]>a[i-2]&&b[i]>b[i-2])return'BUY';if(a[i]<b[i]&&b[i]<d[i]&&a[i]<a[i-2]&&b[i]<b[i-2])return'SELL';return'NEUTRAL'}
 function trend30Direction(){
- const m30=aggregateMinutes(S.chartBars,30);
+ const m30=aggregateMinutes(S.raw,30);
  if(m30.length<20)return'NEUTRAL';
  const a=ema(m30,9),b=ema(m30,20),i=m30.length-1;
  if(a[i]>b[i]&&a[i]>a[i-1]&&b[i]>b[i-1])return'BUY';
