@@ -11,30 +11,18 @@ function scheduleReconnect(){if(S.reconnectTimer)return;const wait=S.reconnectDe
 function connect(){if(S.connecting)return Promise.reject(Error('Conexión en curso'));S.connecting=true;return new Promise((resolve,reject)=>{const ws=new WebSocket(API);S.ws=ws;let settled=false;const timer=setTimeout(()=>{if(!settled){settled=true;S.connecting=false;try{ws.close()}catch{}reject(Error('Tiempo de espera conectando Deriv'))}},12000);ws.onopen=()=>{if(ws!==S.ws){ws.close();return}clearTimeout(timer);settled=true;S.connecting=false;S.reconnectDelay=1000;status('Deriv conectada',true);stopHeartbeat();S.heartbeatTimer=setInterval(()=>{if(S.ws===ws&&ws.readyState===1)send({ping:1}).catch(()=>{try{ws.close()}catch{}})},30000);resolve()};ws.onerror=()=>{clearTimeout(timer);if(!settled){settled=true;S.connecting=false;reject(Error('Error de conexión Deriv'))}};ws.onclose=()=>{if(ws!==S.ws)return;clearTimeout(timer);S.connecting=false;stopHeartbeat();S.marketSubs.clear();S.marketSubSymbols.clear();S.marketLastTick.clear();S.globalScanStarted=false;status('Deriv desconectada');for(const p of S.pending.values())p.reject(Error('Conexión cerrada'));S.pending.clear();scheduleReconnect()};ws.onmessage=e=>{let m;try{m=JSON.parse(e.data)}catch{return}if(m.msg_type==='tick'&&m.tick){try{const subId=m.subscription?.id||m.tick.subscription?.id;const mappedSymbol=subId?S.marketSubSymbols.get(subId):null;if(mappedSymbol){const routedTick={...m.tick,symbol:mappedSymbol};if(mappedSymbol===S.symbol)updateLiveTick(routedTick);else updateMarketTick(routedTick)}else{updateLiveTick(m.tick)}}catch(err){console.error('Error procesando tick global',m.tick.symbol,err)}}if(m.req_id&&S.pending.has(m.req_id)){const p=S.pending.get(m.req_id);S.pending.delete(m.req_id);m.error?p.reject(Error(m.error.message)):p.resolve(m)}}})}
 async function loadSymbols(){
  const r=await send({active_symbols:'brief'});
+ // BOTDER muestra únicamente pares Forex solicitados; se excluyen Volatility,
+ // Crash, Boom y metales (incluido XAUUSD/oro) del gráfico y del escáner.
+ const forexPairs=['frxEURUSD','frxGBPUSD','frxUSDJPY','frxAUDUSD','frxUSDCAD','frxUSDCHF','frxNZDUSD','frxEURJPY','frxGBPJPY','frxEURGBP'];
  const allowed=(r.active_symbols||[]).filter(x=>!Number(x.is_trading_suspended)).map(x=>{
-  const name=String(x.display_name||x.underlying_symbol_name||x.symbol||'').trim();
-  const code=x.underlying_symbol||x.symbol;
-  const normalizedCode=String(code||'');
-  const displayName=normalizedCode==='frxXAUUSD'?'XAUUSD · Oro':name;
-  return{code:normalizedCode,name:displayName,pip:Number(x.pip)||0};
- }).filter(x=>{
-  if(!x.code||!x.name)return false;
-  if(x.code==='frxXAUUSD')return true;
-  const n=x.name.replace(/\s+/g,' ').trim();
-  if(/^(?:Crash|Boom)\s+(?:50|500)\s+Index$/i.test(n))return true;
-  const v=n.match(/^Volatility\s+(\d+)(?:\s*\(1s\))?\s+Index$/i);
-  return !!v&&Number(v[1])>=10&&Number(v[1])<=75;
- });
- const unique=new Map();for(const x of allowed)if(!unique.has(x.code))unique.set(x.code,x);
- S.symbols=[...unique.values()].sort((a,b)=>{
-  const group=x=>/^Volatility/i.test(x.name)?0:/^Crash/i.test(x.name)?1:2;
-  const ga=group(a),gb=group(b);if(ga!==gb)return ga-gb;
-  const num=x=>Number((x.name.match(/\d+/)||[])[0]||0);
-  if(num(a)!==num(b))return num(a)-num(b);
-  return a.name.localeCompare(b.name);
- });
+  const code=String(x.underlying_symbol||x.symbol||'');
+  const name=String(x.display_name||x.underlying_symbol_name||code).trim();
+  return{code,name,pip:Number(x.pip)||0};
+ }).filter(x=>forexPairs.includes(x.code));
+ const byCode=new Map(allowed.map(x=>[x.code,x]));
+ S.symbols=forexPairs.filter(code=>byCode.has(code)).map(code=>byCode.get(code));
  $('symbol').innerHTML=S.symbols.map(x=>'<option value="'+x.code+'">'+x.name+'</option>').join('');
- if(!S.symbols.length)throw Error('Deriv no devolvió instrumentos permitidos (Volatility 10–75, Crash/Boom 50/500 y XAUUSD)');
+ if(!S.symbols.length)throw Error('Deriv no devolvió pares Forex disponibles');
 }
 async function history(symbol,target=COUNT){
  const chunk=4000,all=[];let receivedRaw=0,invalid=0;
