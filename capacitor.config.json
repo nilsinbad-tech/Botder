@@ -1,0 +1,8 @@
+{
+  "appId": "com.botder.app",
+  "appName": "BOTDER",
+  "webDir": "www",
+  "server": {
+    "androidScheme": "https"
+  }
+}
