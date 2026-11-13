@@ -96,10 +96,17 @@
 .binary-signal{display:grid;grid-template-columns:1fr auto;gap:8px;padding:13px;border:1px solid var(--line);border-radius:10px;background:var(--panel);margin:10px 0}
 .binary-signal b{font-size:16px}.binary-signal p{font-size:11px;color:var(--muted);margin:6px 0}.binary-signal>strong{font-size:22px;color:#f5c451;align-self:center;font-variant-numeric:tabular-nums}.binary-signal.buy{border-color:#20d18b}.binary-signal.sell{border-color:#ff5968}.binary-signal.buy b{color:#20d18b}.binary-signal.sell b{color:#ff5968}
 .binary-actions{grid-column:1/-1;display:grid;grid-template-columns:2fr 1fr;gap:8px}.binary-actions button:first-child{background:#146343;border-color:#20d18b}.binary-actions button:disabled{opacity:.4}.binary-signal>small{grid-column:1/-1;color:var(--muted);font-size:10px}
-#chart{height:390px;min-height:320px}.op-row{display:grid;grid-template-columns:1fr 1fr 1fr 1.3fr auto;gap:7px;padding:9px 4px;border-top:1px solid var(--line);font-size:10px;align-items:center}.op-row.win{color:#20d18b}.op-row.loss{color:#ff5968}
-@media(max-width:600px){#chart{height:360px}.op-row{grid-template-columns:1fr 1fr;gap:5px}.binary-actions{grid-template-columns:1fr 1fr}}
+#chart{height:540px;min-height:480px}.op-row{display:grid;grid-template-columns:1fr 1fr 1fr 1.3fr auto;gap:7px;padding:9px 4px;border-top:1px solid var(--line);font-size:10px;align-items:center}.op-row.win{color:#20d18b}.op-row.loss{color:#ff5968}
+@media(max-width:600px){#chart{height:520px;min-height:480px}.op-row{grid-template-columns:1fr 1fr;gap:5px}.binary-actions{grid-template-columns:1fr 1fr}}
 
 /* Estados de señal y prealerta por llegada al precio objetivo */
 .binary-signal{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px;border:1px solid var(--line);border-radius:10px;background:var(--panel)}.binary-signal p{margin:5px 0;color:var(--muted);font-size:11px;line-height:1.4}.binary-signal small{font-size:10px;color:var(--muted)}.binary-signal.buy{border-color:rgba(32,209,139,.55)}.binary-signal.sell{border-color:rgba(255,89,104,.55)}#signalCountdown{font-size:16px;font-weight:900;white-space:nowrap}.binary-signal strong{color:#ffd166}@media(max-width:480px){.binary-signal{align-items:flex-start;flex-wrap:wrap}.binary-signal>strong{margin-left:auto}}
 
 #chartTradeCountdown{position:absolute;z-index:20;top:9px;right:9px;min-width:150px;padding:8px 10px;border:1px solid #f5c451;border-radius:8px;background:rgba(8,13,22,.94);box-shadow:0 0 8px rgba(245,196,81,.22);display:grid;gap:3px;pointer-events:none;text-align:right;font-variant-numeric:tabular-nums}#chartTradeCountdown[hidden]{display:none}#chartTradeCountdown b{font-size:9px;color:#f5c451;letter-spacing:.4px}#chartTradeCountdown strong{font-size:21px;line-height:1.15;color:#fff}#chartTradeCountdown small{font-size:9px;color:#c5d0df}
+
+/* Gráfico M1 de 24 horas: espacio y legibilidad en pantallas móviles */
+.charttitle{align-items:flex-start;flex-wrap:wrap;line-height:1.35}
+.charttitle b{font-size:12px;letter-spacing:.1px}
+.charttitle span{font-size:9px;line-height:1.45;max-width:100%}
+#chart{height:540px;min-height:480px}
+@media(max-width:600px){#chart{height:520px;min-height:480px}.charttitle{display:grid;gap:4px}.charttitle b{font-size:13px}.charttitle span{font-size:9px}}
