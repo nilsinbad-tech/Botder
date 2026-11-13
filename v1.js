@@ -11,7 +11,7 @@ async function preloadAllInstruments(){let ready=0,failed=[];for(const item of S
 try{const saved=JSON.parse(localStorage.getItem(STORE+'-config')||'null');if(saved?.strategy==='zigzag-m1-original')Object.assign(CFG,saved)}catch{}
 const FOREX=['frxEURUSD','frxGBPUSD','frxUSDJPY','frxAUDUSD','frxUSDCAD','frxUSDCHF','frxNZDUSD','frxEURJPY','frxGBPJPY','frxEURGBP'];
 const EXTRA_ASSETS=[{key:'BTCUSD',label:'BTC/USD',match:x=>/^(cry)?BTCUSD$/i.test(x.symbol||x.underlying_symbol||'')||(/bitcoin/i.test((x.display_name||'')+' '+(x.underlying_symbol_name||''))&&/usd/i.test((x.display_name||'')+' '+(x.underlying_symbol_name||'')))},{key:'STONKS',label:'STONKS',match:x=>/stonks/i.test([x.symbol,x.underlying_symbol,x.display_name,x.underlying_symbol_name].filter(Boolean).join(' '))}];
-const S={ws:null,req:0,pending:new Map(),symbols:[],symbol:'',raw:[],chartBars:[],price:null,chart:null,candleSeries:null,ema9:null,ema20:null,ema50:null,markerApi:null,visualLines:[],obOverlay:null,signal:null,signalTimer:null,trade:null,ops:[],backtestTimer:null,chartCountdown:null,lastPivotKey:'',lastAlertKey:'',lastPrealertMinute:-1,subId:null,heartbeat:null,ticks:[],tradeTimer:null};
+const S={ws:null,req:0,pending:new Map(),symbols:[],symbol:'',raw:[],chartBars:[],price:null,chart:null,candleSeries:null,ema9:null,ema20:null,ema50:null,markerApi:null,visualLines:[],obOverlay:null,signal:null,signalTimer:null,trade:null,ops:[],backtestTimer:null,chartCountdown:null,lastPivotKey:'',lastAlertKey:'',lastPrealertSlot:-1,subId:null,heartbeat:null,ticks:[],tradeTimer:null};
 const norm=x=>String(x||'').toLowerCase().replace(/[^a-z0-9]/g,'');
 function status(t,ok=false){$('connection').textContent=t;$('connection').style.color=ok?'#20d18b':'#ffb95c'}
 function send(p){return new Promise((resolve,reject)=>{if(!S.ws||S.ws.readyState!==1)return reject(Error('Deriv desconectada'));const id=++S.req,t=setTimeout(()=>{S.pending.delete(id);reject(Error('Tiempo de espera de Deriv'))},15000);S.pending.set(id,{resolve:x=>{clearTimeout(t);resolve(x)},reject:e=>{clearTimeout(t);reject(e)}});S.ws.send(JSON.stringify({...p,req_id:id}))})}
@@ -70,6 +70,8 @@ function aggregateMinutes(c,minutes){
 }
 function aggregate1m(c){const map=new Map();for(const b of c){if(!Number.isFinite(b.time)||!Number.isFinite(b.open)||!Number.isFinite(b.high)||!Number.isFinite(b.low)||!Number.isFinite(b.close))continue;const t=Math.floor(b.time/60)*60;let x=map.get(t);if(!x){x={time:t,open:b.open,high:b.high,low:b.low,close:b.close,count:0,firstTime:b.time,lastTime:b.time};map.set(t,x)}if(b.time===x.lastTime&&x.count>0)continue;x.high=Math.max(x.high,b.high);x.low=Math.min(x.low,b.low);x.close=b.close;x.count++;x.lastTime=b.time}return [...map.values()].filter(x=>x.count===12&&x.firstTime===x.time&&x.lastTime===x.time+55).map(({firstTime,lastTime,...x})=>x)}
 function partialMinute(c,minute){const a=c.filter(x=>x.time>=minute&&x.time<minute+50);if(a.length!==10||a[0].time!==minute||a.at(-1).time!==minute+45)return null;return{time:minute,open:a[0].open,high:Math.max(...a.map(x=>x.high)),low:Math.min(...a.map(x=>x.low)),close:a.at(-1).close}}
+function aggregate20(c){const map=new Map();for(const b of c){if(!Number.isFinite(b.time)||!Number.isFinite(b.open)||!Number.isFinite(b.high)||!Number.isFinite(b.low)||!Number.isFinite(b.close))continue;const t=Math.floor(b.time/20)*20;let x=map.get(t);if(!x){x={time:t,open:b.open,high:b.high,low:b.low,close:b.close,count:0,firstTime:b.time,lastTime:b.time};map.set(t,x)}if(b.time===x.lastTime&&x.count>0)continue;x.high=Math.max(x.high,b.high);x.low=Math.min(x.low,b.low);x.close=b.close;x.count++;x.lastTime=b.time}return [...map.values()].filter(x=>x.count===4&&x.firstTime===x.time&&x.lastTime===x.time+15).map(({firstTime,lastTime,...x})=>x)}
+function partial20(c,slot){const a=c.filter(x=>x.time>=slot&&x.time<slot+15);if(a.length!==3||a[0].time!==slot||a.at(-1).time!==slot+10)return null;return{time:slot,open:a[0].open,high:Math.max(...a.map(x=>x.high)),low:Math.min(...a.map(x=>x.low)),close:a.at(-1).close}}
 function updateVisuals(){
  if(!S.candleSeries||!S.chartBars.length)return;
  const bars=S.chartBars,markers=[],now=Date.now()/1000,cutoff=now-86400;
@@ -96,19 +98,18 @@ function ema(c,p){const out=Array(c.length).fill(null),k=2/(p+1);let v=null;c.fo
 function zigzag(c,depth=CFG.depth,sep=CFG.separation){const pts=[];for(let i=depth;i<c.length-depth;i++){let hi=true,lo=true;for(let j=1;j<=depth;j++){if(c[i].high<c[i-j].high||c[i].high<c[i+j].high)hi=false;if(c[i].low>c[i-j].low||c[i].low>c[i+j].low)lo=false}if(!hi&&!lo)continue;const p={index:i,time:c[i].time,price:hi?c[i].high:c[i].low,type:hi?'HIGH':'LOW',confirmed:i+depth};const last=pts.at(-1);if(!last||last.type!==p.type){const move=last?Math.abs(p.price-last.price):Infinity,minMove=last?Math.abs(last.price)*(CFG.deviation/10000):0;if(!last||(i-last.index>=sep&&move>=minMove))pts.push(p)}else if((p.type==='HIGH'&&p.price>last.price)||(p.type==='LOW'&&p.price<last.price))pts[pts.length-1]=p}return pts}
 function setSignal(s){
  if(S.signal||S.trade)return;
- const key=S.symbol+'|'+s.side+'|'+s.pivot.time+'|'+s.signalMinute;
+ const key=S.symbol+'|'+s.side+'|'+s.pivot.time;
  if(key===S.lastPivotKey)return;
  S.lastPivotKey=key;
- S.signal={...s,key,created:s.prealertAt,entryAt:(s.signalMinute+60)*1000,state:'PREALERT'};
+ S.signal={...s,key,created:s.prealertAt,entryAt:(s.signalTime+20)*1000,state:'PREALERT'};
  $('signal').className='binary-signal '+(s.side==='BUY'?'buy':'sell');
- $('signalTitle').textContent=s.side==='BUY'?'🟢 PREPARAR CALL · ZIGZAG LOW':'🔴 PREPARAR PUT · ZIGZAG HIGH';
- $('signalInfo').textContent='Aviso anticipado · entrada prevista al abrir la próxima vela M1. Si la vela cambia de dirección, se cancela.';
+ $('signalTitle').textContent=s.side==='BUY'?'🟢 POSIBLE COMPRA · ZIGZAG M20':'🔴 POSIBLE VENTA · ZIGZAG M20';
+ $('signalInfo').textContent='SEÑAL VIGENTE · precio referencial '+fmt(s.partial.close)+' · entrada prevista al abrir la próxima vela de 20 segundos. Se confirma o cancela en ese momento.';
  $('signalPrice').textContent=fmt(s.partial.close);
- $('tradeState').textContent='PREALERTA · 10 SEGUNDOS';
+ $('tradeState').textContent='VIGENTE · PREAVISO 10s';
  if(S.signalTimer)clearInterval(S.signalTimer);
  const update=()=>{if(!S.signal)return;const left=Math.max(0,S.signal.entryAt-Date.now());$('signalCountdown').textContent=(left/1000).toFixed(1)+' s';};
- update();S.signalTimer=setInterval(update,100);
- updateVisuals();
+ update();S.signalTimer=setInterval(update,100);updateVisuals();
 }
 function cancelPendingSignal(message){
  if(S.signalTimer)clearInterval(S.signalTimer);S.signalTimer=null;S.signal=null;
@@ -116,25 +117,24 @@ function cancelPendingSignal(message){
 }
 function prepareSignal(epoch){
  if(S.trade||S.signal)return;
- const minute=Math.floor(epoch/60)*60,second=epoch-minute,prealertSecond=60-ENTRY_WINDOW/1000;
- if(second<prealertSecond||second>prealertSecond+2||S.lastPrealertMinute===minute)return;
- const complete=aggregate1m(S.raw).filter(x=>x.time<minute);
+ const slot=Math.floor(epoch/20)*20,second=epoch-slot;
+ if(second<10||second>12||S.lastPrealertSlot===slot)return;
+ const complete=aggregate20(S.raw).filter(x=>x.time<slot);
  if(complete.length<CFG.depth*2+4)return;
- const partial=partialMinute(S.raw,minute);if(!partial)return;
+ const partial=partial20(S.raw,slot);if(!partial)return;
  const pivot=zigzag(complete).at(-1);
  if(!pivot||pivot.confirmed!==complete.length-1)return;
  const side=pivot.type==='LOW'&&partial.close>partial.open?'BUY':pivot.type==='HIGH'&&partial.close<partial.open?'SELL':null;
  if(!side)return;
- S.lastPrealertMinute=minute;
- setSignal({side,pivot,partial,signalMinute:minute,prealertAt:epoch*1000});
+ S.lastPrealertSlot=slot;
+ setSignal({side,pivot,partial,signalTime:slot,prealertAt:epoch*1000});
 }
 function activatePendingEntry(price,epoch){
  const s=S.signal;if(!s||epoch*1000<s.entryAt)return;
- const late=epoch*1000-s.entryAt;
- const last=aggregate1m(S.raw).find(x=>x.time===s.signalMinute);
- if(late>5000||!last){cancelPendingSignal('La cotización llegó tarde o faltó la vela completa; no se registra entrada.');return}
+ const late=epoch*1000-s.entryAt,last=aggregate20(S.raw).find(x=>x.time===s.signalTime);
+ if(late>5000||!last){cancelPendingSignal('Se canceló: no llegó a tiempo la vela completa de 20 segundos.');return}
  const valid=s.side==='BUY'?last.close>last.open&&last.low>=s.pivot.price:last.close<last.open&&last.high<=s.pivot.price;
- if(!valid){cancelPendingSignal('La vela M1 perdió la dirección o rompió el pivote antes de la entrada.');return}
+ if(!valid){cancelPendingSignal('Señal CANCELADA: la vela de 20 segundos perdió dirección o rompió el pivote.');return}
  startAutomaticTrade(price,epoch);
 }
 function onTick(t){
@@ -150,7 +150,7 @@ function onTick(t){
   if(lastBar&&lastBar.time===minute){lastBar.high=Math.max(lastBar.high,price);lastBar.low=Math.min(lastBar.low,price);lastBar.close=price}
   else if(!lastBar||minute>lastBar.time){S.chartBars.push({time:minute,open:lastBar?lastBar.close:price,high:Math.max(lastBar?lastBar.close:price,price),low:Math.min(lastBar?lastBar.close:price,price),close:price});if(S.chartBars.length>1440)S.chartBars.shift()}
   const bars=S.chartBars;if(bars.length){const b=bars.at(-1),a=ema(bars,9),e=ema(bars,20),d=ema(bars,50),i=bars.length-1;S.candleSeries.update(b);S.ema9.update({time:b.time,value:a[i]});S.ema20.update({time:b.time,value:e[i]});S.ema50.update({time:b.time,value:d[i]});}
-  $('trend').textContent='ZIGZAG M1';$('chartTitle').textContent=S.symbol+' · M1 · 24H · '+bars.length+' velas';
+  $('trend').textContent='ZIGZAG M20';$('chartTitle').textContent=S.symbol+' · M1 · 24H · '+bars.length+' velas';
   if(S.signal)activatePendingEntry(price,epoch);
   if(!S.signal&&!S.trade)prepareSignal(epoch);
   if(closed&&bucket%60===0){updateVisuals();runBacktest();cachePut(S.symbol,S.raw,S.chartBars).catch(e=>console.warn('No se pudo guardar el histórico',e))}
@@ -160,30 +160,30 @@ function onTick(t){
 }
 function fmt(v){if(!Number.isFinite(Number(v)))return'—';return Number(v).toPrecision(8).replace(/(\.\d*?)0+$/,'$1').replace(/\.$/,'')}
 function runBacktest(){
- const c=aggregate1m(S.raw);if(c.length<CFG.depth*2+10){$('backtestResult').textContent='Histórico M1 completo insuficiente para confirmar pivotes ZigZag.';return}
+ const c=aggregate20(S.raw);if(c.length<CFG.depth*2+10){$('backtestResult').textContent='Histórico de 20 segundos insuficiente para confirmar pivotes ZigZag.';return}
  const trades=[];let busyUntil=-1,lastKey='';
- for(let i=CFG.depth*2+2;i<c.length-2;i++){
+ for(let i=CFG.depth*2+2;i<c.length-6;i++){
   if(i<=busyUntil)continue;
   const previous=c.slice(0,i),pivot=zigzag(previous).at(-1);
   if(!pivot||pivot.confirmed!==previous.length-1)continue;
-  const partial=partialMinute(S.raw,c[i].time);if(!partial)continue;
+  const partial=partial20(S.raw,c[i].time);if(!partial)continue;
   const side=pivot.type==='LOW'&&partial.close>partial.open?'BUY':pivot.type==='HIGH'&&partial.close<partial.open?'SELL':null;
   if(!side)continue;
   const finalValid=side==='BUY'?c[i].close>c[i].open&&c[i].low>=pivot.price:c[i].close<c[i].open&&c[i].high<=pivot.price;
   if(!finalValid)continue;
   const key=side+'|'+pivot.time+'|'+c[i].time;if(key===lastKey)continue;lastKey=key;
-  const entryIndex=i+1,exitIndex=i+2;if(exitIndex>=c.length)continue;
+  const entryIndex=i+1,exitIndex=i+6;if(exitIndex>=c.length)continue;
   const entry=c[entryIndex].open,exit=c[exitIndex].close;
   const result=side==='BUY'?(exit>entry?'WIN':exit<entry?'LOSS':'EMPATE'):(exit<entry?'WIN':exit>entry?'LOSS':'EMPATE');
-  const entryTime=c[entryIndex].time*1000,exitTime=(c[i].time+180)*1000;
-  trades.push({id:'BT-'+S.symbol+'-'+entryTime,symbol:S.symbol,side,entry,entryTime,exit,exitTime,result,mode:'BACKTEST',pivotTime:pivot.time,signalTime:c[i].time+60-ENTRY_WINDOW/1000});
+  const entryTime=c[entryIndex].time*1000,exitTime=(c[entryIndex].time+120)*1000;
+  trades.push({id:'BT-'+S.symbol+'-'+entryTime,symbol:S.symbol,side,entry,entryTime,exit,exitTime,result,mode:'BACKTEST',pivotTime:pivot.time,signalTime:c[i].time+10});
   busyUntil=exitIndex;
  }
  const previous=S.ops.filter(x=>!(x.mode==='BACKTEST'&&x.symbol===S.symbol));
  S.ops=[...trades,...previous].sort((a,b)=>b.entryTime-a.entryTime).slice(0,2000);
  saveOps();renderOps();updateVisuals();
  const wins=trades.filter(x=>x.result==='WIN').length,losses=trades.filter(x=>x.result==='LOSS').length,draws=trades.filter(x=>x.result==='EMPATE').length,total=trades.length,rate=total?100*wins/total:0;
- $('backtestResult').textContent='BACKTEST M1 · ZigZag '+CFG.depth+'-'+CFG.deviation+'-'+CFG.separation+' · preaviso 10s antes de entrada · CALL tras LOW / PUT tras HIGH · entrada en apertura M1 siguiente · vencimiento exacto 120s · '+c.length+' velas completas · WIN '+wins+' · LOSS '+losses+' · EMPATE '+draws+' · efectividad '+rate.toFixed(1)+'%.';
+ $('backtestResult').textContent='BACKTEST M20 · ZigZag '+CFG.depth+'-'+CFG.deviation+'-'+CFG.separation+' · preaviso 10s · confirmación M20 · entrada en la siguiente vela · vencimiento 120s · '+c.length+' velas completas · WIN '+wins+' · LOSS '+losses+' · EMPATE '+draws+' · efectividad '+rate.toFixed(1)+'%.';
 }
 function loadOps(){try{const a=JSON.parse(localStorage.getItem(STORE+'-operations')||'[]');S.ops=Array.isArray(a)?a:[]}catch{S.ops=[]}renderOps()}
 function saveOps(){localStorage.setItem(STORE+'-operations',JSON.stringify(S.ops.slice(0,2000)))}
@@ -198,7 +198,7 @@ function renderOps(){
 }
 function initChart(){const L=LightweightCharts;$('chart').innerHTML='';S.obOverlay=document.createElement('div');S.obOverlay.className='v1-overlay';$('chart').appendChild(S.obOverlay);S.chart=L.createChart($('chart'),{autoSize:true,layout:{background:{type:'solid',color:'#0a1320'},textColor:'#aab9ca'},grid:{vertLines:{color:'#1b2a3d'},horzLines:{color:'#1b2a3d'}},timeScale:{timeVisible:true,secondsVisible:false,borderColor:'#34445a',rightOffset:4,barSpacing:3,minBarSpacing:0.5},rightPriceScale:{borderColor:'#34445a'},handleScroll:{mouseWheel:true,pressedMouseMove:true,horzTouchDrag:true},handleScale:{mouseWheel:true,pinch:true}});S.candleSeries=S.chart.addSeries(L.CandlestickSeries,{upColor:'#20d18b',downColor:'#ff5968',wickUpColor:'#20d18b',wickDownColor:'#ff5968',borderVisible:false});S.ema9=S.chart.addSeries(L.LineSeries,{color:'#318bff',lineWidth:2,title:'EMA 9'});S.ema20=S.chart.addSeries(L.LineSeries,{color:'#ff9d28',lineWidth:2,title:'EMA 20'});S.ema50=S.chart.addSeries(L.LineSeries,{color:'#b36bff',lineWidth:2,title:'EMA 50'});const bars=S.chartBars;S.candleSeries.setData(bars);const a=ema(bars,9),b=ema(bars,20),d=ema(bars,50);S.ema9.setData(bars.map((x,i)=>({time:x.time,value:a[i]})));S.ema20.setData(bars.map((x,i)=>({time:x.time,value:b[i]})));S.ema50.setData(bars.map((x,i)=>({time:x.time,value:d[i]})));if(L.createSeriesMarkers)S.markerApi=L.createSeriesMarkers(S.candleSeries,[]);updateVisuals();S.chart.timeScale().fitContent();S.chart.timeScale().subscribeVisibleLogicalRangeChange(drawOrderBlocks)}
 async function subscribe(){if(S.subId){try{await send({forget:S.subId})}catch{}S.subId=null}const r=await send({ticks:S.symbol,subscribe:1});S.subId=r.subscription?.id||null;if(r.tick)onTick(r.tick)}
-async function loadCurrent(force=false){if(S.trade){$('symbol').value=S.symbol;await subscribe();return}S.symbol=$('symbol').value;if(!S.symbol)return;const symbol=S.symbol;status('Abriendo gráfico · '+symbol);$('chartTitle').textContent=symbol+' · cargando velas M1';if(S.signalTimer)clearInterval(S.signalTimer);S.signalTimer=null;S.signal=null;S.lastPivotKey='';S.lastPrealertMinute=-1;$('signalTitle').textContent='ESPERANDO CONFIGURACIÓN';$('signalInfo').textContent='ZigZag M1 · preaviso 10 segundos · CALL/PUT · vencimiento 2 minutos';$('signalCountdown').textContent='—';$('tradeState').textContent='SIN OPERACIÓN';let cached=null;if(!force){try{cached=await cacheGet(symbol)}catch(e){console.warn(e)}}if(S.symbol!==symbol)return;if(cached&&cached.version===1&&Array.isArray(cached.raw)&&cached.raw.length&&Array.isArray(cached.chartBars)&&cached.chartBars.length){S.raw=cached.raw;S.chartBars=cached.chartBars;initChart();runBacktest();await subscribe();status('EN VIVO · '+symbol+' · histórico guardado · '+S.chartBars.length+' velas M1',true);return}S.raw=[];S.chartBars=await chartHistory(symbol);if(S.symbol!==symbol)return;$('chartTitle').textContent=symbol+' · M1 · '+S.chartBars.length+' velas · gráfico listo';initChart();await subscribe();status('GRÁFICO LISTO · cargando análisis en segundo plano',true);history(symbol).then(raw=>{if(S.symbol!==symbol)return;const live=S.raw.slice(),last=raw.at(-1);S.raw=[...raw,...live.filter(x=>!last||x.time>last.time)];runBacktest();cachePut(symbol,S.raw,S.chartBars).catch(e=>console.warn(e));status('EN VIVO · '+symbol+' · histórico y análisis listos',true)}).catch(e=>{if(S.symbol===symbol)status('Gráfico en vivo · histórico de señales pendiente: '+e.message)})}
+async function loadCurrent(force=false){if(S.trade){$('symbol').value=S.symbol;await subscribe();return}S.symbol=$('symbol').value;if(!S.symbol)return;const symbol=S.symbol;status('Abriendo gráfico · '+symbol);$('chartTitle').textContent=symbol+' · cargando velas M1';if(S.signalTimer)clearInterval(S.signalTimer);S.signalTimer=null;S.signal=null;S.lastPivotKey='';S.lastPrealertSlot=-1;$('signalTitle').textContent='ESPERANDO CONFIGURACIÓN';$('signalInfo').textContent='Gráfico M1 · confirmación ZigZag M20 · preaviso 10 segundos · CALL/PUT · vencimiento 2 minutos';$('signalCountdown').textContent='—';$('tradeState').textContent='SIN OPERACIÓN';let cached=null;if(!force){try{cached=await cacheGet(symbol)}catch(e){console.warn(e)}}if(S.symbol!==symbol)return;if(cached&&cached.version===1&&Array.isArray(cached.raw)&&cached.raw.length&&Array.isArray(cached.chartBars)&&cached.chartBars.length){S.raw=cached.raw;S.chartBars=cached.chartBars;initChart();runBacktest();await subscribe();status('EN VIVO · '+symbol+' · histórico guardado · '+S.chartBars.length+' velas M1',true);return}S.raw=[];S.chartBars=await chartHistory(symbol);if(S.symbol!==symbol)return;$('chartTitle').textContent=symbol+' · M1 · '+S.chartBars.length+' velas · gráfico listo';initChart();await subscribe();status('GRÁFICO LISTO · cargando análisis en segundo plano',true);history(symbol).then(raw=>{if(S.symbol!==symbol)return;const live=S.raw.slice(),last=raw.at(-1);S.raw=[...raw,...live.filter(x=>!last||x.time>last.time)];runBacktest();cachePut(symbol,S.raw,S.chartBars).catch(e=>console.warn(e));status('EN VIVO · '+symbol+' · histórico y análisis listos',true)}).catch(e=>{if(S.symbol===symbol)status('Gráfico en vivo · histórico de señales pendiente: '+e.message)})}
 async function start(){try{await connect();await loadSymbols();const saved=localStorage.getItem(STORE+'-symbol');if(saved&&S.symbols.some(x=>x.code===saved))$('symbol').value=saved;loadOps();await loadCurrent()}catch(e){status(e.message);setTimeout(()=>start().catch(x=>status(x.message)),7000)}}
 function applyConfig(){for(const k of Object.keys(CFG)){const el=$('cfg-'+k);if(el)el.value=CFG[k]}}
 function saveConfig(){
