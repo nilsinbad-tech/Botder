@@ -131,7 +131,7 @@ function runBacktest(){
   busyUntil=exit; 
  }
  const previous=S.ops.filter(x=>!(x.mode==='BACKTEST'&&x.symbol===S.symbol));
- S.ops=[...trades.slice().reverse(),...previous].slice(0,2000);
+ S.ops=[...trades,...previous].sort((a,b)=>b.entryTime-a.entryTime).slice(0,2000);
  saveOps();renderOps();updateVisuals();
  const wins=trades.filter(x=>x.result==='WIN').length,losses=trades.filter(x=>x.result==='LOSS').length,draws=trades.filter(x=>x.result==='EMPATE').length,total=trades.length,rate=total?100*wins/total:0;
  const hours=(c.length*5/3600).toFixed(1);
