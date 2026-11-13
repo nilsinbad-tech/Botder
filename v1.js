@@ -140,7 +140,7 @@ function runBacktest(){
    for(let j=1;j<=CFG.depth;j++){if(c[pi].high<c[pi-j].high||c[pi].high<c[pi+j].high)hi=false;if(c[pi].low>c[pi-j].low||c[pi].low>c[pi+j].low)lo=false}
    if(hi||lo){
     const p={index:pi,time:c[pi].time,price:hi?c[pi].high:c[pi].low,type:hi?'HIGH':'LOW',confirmed:i},last=points.at(-1);
-    if(!last||last.type!==p.type){if(!last||pi-last.index>=CFG.separation)points.push(p)}
+    if(!last||last.type!==p.type){const move=last?Math.abs(p.price-last.price):Infinity,minMove=last?Math.abs(last.price)*(CFG.deviation/10000):0;if(!last||(pi-last.index>=CFG.separation&&move>=minMove))points.push(p)}
     else if((p.type==='HIGH'&&p.price>last.price)||(p.type==='LOW'&&p.price<last.price))points[points.length-1]=p;
    }
   }
