@@ -13,7 +13,8 @@ async function history(symbol){const r=await send({ticks_history:symbol,adjust_s
 async function chartHistory(symbol){
  const r=await send({ticks_history:symbol,adjust_start_time:1,count:1440,end:'latest',style:'candles',granularity:60});
  const out=(r.candles||[]).map(x=>({time:+x.epoch,open:+x.open,high:+x.high,low:+x.low,close:+x.close})).filter(x=>Number.isFinite(x.time)&&Number.isFinite(x.close)).sort((a,b)=>a.time-b.time);
- if(out.length<100)throw Error('Histórico M1 insuficiente: Deriv devolvió '+out.length+' velas');\n if(out.length>1440)return out.slice(-1440);
+ if(out.length<100)throw Error('Histórico M1 insuficiente: Deriv devolvió '+out.length+' velas');
+ if(out.length>1440)return out.slice(-1440);
  return out;
 }
 function aggregateMinutes(c,minutes){
