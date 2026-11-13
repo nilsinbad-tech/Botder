@@ -80,3 +80,14 @@
 #chart .si-structure span{position:absolute;top:-9px;left:2px;font-size:7px;font-weight:700;background:rgba(8,13,22,.72);padding:0 2px;white-space:nowrap}
 
 .visual-settings{display:grid;grid-template-columns:minmax(150px,220px) 1fr;gap:9px;align-items:end;margin:8px 0}.visual-settings label{display:grid;gap:5px;color:var(--muted);font-size:10px;font-weight:800}.visual-settings small{color:var(--muted);font-size:10px;line-height:1.4}@media(max-width:600px){.visual-settings{grid-template-columns:1fr}}
+
+/* Panel criptomonedas 5s / 30s */
+.sol-mode{background:#101a29;border:1px solid #35516c;border-radius:10px;padding:12px;display:grid;gap:10px}
+.sol-head{display:flex;justify-content:space-between;gap:8px;align-items:center}.sol-head h3{margin:0;font-size:12px}.sol-head small,.sol-note{color:#9aabc0;font-size:10px}.sol-head>b{font-size:10px;color:#ffb95c}
+.sol-select-label{display:grid;gap:5px;color:#9aabc0;font-size:9px;font-weight:800}.sol-select-label select{width:100%;height:40px}
+.sol-quote{display:flex;align-items:center;gap:12px;background:#0a1320;padding:10px;border-radius:8px}.sol-quote small{font-size:9px;color:#9aabc0}.sol-quote strong{font-size:20px}.sol-quote span{font-size:10px;color:#9aabc0;margin-left:auto}
+.sol-signal{display:grid;grid-template-columns:1fr auto;gap:5px;padding:12px;border:1px solid #344a64;border-radius:8px;background:#0a1320}.sol-signal b{font-size:15px}.sol-signal span{font-size:10px;color:#9aabc0}.sol-signal strong{grid-column:2;grid-row:1/3;font-size:24px;align-self:center}.sol-signal.buy{border-color:#20d18b}.sol-signal.sell{border-color:#ff5968}.sol-signal.buy b{color:#20d18b}.sol-signal.sell b{color:#ff5968}
+.sol-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px}.sol-actions button:first-child{background:#146343;border-color:#20d18b}.sol-actions button:disabled{opacity:.4}
+.sol-trade,.sol-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}.sol-stats{grid-template-columns:repeat(3,1fr)}.sol-trade>div,.sol-stats>div{background:#0a1320;padding:8px;border-radius:7px;min-width:0}.sol-trade small,.sol-stats small{display:block;color:#9aabc0;font-size:8px}.sol-trade b,.sol-stats b{display:block;font-size:12px;margin-top:4px;overflow-wrap:anywhere}.sol-stats b{font-size:16px}
+.sol-row{display:flex;justify-content:space-between;gap:8px;padding:7px 3px;border-top:1px solid #26364b;font-size:10px}.sol-row.win{color:#20d18b}.sol-row.loss{color:#ff5968}
+@media(max-width:600px){.sol-trade{grid-template-columns:repeat(2,1fr)}.sol-head{align-items:flex-start;flex-direction:column}.sol-quote{flex-wrap:wrap}.sol-quote span{width:100%;margin:0}}
