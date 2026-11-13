@@ -112,3 +112,10 @@
 @media(max-width:600px){#chart{height:520px;min-height:480px}.charttitle{display:grid;gap:4px}.charttitle b{font-size:13px}.charttitle span{font-size:9px}}
 
 #history{max-height:520px;overflow-y:auto;overscroll-behavior:contain;padding-right:4px}
+
+.op-row{grid-template-columns:24px minmax(0,1fr) auto 54px auto;gap:7px}
+.op-star{font-size:20px;line-height:1;text-align:center;text-shadow:0 0 5px currentColor,0 0 11px currentColor}
+.op-star.buy{color:#20e58f;text-shadow:0 0 5px #20e58f,0 0 12px #20e58f,0 0 19px rgba(32,229,143,.8)}
+.op-star.sell{color:#ff4058;text-shadow:0 0 5px #ff4058,0 0 12px #ff4058,0 0 19px rgba(255,64,88,.8)}
+.op-countdown{font-variant-numeric:tabular-nums;font-weight:800;color:#f5c451;text-align:center}
+@media(max-width:600px){.op-row{grid-template-columns:22px minmax(0,1fr) auto 48px auto;gap:5px;font-size:10px}.op-star{font-size:18px}}
