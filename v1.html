@@ -2,11 +2,21 @@
 <html lang="es"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#080d16"><title>BOTDER · Scalping M1</title>
-<link rel="stylesheet" href="v1.css?v=18">
+<link rel="stylesheet" href="v1.css?v=19">
 <script src="https://unpkg.com/lightweight-charts@5.0.8/dist/lightweight-charts.standalone.production.js" onerror="this.onerror=null;this.src='https://cdn.jsdelivr.net/npm/lightweight-charts@5.0.8/dist/lightweight-charts.standalone.production.js'"></script>
 </head><body>
 <header><b>BOTDER <small>SCALPING M1 · V1</small></b><span id="connection">Conectando Deriv…</span></header>
 <main>
+<section class="sol-mode" id="solCryptoMode">
+ <div class="sol-head"><div><h3 id="solInstrumentTitle">⚡ CRIPTOMONEDAS · OPERACIÓN 30 SEGUNDOS</h3><small>Velas de 5 segundos · señal anticipada 5 segundos · seguimiento manual</small></div><b id="solConnection">Conectando Deriv…</b></div>
+ <label class="sol-select-label">INSTRUMENTO<select id="solAsset"></select></label>
+ <div class="sol-quote"><small>PRECIO EN VIVO</small><strong id="solPrice">—</strong><span id="solCandle">Esperando ticks…</span></div>
+ <div class="sol-signal" id="solSignal"><b id="solSignalTitle">ESPERANDO SEÑAL</b><span id="solSignalInfo">Analizando EMA 9/20, RSI y tendencia corta</span><strong id="solCountdown">—</strong></div>
+ <div class="sol-actions"><button id="solEnter" disabled>ENTRÉ</button><button id="solCancel" disabled>CANCELAR SEÑAL</button></div>
+ <div class="sol-trade"><div><small>OPERACIÓN</small><b id="solTradeState">SIN OPERACIÓN</b></div><div><small>TIEMPO RESTANTE</small><b id="solTimer">—</b></div><div><small>PRECIO ENTRADA</small><b id="solEntry">—</b></div><div><small>PRECIO FINAL</small><b id="solExit">—</b></div></div>
+ <div class="sol-stats"><div><small>GANADAS</small><b id="solWins">0</b></div><div><small>PERDIDAS</small><b id="solLosses">0</b></div><div><small>ACIERTO</small><b id="solRate">0%</b></div></div>
+ <small class="sol-note">La señal se prepara 5 segundos antes. Pulsa ENTRÉ cuando llegue el momento; desde ahí se cuentan 30 segundos. No se envían órdenes a Deriv.</small><div id="solHistory"></div>
+</section>
 <section id="signalNotices" class="signal-notices" aria-live="polite" aria-label="Avisos de señales"></section><section class="active-board"><h3>SEÑALES VIGENTES · TODOS LOS INSTRUMENTOS</h3><div id="activeSignals" class="active-signals" hidden></div></section>
 <section class="toolbar"><label>INSTRUMENTO<select id="symbol"></select></label><button id="reload">↻ ACTUALIZAR</button></section>
 <section class="statusgrid">
@@ -39,4 +49,4 @@
  <p><b>Order Blocks:</b> zonas basadas en el cuerpo de la vela, con fondo casi transparente. El selector incluye Volatility normales y de 1 segundo entre 10 y 75, Crash 50/500, Boom 50/500 y XAUUSD (oro), cuando Deriv lo devuelve como instrumento activo. Cada instrumento guarda su propio TP y SL en este dispositivo. El backtesting evalúa las últimas 48 horas del instrumento seleccionado.</p>
  <p>El gráfico y el backtest muestran el instrumento seleccionado. El panel superior vigila todos los instrumentos permitidos; al cerrarse una señal desaparece de vigentes y queda en el gráfico e historial de su instrumento.</p>
 </section>
-</main><script src="v1.js?v=46"></script></body></html>
+</main><script src="sol5s.js?v=1"></script><script src="v1.js?v=46"></script></body></html>
