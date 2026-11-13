@@ -70,8 +70,8 @@ function updateVisuals(){
  const pivots=pts.filter(p=>p.confirmed<m10.length&&p.time>=cutoff).slice(-6);
  for(const p of pivots)markers.push({time:p.time,position:p.type==='LOW'?'belowBar':'aboveBar',color:p.type==='LOW'?'#20d18b':'#ff5968',shape:p.type==='LOW'?'arrowUp':'arrowDown',text:''});
  for(const op of S.ops){if(op.symbol!==S.symbol||Date.now()-op.entryTime>86400000)continue;const t=Math.floor((op.entryTime/1000)/60)*60;markers.push({time:t,position:op.side==='BUY'?'belowBar':'aboveBar',color:op.side==='BUY'?'#20d18b':'#ff5968',shape:'circle',text:op.side==='BUY'?'CALL':'PUT'});if(op.exitTime){const xt=Math.floor((op.exitTime/1000)/60)*60;markers.push({time:xt,position:op.side==='BUY'?'aboveBar':'belowBar',color:op.result==='WIN'?'#20d18b':op.result==='LOSS'?'#ff5968':'#f5c451',shape:'square',text:op.result==='WIN'?'W':op.result==='LOSS'?'L':'='});}}
- if(S.signal){const t=Math.floor(S.signal.pivot.time/60)*60;markers.push({time:t,position:S.signal.side==='BUY'?'belowBar':'aboveBar',color:'#f5c451',shape:'arrow',text:S.signal.side==='BUY'?'ENTRADA COMPRA':'ENTRADA VENTA'});}
- if(S.trade){const t=Math.floor((S.trade.entryTime/1000)/60)*60;markers.push({time:t,position:S.trade.side==='BUY'?'belowBar':'aboveBar',color:'#f5c451',shape:'circle',text:S.trade.side==='BUY'?'COMPRA ACTIVA':'VENTA ACTIVA'});}
+ if(S.signal){const t=Math.floor(S.signal.pivot.time/60)*60;markers.push({time:t,position:S.signal.side==='BUY'?'belowBar':'aboveBar',color:'#f5c451',shape:'arrow',text:S.signal.side==='BUY'?'PREPARAR CALL':'PREPARAR PUT'});}
+ if(S.trade){const t=Math.floor((S.trade.entryTime/1000)/60)*60;markers.push({time:t,position:S.trade.side==='BUY'?'belowBar':'aboveBar',color:'#f5c451',shape:'circle',text:S.trade.side==='BUY'?'CALL ACTIVO':'PUT ACTIVO'});}
  markers.sort((a,b)=>a.time-b.time);if(S.markerApi)S.markerApi.setMarkers(markers);
  S.visualLines.forEach(x=>{try{S.candleSeries.removePriceLine(x)}catch{}});S.visualLines=[];
  // No mostrar etiquetas en la escala de precios: se superponían unas con otras.
