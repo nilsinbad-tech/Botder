@@ -1,5 +1,7 @@
 (()=>{'use strict';
-const $=id=>document.getElementById(id),API='wss://api.derivws.com/trading/v1/options/ws/public',STORE='botder-binary-zigzag-5s-v1',DEPTH=3,SEPARATION=3,EXPIRY=120000,ENTRY_WINDOW=10000;
+const $=id=>document.getElementById(id),API='wss://api.derivws.com/trading/v1/options/ws/public',STORE='botder-binary-zigzag-5s-v1',EXPIRY=120000,ENTRY_WINDOW=10000;
+const CFG={depth:10,deviation:5,separation:3,rsiPeriod:14,buyLevel:55,sellLevel:45};
+try{Object.assign(CFG,JSON.parse(localStorage.getItem(STORE+'-config')||'{}'))}catch{}
 const FOREX=['frxEURUSD','frxGBPUSD','frxUSDJPY','frxAUDUSD','frxUSDCAD','frxUSDCHF','frxNZDUSD','frxEURJPY','frxGBPJPY','frxEURGBP'];
 const CRYPTO=[{label:'SOL/USD',keys:['solusd','crysolusd','solanausd']},{label:'BTC/USD',keys:['btcusd','crybtcusd','bitcoinusd']},{label:'ETH/USD',keys:['ethusd','cryethusd','ethereumusd']}];
 const S={ws:null,req:0,pending:new Map(),symbols:[],symbol:'',raw:[],chartBars:[],price:null,chart:null,candleSeries:null,ema9:null,ema20:null,ema50:null,markerApi:null,visualLines:[],signal:null,signalTimer:null,trade:null,ops:[],backtestTimer:null,chartCountdown:null,lastPivotKey:'',lastAlertKey:'',lastClosed15:0,subId:null,heartbeat:null,ticks:[],tradeTimer:null};
@@ -86,8 +88,10 @@ function updateVisuals(){
 
 function ema(c,p){const out=Array(c.length).fill(null),k=2/(p+1);let v=null;c.forEach((x,i)=>{v=v===null?x.close:x.close*k+v*(1-k);out[i]=v});return out}
 function aggregate15(c){const map=new Map();for(const b of c){const t=Math.floor(b.time/15)*15;let x=map.get(t);if(!x){x={time:t,open:b.open,high:b.high,low:b.low,close:b.close,count:0};map.set(t,x)}x.high=Math.max(x.high,b.high);x.low=Math.min(x.low,b.low);x.close=b.close;x.count++}return [...map.values()].filter(x=>x.count===3)}
-function zigzag(c,depth=DEPTH,sep=SEPARATION){const pts=[];for(let i=depth;i<c.length-depth;i++){let hi=true,lo=true;for(let j=1;j<=depth;j++){if(c[i].high<c[i-j].high||c[i].high<c[i+j].high)hi=false;if(c[i].low>c[i-j].low||c[i].low>c[i+j].low)lo=false}if(!hi&&!lo)continue;const p={index:i,time:c[i].time,price:hi?c[i].high:c[i].low,type:hi?'HIGH':'LOW',confirmed:i+depth};const last=pts.at(-1);if(!last||last.type!==p.type){if(!last||i-last.index>=sep)pts.push(p)}else if((p.type==='HIGH'&&p.price>last.price)||(p.type==='LOW'&&p.price<last.price))pts[pts.length-1]=p}return pts}
+function zigzag(c,depth=CFG.depth,sep=CFG.separation){const pts=[];for(let i=depth;i<c.length-depth;i++){let hi=true,lo=true;for(let j=1;j<=depth;j++){if(c[i].high<c[i-j].high||c[i].high<c[i+j].high)hi=false;if(c[i].low>c[i-j].low||c[i].low>c[i+j].low)lo=false}if(!hi&&!lo)continue;const p={index:i,time:c[i].time,price:hi?c[i].high:c[i].low,type:hi?'HIGH':'LOW',confirmed:i+depth};const last=pts.at(-1);if(!last||last.type!==p.type){const move=last?Math.abs(p.price-last.price):Infinity,minMove=last?Math.abs(last.price)*(CFG.deviation/10000):0;if(!last||(i-last.index>=sep&&move>=minMove))pts.push(p)}else if((p.type==='HIGH'&&p.price>last.price)||(p.type==='LOW'&&p.price<last.price))pts[pts.length-1]=p}return pts}
 function stackDirection(c){if(c.length<20)return'NEUTRAL';const a=ema(c,9),b=ema(c,20),i=c.length-1;if(a[i]>b[i])return'BUY';if(a[i]<b[i])return'SELL';return'NEUTRAL'}
+function rsi(c,period=CFG.rsiPeriod){const out=Array(c.length).fill(null);if(c.length<=period)return out;let gain=0,loss=0;for(let i=1;i<=period;i++){const d=c[i].close-c[i-1].close;if(d>0)gain+=d;else loss-=d}let ag=gain/period,al=loss/period;out[period]=al===0?100:100-100/(1+ag/al);for(let i=period+1;i<c.length;i++){const d=c[i].close-c[i-1].close;ag=(ag*(period-1)+Math.max(d,0))/period;al=(al*(period-1)+Math.max(-d,0))/period;out[i]=al===0?100:100-100/(1+ag/al)}return out}
+function rsiAllows(c,side){const v=rsi(c)[c.length-1];return Number.isFinite(v)&&(side==='BUY'?v>CFG.buyLevel:v<CFG.sellLevel)}
 function trend30Direction(source=S.raw){
  const m30=aggregateMinutes(source,30);
  if(m30.length<20)return'NEUTRAL';
@@ -96,7 +100,7 @@ function trend30Direction(source=S.raw){
  if(a[i]<b[i]&&a[i]<a[i-1]&&b[i]<b[i-1])return'SELL';
  return'NEUTRAL';
 }
-function strategyState(){const c=S.raw.slice(0,-1);if(c.length<60)return null;const pts=zigzag(c),p=pts.at(-1);if(!p||p.confirmed>=c.length)return null;const trend30=trend30Direction();if(trend30==='NEUTRAL')return null;const dir=stackDirection(c);if(dir==='NEUTRAL'||dir!==trend30)return null;const m15=aggregate15(c),confirm=m15.at(-1);if(!confirm)return null;const nowBar=c.at(-1);if(confirm.time+15>nowBar.time+5||confirm.time+15<p.time+(DEPTH+1)*5)return null;const prior=pts.slice(0,-1).filter(x=>x.type===p.type&&x.index<p.index&&p.index-x.index<=180).at(-1);const bullish=confirm.close>confirm.open,bearish=confirm.close<confirm.open;if(dir==='BUY'&&p.type==='LOW'&&bullish&&confirm.close>p.price)return{side:'BUY',pivot:p,confirm,dir,trend30,liquidity:prior?.price??p.price,targetPrice:p.price+(confirm.close-p.price)*0.5};if(dir==='SELL'&&p.type==='HIGH'&&bearish&&confirm.close<p.price)return{side:'SELL',pivot:p,confirm,dir,trend30,liquidity:prior?.price??p.price,targetPrice:p.price-(p.price-confirm.close)*0.5};return null}
+function strategyState(){const c=S.raw.slice(0,-1);if(c.length<Math.max(60,CFG.rsiPeriod+2))return null;const pts=zigzag(c),p=pts.at(-1);if(!p||p.confirmed>=c.length)return null;const trend30=trend30Direction();if(trend30==='NEUTRAL')return null;const dir=stackDirection(c);if(dir==='NEUTRAL'||dir!==trend30||!rsiAllows(c,dir))return null;const m15=aggregate15(c),confirm=m15.at(-1);if(!confirm)return null;const nowBar=c.at(-1);if(confirm.time+15>nowBar.time+5||confirm.time+15<p.time+(CFG.depth+1)*5)return null;const prior=pts.slice(0,-1).filter(x=>x.type===p.type&&x.index<p.index&&p.index-x.index<=180).at(-1);const bullish=confirm.close>confirm.open,bearish=confirm.close<confirm.open;if(dir==='BUY'&&p.type==='LOW'&&bullish&&confirm.close>p.price)return{side:'BUY',pivot:p,confirm,dir,trend30,liquidity:prior?.price??p.price,targetPrice:p.price+(confirm.close-p.price)*0.5};if(dir==='SELL'&&p.type==='HIGH'&&bearish&&confirm.close<p.price)return{side:'SELL',pivot:p,confirm,dir,trend30,liquidity:prior?.price??p.price,targetPrice:p.price-(p.price-confirm.close)*0.5};return null}
 function setSignal(s){if(S.signal||S.trade)return;const key=S.symbol+'|'+s.side+'|'+s.pivot.time+'|'+s.confirm.time;if(key===S.lastPivotKey)return;S.lastPivotKey=key;S.signal={...s,key,created:Date.now(),expires:Date.now()+90000,state:'WAIT_PRICE',targetPrice:s.targetPrice};$('signal').className='binary-signal '+(s.side==='BUY'?'buy':'sell');$('signalTitle').textContent=s.side==='BUY'?'🟢 ENTRADA DE COMPRA · A FAVOR DE TENDENCIA':'🔴 ENTRADA DE VENTA · A FAVOR DE TENDENCIA';$('signalInfo').textContent='Tendencia M30: '+(s.trend30==='BUY'?'ALCISTA':'BAJISTA')+' · Confirmación M1/M15s · Esperando precio de entrada.';$('signalPrice').textContent=fmt(s.targetPrice);$('signalCountdown').textContent='ESPERANDO';$('tradeState').textContent='SEÑAL PENDIENTE · LIQUIDEZ '+fmt(s.liquidity);updateVisuals();}
 function monitorSignal(price,epoch){const s=S.signal;if(!s||S.trade)return;const now=Date.now(),prev=S.ticks.at(-1);S.ticks.push({price,time:epoch});if(S.ticks.length>8)S.ticks.shift();if(now>s.expires){$('signalTitle').textContent='SEÑAL VENCIDA';$('signalInfo').textContent='No alcanzó el precio objetivo dentro del tiempo permitido.';$('tradeState').textContent='VENCIDA';$('signalCountdown').textContent='—';S.signal=null;return;}if((s.side==='BUY'&&price<s.pivot.price)||(s.side==='SELL'&&price>s.pivot.price)){$('signalTitle').textContent='SEÑAL INVALIDADA';$('tradeState').textContent='INVALIDADA';$('signalInfo').textContent='El precio rompió el pivote que protegía la señal.';S.signal=null;return;}const crossed=prev&&(s.side==='BUY'?prev.price>s.targetPrice&&price<=s.targetPrice:prev.price<s.targetPrice&&price>=s.targetPrice);if(crossed||Math.abs(price-s.targetPrice)<=Math.max(Math.abs(s.targetPrice)*0.00001,0.000001)){startAutomaticTrade(price);return;}if(S.ticks.length>=3){const a=S.ticks[0],b=S.ticks.at(-1),secs=Math.max(1,b.time-a.time),velocity=(b.price-a.price)/secs,toward=s.side==='BUY'?velocity<0:velocity>0,eta=toward?Math.abs(s.targetPrice-price)/Math.abs(velocity):Infinity;if(eta<=10){$('signalTitle').textContent='⚠️ '+(s.side==='BUY'?'COMPRA':'VENTA')+' · LLEGA EN '+Math.max(0,Math.ceil(eta))+'s';$('tradeState').textContent='VIGENTE · PREALERTA 10s';$('signalCountdown').textContent=Math.max(0,eta).toFixed(1)+' s';}else{$('signalTitle').textContent=(s.side==='BUY'?'COMPRA':'VENTA')+' · ESPERANDO OBJETIVO';$('tradeState').textContent='VIGENTE · OBJETIVO PENDIENTE';$('signalCountdown').textContent='—';}}}
 function evaluate(){if(S.trade||S.signal)return;const s=strategyState();if(s)setSignal(s)}
@@ -123,20 +127,20 @@ function fmt(v){if(!Number.isFinite(Number(v)))return'—';return Number(v).toPr
 function runBacktest(){
  const c=S.raw.slice(0,-1);
  if(c.length<100){$('backtestResult').textContent='Histórico insuficiente: se necesitan al menos 100 velas de 5 segundos.';return}
- const e9=ema(c,9),e20=ema(c,20),e50=ema(c,50),points=[],trades=[];
+ const e9=ema(c,9),e20=ema(c,20),rsiValues=rsi(c),points=[],trades=[];
  let group=null,confirm=null,lastKey='',busyUntil=-1,checked=0;
  for(let i=0;i<c.length&&trades.length<500;i++){
   const bar=c[i],bucket=Math.floor(bar.time/15)*15;
   if(!group||group.time!==bucket){group={time:bucket,open:bar.open,high:bar.high,low:bar.low,close:bar.close,count:1}}
   else{group.high=Math.max(group.high,bar.high);group.low=Math.min(group.low,bar.low);group.close=bar.close;group.count++}
   if(group.count===3)confirm={...group};
-  const pi=i-DEPTH;
-  if(pi>=DEPTH){
+  const pi=i-CFG.depth;
+  if(pi>=CFG.depth){
    let hi=true,lo=true;
-   for(let j=1;j<=DEPTH;j++){if(c[pi].high<c[pi-j].high||c[pi].high<c[pi+j].high)hi=false;if(c[pi].low>c[pi-j].low||c[pi].low>c[pi+j].low)lo=false}
+   for(let j=1;j<=CFG.depth;j++){if(c[pi].high<c[pi-j].high||c[pi].high<c[pi+j].high)hi=false;if(c[pi].low>c[pi-j].low||c[pi].low>c[pi+j].low)lo=false}
    if(hi||lo){
     const p={index:pi,time:c[pi].time,price:hi?c[pi].high:c[pi].low,type:hi?'HIGH':'LOW',confirmed:i},last=points.at(-1);
-    if(!last||last.type!==p.type){if(!last||pi-last.index>=SEPARATION)points.push(p)}
+    if(!last||last.type!==p.type){if(!last||pi-last.index>=CFG.separation)points.push(p)}
     else if((p.type==='HIGH'&&p.price>last.price)||(p.type==='LOW'&&p.price<last.price))points[points.length-1]=p;
    }
   }
@@ -145,6 +149,7 @@ function runBacktest(){
   const trend30=trend30Direction(c.slice(0,i+1));const dir=e9[i]>e20[i]?'BUY':e9[i]<e20[i]?'SELL':'NEUTRAL';
   // Regla EMA 9/20: solo opera en su dirección y además respeta la tendencia M30.
   if(dir==='NEUTRAL'||trend30!==dir)continue;
+  const rsiValue=rsiValues[i];if(!Number.isFinite(rsiValue)||(dir==='BUY'?rsiValue<=CFG.buyLevel:rsiValue>=CFG.sellLevel))continue;
   const bullish=confirm.close>confirm.open,bearish=confirm.close<confirm.open;
   let side=null,target=NaN;
   if(dir==='BUY'&&p.type==='LOW'&&bullish&&confirm.close>p.price){side='BUY';target=p.price+(confirm.close-p.price)*.5}
@@ -168,7 +173,7 @@ function runBacktest(){
  saveOps();renderOps();updateVisuals();
  const wins=trades.filter(x=>x.result==='WIN').length,losses=trades.filter(x=>x.result==='LOSS').length,draws=trades.filter(x=>x.result==='EMPATE').length,total=trades.length,rate=total?100*wins/total:0;
  const hours=(c.length*5/3600).toFixed(1);
- $('backtestResult').textContent='BACKTEST · '+total+' de hasta 500 operaciones anteriores · '+c.length+' velas de 5s ('+hours+' h) · señales detectadas: '+checked+' · WIN '+wins+' · LOSS '+losses+' · EMPATE '+draws+' · efectividad '+rate.toFixed(1)+'%. '+(total<500?'No se encontraron 500 operaciones completas en las últimas 24 horas.':'Las 500 operaciones están cargadas en Historial y marcadas en el gráfico.');
+ $('backtestResult').textContent='BACKTEST · '+total+' operaciones · RSI('+CFG.rsiPeriod+') compra > '+CFG.buyLevel+' / venta < '+CFG.sellLevel+' · ZigZag '+CFG.depth+'-'+CFG.deviation+'-'+CFG.separation+' · EMA 9/20 + tendencia M30 · '+c.length+' velas 5s ('+hours+' h) · señales '+checked+' · WIN '+wins+' · LOSS '+losses+' · EMPATE '+draws+' · efectividad '+rate.toFixed(1)+'%. '+(total<500?'No se encontraron 500 operaciones completas en el histórico cargado.':'Recalculado con la configuración actual.');
 }
 function loadOps(){try{const a=JSON.parse(localStorage.getItem(STORE+'-operations')||'[]');S.ops=Array.isArray(a)?a:[]}catch{S.ops=[]}renderOps()}
 function saveOps(){localStorage.setItem(STORE+'-operations',JSON.stringify(S.ops.slice(0,2000)))}
@@ -183,5 +188,8 @@ function initChart(){const L=LightweightCharts;$('chart').innerHTML='';S.chart=L
 async function subscribe(){if(S.subId){try{await send({forget:S.subId})}catch{}S.subId=null}const r=await send({ticks:S.symbol,subscribe:1});S.subId=r.subscription?.id||null;if(r.tick)onTick(r.tick)}
 async function loadCurrent(){if(S.trade){$('symbol').value=S.symbol;return}S.symbol=$('symbol').value;if(!S.symbol)return;status('Cargando histórico completo de 24 horas…');$('chartTitle').textContent=S.symbol+' · cargando velas M1';S.raw=await history(S.symbol);S.chartBars=await chartHistory(S.symbol);$('chartTitle').textContent=S.symbol+' · M1 · 24H · '+S.chartBars.length+' velas';S.signal=null;S.ticks=[];S.lastPivotKey='';if(S.signalTimer)clearInterval(S.signalTimer);$('signalTitle').textContent='ESPERANDO CONFIGURACIÓN';$('signalInfo').textContent='Tendencia M30 + EMA 9/20/50 + confirmación 15 segundos';$('signalCountdown').textContent='—';$('tradeState').textContent='SIN OPERACIÓN';initChart();runBacktest();await subscribe();status('EN VIVO · '+S.symbol+' · '+S.raw.length+' velas 5s / '+S.chartBars.length+' velas M1',true)}
 async function start(){try{await connect();await loadSymbols();const saved=localStorage.getItem(STORE+'-symbol');if(saved&&S.symbols.some(x=>x.code===saved))$('symbol').value=saved;loadOps();await loadCurrent()}catch(e){status(e.message);setTimeout(()=>start().catch(x=>status(x.message)),7000)}}
+function applyConfig(){for(const k of Object.keys(CFG)){const el=$('cfg-'+k);if(el)el.value=CFG[k]}}
+function saveConfig(){for(const k of Object.keys(CFG)){const el=$('cfg-'+k);if(el){const v=Number(el.value);if(Number.isFinite(v)&&v>0)CFG[k]=v}}if(CFG.sellLevel>=CFG.buyLevel){$('configStatus').textContent='Error: el nivel de venta debe ser menor que el de compra.';return}localStorage.setItem(STORE+'-config',JSON.stringify(CFG));S.signal=null;runBacktest();$('configStatus').textContent='Configuración aplicada · backtesting recalculado';}
+['depth','deviation','separation','rsiPeriod','buyLevel','sellLevel'].forEach(k=>{const el=$('cfg-'+k);if(el)el.addEventListener('change',saveConfig)});applyConfig();
 $('symbol').addEventListener('change',()=>{localStorage.setItem(STORE+'-symbol',$('symbol').value);loadCurrent().catch(e=>status(e.message))});$('reload').addEventListener('click',()=>loadCurrent().catch(e=>status(e.message)));start();
 })();
