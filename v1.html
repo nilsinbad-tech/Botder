@@ -2,7 +2,7 @@
 <html lang="es"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#080d16"><title>BOTDER · Binarias ZigZag 5s</title>
-<link rel="stylesheet" href="v1.css?v=22">
+<link rel="stylesheet" href="v1.css?v=23">
 <script src="https://unpkg.com/lightweight-charts@5.0.8/dist/lightweight-charts.standalone.production.js" onerror="this.onerror=null;this.src='https://cdn.jsdelivr.net/npm/lightweight-charts@5.0.8/dist/lightweight-charts.standalone.production.js'"></script>
 </head><body>
 <header><b>BOTDER <small>BINARIAS · GRÁFICO M1</small></b><span id="connection">Conectando Deriv…</span></header>
@@ -13,4 +13,4 @@
 <section class="binary-signal" id="signal"><div><b id="signalTitle">ESPERANDO SEÑAL</b><p id="signalInfo">ZigZag + EMA 9/20/50 + confirmación 15 segundos</p><small>PRECIO OBJETIVO DE ENTRADA: <b id="signalPrice">—</b></small></div><strong id="signalCountdown">—</strong><small id="tradeState">SIN OPERACIÓN</small></section>
 <section class="stats"><h3>BACKTESTING AUTOMÁTICO · ZIGZAG · EXPIRACIÓN 120s</h3><p id="backtestResult">Backtesting automático: se ejecuta al cargar el histórico y se actualiza al cerrar cada vela M1.</p></section><section class="stats"><h3>HISTORIAL · BACKTEST Y OPERACIONES</h3><div class="statgrid"><article><small>TOTAL</small><b id="total">0</b></article><article><small>WIN</small><b id="wins">0</b></article><article><small>LOSS</small><b id="losses">0</b></article><article><small>EMPATE</small><b id="draws">0</b></article><article><small>EFECTIVIDAD</small><b id="rate">0%</b></article></div><div id="history"></div></section>
 <section class="rules"><h3>ESTRATEGIA ACTIVA</h3><p><b>Velas:</b> 5 segundos. <b>Confirmación:</b> vela cerrada de 15 segundos. <b>Expiración:</b> 2 minutos desde la entrada automática.</p><p><b>COMPRAR:</b> pivote LOW confirmado, vela M15s alcista y EMA 9 por encima de EMA 20 y EMA 50.</p><p><b>VENDER:</b> pivote HIGH confirmado, vela M15s bajista y EMA 9 por debajo de EMA 20 y EMA 50.</p><p>El ZigZag confirma con 3 velas de 5 segundos y separación mínima de 3. BOTDER calcula un precio objetivo de entrada en el retroceso de la zona entre pivote y confirmación. Estima la llegada con la velocidad reciente y muestra PREALERTA cuando calcula que faltan 10 segundos o menos. Al tocar el objetivo, registra automáticamente la entrada y evalúa WIN/LOSS/EMPATE a los 120 segundos. Las señales pueden quedar VIGENTES, VENCIDAS o INVALIDADAS. No envía órdenes reales a Deriv; los resultados son simulados por precio.</p></section>
-</main><script src="v1.js?v=56"></script></body></html>
+</main><script src="v1.js?v=57"></script></body></html>
