@@ -142,7 +142,7 @@ function runBacktest(){
   }
   if(i<60||i<=busyUntil||!confirm||confirm.count!==3)continue;
   const p=points.at(-1);if(!p||p.confirmed!==i)continue;
-  const m30=aggregateMinutes(c,30),m30a=ema(m30,9),m30b=ema(m30,20),mi=m30.length-1;const trend30=m30.length>=20?(m30a[mi]>m30b[mi]&&m30a[mi]>m30a[mi-1]&&m30b[mi]>m30b[mi-1]?'BUY':m30a[mi]<m30b[mi]&&m30a[mi]<m30a[mi-1]&&m30b[mi]<m30b[mi-1]?'SELL':'NEUTRAL'):'NEUTRAL';const dir=e9[i]>e20[i]&&e20[i]>e50[i]&&e9[i]>e9[i-2]&&e20[i]>e20[i-2]?'BUY':e9[i]<e20[i]&&e20[i]<e50[i]&&e9[i]<e9[i-2]&&e20[i]<e20[i-2]?'SELL':'NEUTRAL';
+  const m30=aggregateMinutes(c.slice(0,i+1),30),m30a=ema(m30,9),m30b=ema(m30,20),mi=m30.length-1;const trend30=m30.length>=20?(m30a[mi]>m30b[mi]&&m30a[mi]>m30a[mi-1]&&m30b[mi]>m30b[mi-1]?'BUY':m30a[mi]<m30b[mi]&&m30a[mi]<m30a[mi-1]&&m30b[mi]<m30b[mi-1]?'SELL':'NEUTRAL'):'NEUTRAL';const dir=e9[i]>e20[i]&&e20[i]>e50[i]&&e9[i]>e9[i-2]&&e20[i]>e20[i-2]?'BUY':e9[i]<e20[i]&&e20[i]<e50[i]&&e9[i]<e9[i-2]&&e20[i]<e20[i-2]?'SELL':'NEUTRAL';
   if(dir==='NEUTRAL')continue;
   const bullish=confirm.close>confirm.open,bearish=confirm.close<confirm.open;
   let side=null,target=NaN;
