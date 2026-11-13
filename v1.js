@@ -1,7 +1,7 @@
 (()=>{'use strict';
 const $=id=>document.getElementById(id),API='wss://api.derivws.com/trading/v1/options/ws/public',STORE='botder-binary-zigzag-5s-v1',EXPIRY=120000,ENTRY_WINDOW=10000;
 const CFG={depth:3,deviation:5,separation:3};
-try{Object.assign(CFG,JSON.parse(localStorage.getItem(STORE+'-config')||'{}'))}catch{}
+try{const saved=JSON.parse(localStorage.getItem(STORE+'-config')||'null');if(saved?.strategy==='zigzag-m1-original')Object.assign(CFG,saved)}catch{}
 const FOREX=['frxEURUSD','frxGBPUSD','frxUSDJPY','frxAUDUSD','frxUSDCAD','frxUSDCHF','frxNZDUSD','frxEURJPY','frxGBPJPY','frxEURGBP'];
 const CRYPTO=[{label:'SOL/USD',keys:['solusd','crysolusd','solanausd']},{label:'BTC/USD',keys:['btcusd','crybtcusd','bitcoinusd']},{label:'ETH/USD',keys:['ethusd','cryethusd','ethereumusd']}];
 const S={ws:null,req:0,pending:new Map(),symbols:[],symbol:'',raw:[],chartBars:[],price:null,chart:null,candleSeries:null,ema9:null,ema20:null,ema50:null,markerApi:null,visualLines:[],signal:null,signalTimer:null,trade:null,ops:[],backtestTimer:null,chartCountdown:null,lastPivotKey:'',lastAlertKey:'',lastClosed15:0,subId:null,heartbeat:null,ticks:[],tradeTimer:null};
@@ -174,7 +174,7 @@ async function start(){try{await connect();await loadSymbols();const saved=local
 function applyConfig(){for(const k of Object.keys(CFG)){const el=$('cfg-'+k);if(el)el.value=CFG[k]}}
 function saveConfig(){
  for(const k of Object.keys(CFG)){const el=$('cfg-'+k);if(el){const v=Number(el.value);if(Number.isFinite(v)&&v>0)CFG[k]=v}}
- localStorage.setItem(STORE+'-config',JSON.stringify(CFG));S.signal=null;runBacktest();
+ localStorage.setItem(STORE+'-config',JSON.stringify({...CFG,strategy:'zigzag-m1-original'}));S.signal=null;runBacktest();
  $('configStatus').textContent='ZigZag actualizado · profundidad '+CFG.depth+' · desviación '+CFG.deviation+' · separación '+CFG.separation;
 }
 ['depth','deviation','separation'].forEach(k=>{const el=$('cfg-'+k);if(el)el.addEventListener('change',saveConfig)});applyConfig();
