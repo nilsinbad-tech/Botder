@@ -26,14 +26,14 @@
 <section class="panel"><div class="panelhead"><h3>BACKTEST · RESULTADO A 3 MINUTOS</h3><span id="backtestStatus">Esperando histórico</span></div><p id="backtestSummary">Cada operación simulada se marcará en el gráfico con su entrada, TP, SL y resultado.</p><div id="history"></div></section>
 <section class="panel settings"><h3>CONFIGURACIÓN DE ESTRATEGIA</h3>
 <div class="settingsgrid">
-<label>RSI COMPRA<input id="rsiBuy" type="number" min="50" max="90" value="60"></label>
-<label>RSI VENTA<input id="rsiSell" type="number" min="10" max="50" value="40"></label>
+<label>RCI COMPRA<input id="rciBuy" type="number" min="50" max="90" value="55"></label>
+<label>RCI VENTA<input id="rciSell" type="number" min="10" max="50" value="45"></label>
 <label>ZIGZAG PROFUNDIDAD<input id="zzDepth" type="number" min="2" max="20" value="5"></label>
 <label>ZIGZAG DESVIACIÓN %<input id="zzDeviation" type="number" min="0.05" max="5" step="0.05" value="0.25"></label>
 <label>VELAS MÍNIMAS<input id="pullbackBars" type="number" min="2" max="8" value="2"></label>
 <label>RIESGO / BENEFICIO<input id="rr" type="number" min="1" max="5" step="0.25" value="1.5"></label>
 </div><button id="applySettings">APLICAR Y RECALCULAR</button><small>La señal se anticipa al toque del precio esperado. La entrada se simula solo si el precio alcanza el nivel y confirma el impulso. No se envían órdenes reales.</small></section>
-<section class="panel"><h3>REGLAS ACTIVAS · ALLIGATOR + LIQUIDEZ</h3><ul><li>Alligator suavizado: labios verdes 13/8, dientes rojos 8/5 y mandíbula azul 5/3.</li><li>BUY: labios verdes cruzan los dientes rojos hacia arriba y RSI cruza 60 hacia arriba, en soporte/liquidez inferior.</li><li>SELL: labios verdes cruzan los dientes rojos hacia abajo y RSI cruza 40 hacia abajo, en resistencia/liquidez superior.</li><li>Solo velas cortas; se excluyen dojis y velas grandes.</li><li>Detecta zonas repetidas de soporte/resistencia y evita repetir señales en la misma zona durante 30 velas.</li><li>La operación gana si, exactamente 3 minutos después de la entrada, BUY está arriba o SELL está abajo del precio de entrada.</li><li>Backtest de 12 horas con evaluación temporal de 3 minutos; no usa velas futuras para crear la señal.</li></ul></section>
+<section class="panel"><h3>REGLAS ACTIVAS · ALLIGATOR + LIQUIDEZ</h3><ul><li>Alligator suavizado: labios verdes 13/8, dientes rojos 8/5 y mandíbula azul 5/3.</li><li>BUY: labios verdes cruzan los dientes rojos hacia arriba, RCI sube hacia 55–60 y el precio rompe el último pivote máximo confirmado.</li><li>SELL: labios verdes cruzan los dientes rojos hacia abajo, RCI baja desde 50 hacia 45–40 y el precio rompe el último pivote mínimo confirmado.</li><li>Solo velas cortas; se excluyen dojis y velas grandes.</li><li>Detecta zonas repetidas de soporte/resistencia y evita repetir señales en la misma zona durante 30 velas.</li><li>La operación gana si, exactamente 3 minutos después de la entrada, BUY está arriba o SELL está abajo del precio de entrada.</li><li>Backtest de 12 horas con evaluación temporal de 3 minutos; no usa velas futuras para crear la señal.</li></ul></section>
 <footer>Herramienta de análisis y simulación. Los resultados históricos no garantizan resultados futuros. Verifica la conexión y los datos antes de tomar decisiones.</footer>
 </main>
 <script src="app.js"></script>
