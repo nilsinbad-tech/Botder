@@ -1,0 +1,64 @@
+name: Build V75 Signal Lab Android APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - v75-signal-lab
+    paths:
+      - 'v75/**'
+      - 'package.json'
+      - 'capacitor.config.json'
+      - '.github/workflows/build-v75-apk.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Compile V75 Android APK
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Prepare V75 web application
+        run: |
+          mkdir -p www
+          cp v75/index.html www/index.html
+          cp v75/app.js www/app.js
+          cp v75/styles.css www/styles.css
+
+      - name: Generate Android project
+        run: npx cap add android
+
+      - name: Sync Android project
+        run: npx cap sync android
+
+      - name: Build debug APK
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug
+
+      - name: Publish installable APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: V75-Signal-Lab-Android-APK
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 30
