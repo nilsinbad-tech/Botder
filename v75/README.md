@@ -1,17 +1,17 @@
-# V75 Signal Lab — EMA + RSI + ZigZag
+# BOTDER V75 — Alligator + RSI + Liquidez
 
-Aplicación nueva e independiente para Volatility 75 (1s), desarrollada en la carpeta `v75/`.
+Aplicación independiente para análisis y simulación de Volatility 75 (1s), símbolo `1HZ75V`.
 
-## Qué incluye
-- Conexión pública de lectura a Deriv y símbolo `1HZ75V`.
-- Histórico de velas de 1 minuto de las últimas 12 horas.
-- Gráfico con velas y EMA 9/30/50.
-- Señal anticipada con precio esperado, TP y SL dibujados como líneas de precio.
-- Backtesting de 12 horas y marcadores BUY/SELL y WIN/LOSS.
-- Parámetros configurables de RSI, ZigZag, retroceso y riesgo/beneficio.
-- No envía órdenes reales.
+## Estrategia implementada
+- Alligator suavizado sobre precio medio: labios verdes SMMA(13) desplazamiento 8, dientes rojos SMMA(8) desplazamiento 5 y mandíbula azul SMMA(5) desplazamiento 3.
+- SELL: labios verdes cruzan los dientes rojos hacia abajo y RSI(14) cruza 40 hacia abajo, cerca de resistencia/liquidez superior.
+- BUY: labios verdes cruzan los dientes rojos hacia arriba y RSI(14) cruza 60 hacia arriba, cerca de soporte/liquidez inferior.
+- Solo velas cortas (rango máximo 0.65 ATR y cuerpo no doji); se excluyen velas grandes y dojis.
+- Zonas de soporte/resistencia construidas a partir de pivotes ZigZag repetidos; enfriamiento de 30 velas para no repetir señales en la misma zona.
+- Evaluación de cada operación al cierre de la tercera vela de 1 minuto después de la entrada: BUY gana si el cierre está por encima de la entrada; SELL gana si está por debajo.
+- Backtest sobre las últimas 12 horas de velas de 1 minuto.
 
-## Notas
-La señal es una prealerta; el backtest simula el toque del nivel esperado y la salida por TP/SL. Si TP y SL se alcanzan dentro de la misma vela, se contabiliza conservadoramente como SL. La precisión y rentabilidad deben validarse con datos suficientes y pruebas fuera de muestra.
-
-Para publicar esta nueva versión, integrar el contenido de esta rama en la rama configurada para GitHub Pages.
+## Conexión y seguridad
+- Conexión pública de lectura a Deriv; no envía órdenes reales.
+- Los resultados del backtest son simulaciones y no garantizan resultados futuros.
+- Validar conexión, datos en vivo y señales en distintos mercados antes de usar decisiones reales.
