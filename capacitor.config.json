@@ -1,0 +1,6 @@
+{
+  "appId": "com.nilsinbad.v75signallab",
+  "appName": "V75 Signal Lab",
+  "webDir": "www",
+  "bundledWebRuntime": false
+}
