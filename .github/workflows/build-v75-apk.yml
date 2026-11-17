@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - v75-signal-lab
+      - main
     paths:
       - 'v75/**'
       - 'package.json'
