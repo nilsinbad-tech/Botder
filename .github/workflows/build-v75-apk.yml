@@ -41,7 +41,7 @@ jobs:
         run: |
           mkdir -p www
           cp v75/index.html www/index.html
-          cp v75/app.js www/app.js
+          cp v75/sell.js www/sell.js
           cp v75/styles.css www/styles.css
 
       - name: Generate Android project
