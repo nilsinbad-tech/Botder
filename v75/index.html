@@ -4,14 +4,14 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#080e18">
-<title>V75 · Alligator + RSI + Liquidez</title>
+<title>BOTDER · Volatility Signal Lab</title>
 <link rel="stylesheet" href="styles.css">
 <script src="https://unpkg.com/lightweight-charts@5.0.8/dist/lightweight-charts.standalone.production.js"></script>
 </head>
 <body>
-<header><div><b>V75 SIGNAL LAB</b><small>VOLATILITY 75 · 1 SECOND</small></div><span id="connection">Conectando con Deriv…</span></header>
+<header><div><b>BOTDER SIGNAL LAB</b><small>VOLATILITY · 1 SECOND</small></div><span id="connection">Conectando con Deriv…</span></header>
 <main>
-<section class="topline"><div><small>ACTIVO</small><strong>Volatility 75 (1s)</strong></div><div><small>PRECIO EN VIVO</small><strong id="livePrice">—</strong></div><button id="reconnect">RECONECTAR</button></section>
+<section class="topline"><div><small>INSTRUMENTO</small><select id="instrumentSelect" aria-label="Seleccionar instrumento"><option value="1HZ75V">Cargando instrumentos…</option></select></div><div><small>ACTIVO</small><strong id="assetName">—</strong></div><div><small>PRECIO EN VIVO</small><strong id="livePrice">—</strong></div><button id="reconnect">RECONECTAR</button></section>
 <section class="signal" id="signalCard"><div><small id="signalState">ANALIZANDO EL MERCADO</small><h2 id="signalTitle">Esperando configuración</h2><p id="signalText">El bot está cargando velas e indicadores.</p></div><div class="countdown" id="signalCountdown">—</div></section>
 <section class="levels">
 <div><small>ENTRADA ESPERADA</small><b id="expectedEntry">—</b></div>
