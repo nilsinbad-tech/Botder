@@ -4,38 +4,23 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#080e18">
-<title>V75 · EMA + RSI + ZigZag</title>
+<title>V75 Signal Lab · Volatility 75 (1s)</title>
 <link rel="stylesheet" href="styles.css">
 <script src="https://unpkg.com/lightweight-charts@5.0.8/dist/lightweight-charts.standalone.production.js"></script>
 </head>
 <body>
-<header><div><b>V75 SIGNAL LAB</b><small>VOLATILITY 75 · 1 SECOND</small></div><span id="connection">Conectando con Deriv…</span></header>
+<header><div><b>V75 SIGNAL LAB</b><small>BOT INDEPENDIENTE · VOLATILITY 75 (1s)</small></div><span id="connection">Conectando con Deriv…</span></header>
 <main>
-<section class="topline"><div><small>ACTIVO</small><strong>Volatility 75 (1s)</strong></div><div><small>PRECIO EN VIVO</small><strong id="livePrice">—</strong></div><button id="reconnect">RECONECTAR</button></section>
-<section class="signal" id="signalCard"><div><small id="signalState">ANALIZANDO EL MERCADO</small><h2 id="signalTitle">Esperando configuración</h2><p id="signalText">El bot está cargando velas e indicadores.</p></div><div class="countdown" id="signalCountdown">—</div></section>
-<section class="levels">
-<div><small>ENTRADA ESPERADA</small><b id="expectedEntry">—</b></div>
-<div><small>TAKE PROFIT</small><b class="green" id="takeProfit">—</b></div>
-<div><small>STOP LOSS</small><b class="red" id="stopLoss">—</b></div>
-<div><small>VÁLIDA HASTA</small><b id="validUntil">—</b></div>
-</section>
-<section class="chartcard"><div class="charthead"><b>Gráfico · últimas 12 horas</b><span>EMA 9 · EMA 30 · EMA 50 · BUY/SELL · TP/SL</span></div><div id="chart"></div><div class="legend"><span class="ema9">EMA 9</span><span class="ema30">EMA 30</span><span class="ema50">EMA 50</span><span class="zigzag">ZigZag</span><span class="buy">BUY / WIN</span><span class="sell">SELL / LOSS</span></div></section>
-<section class="panel capital"><div class="panelhead"><h3>GESTIÓN DE CAPITAL · OBJETIVO $500</h3><span id="capitalStatus">Simulación en USD</span></div><div class="capitalgrid"><div><small>SALDO SIMULADO</small><b id="accountBalance">$7.00</b></div><div><small>RIESGO MÁXIMO / OPERACIÓN</small><b id="riskMoney">$0.07</b></div><div><small>TP TEÓRICO (1.5R)</small><b class="green" id="rewardMoney">$0.11</b></div><div><small>PROGRESO AL OBJETIVO</small><b id="goalProgress">0.0%</b></div></div><div class="settingsgrid capitalinputs"><label>SALDO INICIAL ($)<input id="startBalance" type="number" min="1" step="0.01" value="7"></label><label>RIESGO POR OPERACIÓN (%)<input id="riskPct" type="number" min="0.5" max="2" step="0.25" value="1"></label><label>OBJETIVO ($)<input id="goalBalance" type="number" min="10" step="1" value="500"></label></div><small>El riesgo es un presupuesto de pérdida teórico. La cantidad/contrato real debe respetar el mínimo y el valor por punto del producto Deriv; si el mínimo supera el presupuesto, el bot debe indicar NO OPERAR. El TP en dólares es estimado bajo la relación R:R, no una promesa de pago.</small></section>
-<section class="metrics">
-<article><small>OPERACIONES</small><b id="totalTrades">0</b></article><article><small>GANADAS</small><b class="green" id="wins">0</b></article><article><small>PERDIDAS</small><b class="red" id="losses">0</b></article><article><small>EFECTIVIDAD</small><b id="winRate">—</b></article><article><small>RESULTADO R</small><b id="netR">0.00R</b></article>
-</section>
-<section class="panel"><div class="panelhead"><h3>BACKTEST · ÚLTIMAS 12 HORAS</h3><span id="backtestStatus">Esperando histórico</span></div><p id="backtestSummary">Cada operación simulada se marcará en el gráfico con su entrada, TP, SL y resultado.</p><div id="history"></div></section>
-<section class="panel settings"><h3>CONFIGURACIÓN DE ESTRATEGIA</h3>
-<div class="settingsgrid">
-<label>RSI COMPRA<input id="rsiBuy" type="number" min="50" max="90" value="60"></label>
-<label>RSI VENTA<input id="rsiSell" type="number" min="10" max="50" value="40"></label>
-<label>ZIGZAG PROFUNDIDAD<input id="zzDepth" type="number" min="2" max="20" value="5"></label>
-<label>ZIGZAG DESVIACIÓN %<input id="zzDeviation" type="number" min="0.05" max="5" step="0.05" value="0.25"></label>
-<label>VELAS MÍNIMAS<input id="pullbackBars" type="number" min="2" max="8" value="2"></label>
-<label>RIESGO / BENEFICIO<input id="rr" type="number" min="1" max="5" step="0.25" value="1.5"></label>
-</div><button id="applySettings">APLICAR Y RECALCULAR</button><small>La señal se anticipa al toque del precio esperado. La entrada se simula solo si el precio alcanza el nivel y confirma el impulso. No se envían órdenes reales.</small></section>
-<section class="panel"><h3>REGLAS ACTIVAS</h3><ul><li>EMA 9 rompe EMA 30 y se acerca a EMA 50.</li><li>BUY: RSI ≥ 60 y pivote LOW confirmado por ZigZag.</li><li>SELL: RSI ≤ 40 y pivote HIGH confirmado por ZigZag.</li><li>Después del pivote se exigen al menos dos velas de retroceso/confirmación.</li><li>El aviso muestra antes el precio esperado, TP, SL y caducidad.</li><li>Backtest de 12 horas, sin usar datos futuros para generar señales.</li></ul></section>
-<footer>Herramienta de análisis y simulación. Los resultados históricos no garantizan resultados futuros. Verifica la conexión y los datos antes de tomar decisiones.</footer>
+<section class="topline"><div><small>ÚNICO ACTIVO</small><strong>Volatility 75 (1s)</strong></div><div><small>PRECIO EN VIVO</small><strong id="livePrice">—</strong></div><button id="reconnect">RECONECTAR</button></section>
+<section class="signal" id="signalCard"><div><small id="signalState">ANALIZANDO EL MERCADO</small><h2 id="signalTitle">Iniciando V75 Signal Lab</h2><p id="signalText">Cargando velas e indicadores.</p></div><div class="countdown" id="signalCountdown">—</div></section>
+<section class="levels"><div><small>ENTRADA ESPERADA</small><b id="expectedEntry">—</b></div><div><small>TAKE PROFIT</small><b class="green" id="takeProfit">—</b></div><div><small>STOP LOSS</small><b class="red" id="stopLoss">—</b></div><div><small>VÁLIDA HASTA</small><b id="validUntil">—</b></div></section>
+<section class="chartcard"><div class="charthead"><b>Gráfico · últimas 12 horas</b><span>EMA 9 · EMA 30 · EMA 50 · ZigZag · señales</span></div><div id="chart"></div><div class="legend"><span class="ema9">EMA 9</span><span class="ema30">EMA 30</span><span class="ema50">EMA 50</span><span class="zigzag">ZigZag</span><span class="buy">BUY / WIN</span><span class="sell">SELL / LOSS</span></div></section>
+<section class="panel capital"><div class="panelhead"><h3>GESTIÓN DE CAPITAL · OBJETIVO $500</h3><span id="capitalStatus">Simulación USD</span></div><div class="capitalgrid"><div><small>SALDO SIMULADO</small><b id="accountBalance">$7.00</b></div><div><small>PÉRDIDA MÁXIMA / OPERACIÓN</small><b id="riskMoney">$1.50</b></div><div><small>GANANCIA OBJETIVO / OPERACIÓN</small><b class="green" id="rewardMoney">$3.00</b></div><div><small>PROGRESO AL OBJETIVO</small><b id="goalProgress">1.4%</b></div></div><small>Importes fijos para backtesting y simulación: −$1.50 si pierde y +$3.00 si gana. No son un cálculo de stake real ni una orden enviada a Deriv. Con saldo inicial de $7, el riesgo equivale al 21.4% del capital.</small></section>
+<section class="metrics"><article><small>OPERACIONES</small><b id="totalTrades">0</b></article><article><small>GANADAS</small><b class="green" id="wins">0</b></article><article><small>PERDIDAS</small><b class="red" id="losses">0</b></article><article><small>EFECTIVIDAD</small><b id="winRate">—</b></article><article><small>RESULTADO R</small><b id="netR">0.00R</b></article></section>
+<section class="panel"><div class="panelhead"><h3>BACKTEST · ÚLTIMAS 12 HORAS</h3><span id="backtestStatus">Esperando histórico</span></div><p id="backtestSummary">Las operaciones simuladas se marcarán en el gráfico con entrada, TP, SL y resultado.</p><div id="history"></div></section>
+<section class="panel settings"><h3>CONFIGURACIÓN DE ESTRATEGIA</h3><div class="settingsgrid"><label>RSI COMPRA<input id="rsiBuy" type="number" min="50" max="90" value="60"></label><label>RSI VENTA<input id="rsiSell" type="number" min="10" max="50" value="40"></label><label>ZIGZAG PROFUNDIDAD<input id="zzDepth" type="number" min="2" max="20" value="5"></label><label>ZIGZAG DESVIACIÓN %<input id="zzDeviation" type="number" min="0.05" max="5" step="0.05" value="0.25"></label><label>VELAS MÍNIMAS<input id="pullbackBars" type="number" min="2" max="8" value="2"></label></div><button id="applySettings">APLICAR Y RECALCULAR</button><small>Señales y resultados exclusivamente simulados. El sistema no envía órdenes reales.</small></section>
+<section class="panel"><h3>REGLAS ACTIVAS</h3><ul><li>Activo único: Volatility 75 (1s), símbolo 1HZ75V.</li><li>BUY: RSI ≥ 60, EMA 9 por encima de EMA 30 y EMA 30 por encima de EMA 50, con pivote LOW confirmado.</li><li>SELL: RSI ≤ 40, EMA 9 por debajo de EMA 30 y EMA 30 por debajo de EMA 50, con pivote HIGH confirmado.</li><li>Confirmación ZigZag y mínimo de dos velas de retroceso.</li><li>Gestión simulada fija: SL monetario $1.50 y TP monetario $3.00.</li></ul></section>
+<footer>V75 Signal Lab independiente. Herramienta de análisis y simulación; no ejecuta órdenes. El backtest no garantiza resultados futuros.</footer>
 </main>
 <script src="app.js"></script>
 </body></html>
